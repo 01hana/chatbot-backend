@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "0926881013" # 加上引號確保它是字串
+      POSTGRES_DB: chatbot
+    ports:
+      - '5434:5432'
+    # volumes:
+    #   - pgdata:/var/lib/postgresql/data
+    # healthcheck:
+    #   test: ["CMD-SHELL", "pg_isready -U postgres"]
+    #   interval: 5s
+    #   timeout: 5s
+    #   retries: 5
+
+  # NestJS 應用程式服務
+#   api:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile
+#     container_name: nestjs-api
+#     depends_on:
+#       db:
+#         condition: service_healthy # 等到資料庫健康檢查通過後再啟動 NestJS
+#     ports:
+#       - '3000:3000'
+#     volumes:
+#       - .:/usr/src/app
+#       - /usr/src/app/node_modules # 避免本地 node_modules 蓋過容器內編譯好的版本
+#     environment:
+#       # 注意：這裡 Host 要填服務名稱 'db'
+#       DATABASE_URL: postgres://postgres:mysecretpassword@db:5432/my_nestjs_app
+#       NODE_ENV: development
+#     command: npm run start:dev
+
+# volumes:
+#   pgdata:

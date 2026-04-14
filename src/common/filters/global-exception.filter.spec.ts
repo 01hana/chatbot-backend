@@ -147,3 +147,7 @@ describe('GlobalExceptionFilter', () => {
     });
   });
 });
+function expect(status: jest.Mock) {
+    throw new Error('Function not implemented.');
+}
+

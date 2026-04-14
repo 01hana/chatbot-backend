@@ -17,18 +17,26 @@ import type * as Prisma from "./prismaNamespace.js"
 
 const config: runtime.GetPrismaClientConfig = {
   "previewFeatures": [],
-  "clientVersion": "7.2.0",
-  "engineVersion": "0c8ef2ce45c83248ab3df073180d5eda9e8be7a3",
+  "clientVersion": "7.7.0",
+  "engineVersion": "75cbdc1eb7150937890ad5465d861175c6624711",
   "activeProvider": "postgresql",
   "inlineSchema": "generator client {\n  provider     = \"prisma-client\"\n  output       = \"../src/generated/prisma\"\n  moduleFormat = \"cjs\"\n}\n\ndatasource db {\n  provider = \"postgresql\"\n}\n\n/// System-wide configuration key-value store.\n/// All runtime-tunable thresholds and text are stored here.\nmodel SystemConfig {\n  key         String   @id\n  value       String\n  description String?\n  updatedAt   DateTime @updatedAt\n\n  @@map(\"system_configs\")\n}\n",
   "runtimeDataModel": {
     "models": {},
     "enums": {},
     "types": {}
+  },
+  "parameterizationSchema": {
+    "strings": [],
+    "graph": ""
   }
 }
 
 config.runtimeDataModel = JSON.parse("{\"models\":{\"SystemConfig\":{\"fields\":[{\"name\":\"key\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"value\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"description\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"}],\"dbName\":\"system_configs\"}},\"enums\":{},\"types\":{}}")
+config.parameterizationSchema = {
+  strings: JSON.parse("[\"where\",\"SystemConfig.findUnique\",\"SystemConfig.findUniqueOrThrow\",\"orderBy\",\"cursor\",\"SystemConfig.findFirst\",\"SystemConfig.findFirstOrThrow\",\"SystemConfig.findMany\",\"data\",\"SystemConfig.createOne\",\"SystemConfig.createMany\",\"SystemConfig.createManyAndReturn\",\"SystemConfig.updateOne\",\"SystemConfig.updateMany\",\"SystemConfig.updateManyAndReturn\",\"create\",\"update\",\"SystemConfig.upsertOne\",\"SystemConfig.deleteOne\",\"SystemConfig.deleteMany\",\"having\",\"_count\",\"_min\",\"_max\",\"SystemConfig.groupBy\",\"SystemConfig.aggregate\",\"AND\",\"OR\",\"NOT\",\"key\",\"value\",\"description\",\"updatedAt\",\"equals\",\"in\",\"notIn\",\"lt\",\"lte\",\"gt\",\"gte\",\"not\",\"contains\",\"startsWith\",\"endsWith\",\"set\"]"),
+  graph: "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"
+}
 
 async function decodeBase64AsWasm(wasmBase64: string): Promise<WebAssembly.Module> {
   const { Buffer } = await import('node:buffer')
@@ -37,12 +45,14 @@ async function decodeBase64AsWasm(wasmBase64: string): Promise<WebAssembly.Modul
 }
 
 config.compilerWasm = {
-  getRuntime: async () => await import("@prisma/client/runtime/query_compiler_bg.postgresql.js"),
+  getRuntime: async () => await import("@prisma/client/runtime/query_compiler_fast_bg.postgresql.js"),
 
   getQueryCompilerWasmModule: async () => {
-    const { wasm } = await import("@prisma/client/runtime/query_compiler_bg.postgresql.wasm-base64.js")
+    const { wasm } = await import("@prisma/client/runtime/query_compiler_fast_bg.postgresql.wasm-base64.js")
     return await decodeBase64AsWasm(wasm)
-  }
+  },
+
+  importName: "./query_compiler_fast_bg.js"
 }
 
 
@@ -57,7 +67,9 @@ export interface PrismaClientConstructor {
    * Type-safe database client for TypeScript
    * @example
    * ```
-   * const prisma = new PrismaClient()
+   * const prisma = new PrismaClient({
+   *   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL })
+   * })
    * // Fetch zero or more SystemConfigs
    * const systemConfigs = await prisma.systemConfig.findMany()
    * ```
@@ -79,7 +91,9 @@ export interface PrismaClientConstructor {
  * Type-safe database client for TypeScript
  * @example
  * ```
- * const prisma = new PrismaClient()
+ * const prisma = new PrismaClient({
+ *   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL })
+ * })
  * // Fetch zero or more SystemConfigs
  * const systemConfigs = await prisma.systemConfig.findMany()
  * ```
@@ -164,7 +178,7 @@ export interface PrismaClient<
    * ])
    * ```
    * 
-   * Read more in our [docs](https://www.prisma.io/docs/concepts/components/prisma-client/transactions).
+   * Read more in our [docs](https://www.prisma.io/docs/orm/prisma-client/queries/transactions).
    */
   $transaction<P extends Prisma.PrismaPromise<any>[]>(arg: [...P], options?: { isolationLevel?: Prisma.TransactionIsolationLevel }): runtime.Types.Utils.JsPromise<runtime.Types.Utils.UnwrapTuple<P>>
 

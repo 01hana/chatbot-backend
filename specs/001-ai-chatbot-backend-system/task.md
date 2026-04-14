@@ -1,23 +1,24 @@
 # 震南官網 AI 客服聊天機器人 — Backend 工程任務清單
 
-**版本**：1.3.0 | **建立日期**：2026-04-10 | **狀態**：Draft  
-**承接文件**：`spec.md` v1.6.0、`design.md` v1.8.0、`plan.md` v1.3.0  
+**版本**：1.3.1 | **建立日期**：2026-04-10 | **狀態**：Draft  
+**承接文件**：`spec.md` v1.6.0、`design.md` v1.8.0、`plan.md` v1.3.1  
 
 ---
 
 ## 0. 本期實作總原則
 
-> 本期（spec.md v1.6.0 / design.md v1.8.0 / plan.md v1.3.0）明確定案下列事項：
+> 本期（spec.md v1.6.0 / design.md v1.8.0 / plan.md v1.3.1）明確定案下列事項：
 
 - **SSE 串流回覆** 為本期正式主流程（非延後），所有聊天回覆一律走 `text/event-stream`
 - **取消串流以 `AbortController.abort()` / connection close 為正式機制**；不設計獨立 cancel endpoint
 - **sessionToken**（UUID）為前端唯一識別符；後端內部以 `Conversation.id`（sessionId）處理；兩者透過 `session_token` 欄位對映
 - **SSE 事件格式最終版**：`event: token\ndata: {"token":"..."}` / `event: done\ndata: {messageId, action, sourceReferences, usage}` / `event: error\ndata: {code, message}` / `event: timeout\ndata: {message}` / `event: interrupted\ndata: {message}`
 - **Widget Config API**（`GET /api/v1/widget/config`）為本期正式交付項目；`status` 只用 `online / offline / degraded`；所有文案欄位為多語系 JSONB 結構（`{"zh-TW":"...","en":"..."}`）
+- **`GET /api/v1/health/ai-status`** 是 **internal health / monitoring endpoint**，非前端 Widget 正式初始化 contract；前端 Widget 正式初始化狀態來源只有 `GET /api/v1/widget/config` 的 `status`；實作時不得以 `ai-status` 作為前端 Widget 的正式初始化依賴
 - **Ticket 實體**（含完整 CRUD 與 Admin API）為本期正式交付項目；狀態流 `open → in_progress → resolved → closed`（四段，不簡化）
 - **Feedback API** 為本期正式交付項目；評分使用 `value: "up" | "down"`，不使用 1-5 分制
 - **Lead API 欄位最終版**：`name`（必填）、`email`（必填）、`company`（選填）、`phone`（選填）、`message`（選填，訪客原始留言）、`language`（選填，前端語系 `zh-TW`/`en`）
-- **Handoff API**：`POST /api/v1/chat/sessions/:sessionToken/handoff`；回傳 `{accepted, action, leadId, ticketId, message}`；`leadId` / `ticketId` 為 nullable（建立失敗不阻斷 handoff 語意）
+- **Handoff API**：`POST /api/v1/chat/sessions/:sessionToken/handoff`；回傳 `{ accepted, action, leadId, ticketId, message }`；`action` 穩定語意為 `"handoff"`；`leadId` / `ticketId` 為 nullable，依實際建立結果回傳；`accepted = true` 時兩者不得同時為 `null`；handoff 觸發後，後端建立 Lead 與 / 或 Ticket，`leadId` / `ticketId` 依實際建立結果回傳；`/lead` API 成功時 `leadId` 不可為 `null`
 - **end session API 本期不做**：前端以 `AbortController.abort()` / connection close 結束串流；不設計獨立 session 終止端點
 - **Dashboard 聚合查詢 API** 為本期正式交付項目；`feedbackSummary` 格式為 `{totalCount, upCount, downCount, upRate}`
 - **handoff status 查詢 API** 明確排除本期
@@ -105,67 +106,67 @@ Phase 7（品質補強與驗收準備）
 
 ---
 
-- [ ] **T0-001** `OPS` **確認本地開發環境與容器**
+- [X] **T0-001** `OPS` **確認本地開發環境與容器**
   - 說明：確認 `docker-compose.yml` 可正常啟動 Postgres；確認 Node.js 版本符合 NestJS v11 需求；確認 `.env` 可正確讀取
   - 輸出物：`docker-compose.yml`（含 postgres service）、`.env`（本地用，不 commit）
   - 驗收：`docker compose up -d` 後 Postgres 可連線；`npm run start:dev` 不因缺少環境變數而崩潰
 
-- [ ] **T0-002** `OPS` **建立 `.env.example` 初版**
+- [X] **T0-002** `OPS` **建立 `.env.example` 初版**
   - 說明：列出所有必要環境變數佔位符（`DATABASE_URL`、`NODE_ENV`、`PORT`、`OPENAI_API_KEY`、`LLM_MODEL`、`LLM_MAX_TOKENS`、`LLM_TIMEOUT_MS`、`WEBHOOK_URL`、`WEBHOOK_SECRET`、`EMAIL_PROVIDER` 等），Email 相關預留但無值
   - 輸出物：`.env.example`
   - 驗收：所有 Phase 0 所需變數均有佔位符；Email / HMAC 相關變數預留標記
 
-- [ ] **T0-003** `CORE` **建立 NestJS 應用骨架與全域模組接線**
+- [X] **T0-003** `CORE` **建立 NestJS 應用骨架與全域模組接線**
   - 說明：確認 `main.ts`、`app.module.ts` 結構正確；接入全域 `ValidationPipe`（`class-validator`、`whitelist: true`、`forbidNonWhitelisted: true`）；接入全域 `TransformInterceptor`（回傳格式統一為 `{ data: T, code: number, requestId }`）；接入 `GlobalExceptionFilter`（`ValidationError` → 400、`HttpException` → 4xx、未知 → 500，不洩露 stack trace）
   - 輸出物：`src/main.ts`、`src/app.module.ts`、`src/common/interceptors/transform.interceptor.ts`、`src/common/filters/global-exception.filter.ts`
   - 驗收：應用啟動無錯誤；回傳格式符合統一規範；非 HTTP 錯誤不洩露 stack
 
-- [ ] **T0-004** `OPS` **建立 ConfigModule 與環境變數管理**
-  - 說明：使用 `@nestjs/config` 建立 `ConfigModule.forRoot()`（`isGlobal: true`）；建立 `AppConfigService` 包裝常用取值方法；確認所有配置從環境變數讀取，無硬編碼
-  - 輸出物：`src/config/app-config.service.ts`、`src/config/config.module.ts`
-  - 驗收：`AppConfigService` 可正確取得 `DATABASE_URL`、`NODE_ENV` 等必要值；未設定必要變數時啟動報錯提示明確
+- [X] **T0-004** `OPS` **建立 ConfigModule 與環境變數管理**
+  - 說明：使用 `@nestjs/config` 建立 `ConfigModule.forRoot({ isGlobal: true })`；各模組直接透過 `ConfigService` 注入取得環境變數；確認所有配置從 env 讀取，不可硬編碼
+  - 輸出物：`app.module.ts` 中的 `ConfigModule.forRoot({ isGlobal: true })` 設定
+  - 驗收：`ConfigService` 可正確取得 `DATABASE_URL`、`NODE_ENV` 等必要值；未設定必要變數時啟動報錯提示明確
 
-- [ ] **T0-005** `DATA` **建立 PrismaModule 與 PrismaService**
+- [X] **T0-005** `DATA` **建立 PrismaModule 與 PrismaService**
   - 說明：建立 `PrismaModule`（`isGlobal: true`）、`PrismaService`（繼承 `PrismaClient`，於 `onModuleInit` 連線、`onModuleDestroy` 中斷）；初始化 `prisma/schema.prisma`（含 `SystemConfig` model）
   - 輸出物：`src/prisma/prisma.module.ts`、`src/prisma/prisma.service.ts`、`prisma/schema.prisma`（`SystemConfig` model）
   - 驗收：應用啟動時 Prisma 可成功連線 DB；`PrismaService` 可被 inject 使用
 
-- [ ] **T0-006** `DATA` **執行 SystemConfig 首次 migration**
+- [X] **T0-006** `DATA` **執行 SystemConfig 首次 migration**
   - 說明：在 `prisma/schema.prisma` 定義 `SystemConfig` 資料表（`key`、`value`、`description`、`updatedAt`）；執行 `npx prisma migrate dev --name init-system-config`；建立對應 seed 初始值（rate limit、RAG 閾值、fallback 訊息等業務閾值）
   - 輸出物：`prisma/migrations/`（首次 migration）、`prisma/seeds/` 目錄（含 `seed.ts` 主進入點 + 5 個子 seed 空殼）
   - 驗收：`npx prisma migrate dev` 執行成功；`npx prisma db seed` 主進入點可執行（子 seed 為空時不報錯）
 
-- [ ] **T0-007** `CORE` **建立 Request ID Middleware**
+- [X] **T0-007** `CORE` **建立 Request ID Middleware**
   - 說明：每個 HTTP 請求注入 UUID v4 `X-Request-ID`（優先讀取 request header 中的值，不存在則生成）；將 `requestId` 掛載至 request 物件，供後續 Logger 與 Response 使用
   - 輸出物：`src/common/middleware/request-id.middleware.ts`
   - 驗收：所有 HTTP 回應 header 含 `X-Request-ID`；日誌輸出含對應 `requestId`
 
-- [ ] **T0-008** `OPS` **建立 Structured Logger**
+- [X] **T0-008** `OPS` **建立 Structured Logger**
   - 說明：使用 NestJS 內建 `Logger` 或 `ConsoleLogger`，輸出 JSON 格式日誌（含 `timestamp`、`requestId`、`sessionId`（可選）、`module`、`level`、`message`）；`NODE_ENV=production` 時僅輸出 `warn` 以上等級
   - 輸出物：`src/common/logger/app-logger.service.ts`（或 logger 設定）
   - 驗收：`npm run start:dev` 日誌為 JSON 格式；每筆日誌含 `requestId`（middleware 注入後）
 
-- [ ] **T0-009** `DATA` **建立 SystemConfigService（in-memory cache + 啟動載入）**
+- [X] **T0-009** `DATA` **建立 SystemConfigService（in-memory cache + 啟動載入）**
   - 說明：`SystemConfigService` 於模組 init 時從 DB 載入所有 `SystemConfig` key-value 至 in-memory cache；提供 `get(key: string): string`、`getNumber(key: string): number` 等方法；提供 `invalidateCache()` 供後台 API 更新後呼叫
   - 輸出物：`src/system-config/system-config.service.ts`、`src/system-config/system-config.module.ts`
   - 驗收：應用啟動時可從 DB 載入 SystemConfig 值；`get('rag_confidence_threshold')` 回傳正確值
 
-- [ ] **T0-010** `CORE` **建立 HealthModule**
-  - 說明：實作 `GET /api/v1/health`（DB ping 回傳 `{ status: "ok", db: "ok" }`）；實作 `GET /api/v1/health/ai-status`（回傳 `{ aiStatus: "normal" | "degraded" }`，初始值 `"normal"`）；`AiStatusService` 為 in-memory 狀態管理，Phase 2 實作 degraded 邏輯時注入
+- [X] **T0-010** `CORE` **建立 HealthModule**
+  - 說明：實作 `GET /api/v1/health`（DB ping 回傳 `{ status: "ok", db: "ok" }`）；實作 `GET /api/v1/health/ai-status`（回傳 `{ aiStatus: "normal" | "degraded" }`，初始値 `"normal"`；**此端點為 internal health / monitoring 用途，非前端 Widget 正式初始化 contract**；前端 Widget 正式初始化狀態來源只有 `GET /api/v1/widget/config` 的 `status`）；`AiStatusService` 為 in-memory 狀態管理，Phase 2 實作 degraded 邏輯時注入
   - 輸出物：`src/health/health.controller.ts`、`src/health/health.module.ts`、`src/health/ai-status.service.ts`
   - 驗收：`GET /api/v1/health` 回傳 200 + 正確格式；DB 連線中斷時回傳 503；`GET /api/v1/health/ai-status` 回傳正確格式
 
-- [ ] **T0-011** `OPS` **接入 Rate Limiting（@nestjs/throttler）**
-  - 說明：安裝 `@nestjs/throttler`；接入 `ThrottlerModule`（`ttl` 和 `limit` 讀取自 `SystemConfig.rate_limit_per_ip_per_min`，預設 60/min）；套用至全域或 Chat API 路由
+- [X] **T0-011** `OPS` **接入 Rate Limiting（@nestjs/throttler）**
+  - 說明：安裝 `@nestjs/throttler`；接入 `ThrottlerModule`，Phase 0 限流參數由環境變數 `RATE_LIMIT_PER_IP_PER_MIN` 透過 `ConfigService` 讀取（預設 60/min）；套用至全域路由；`SystemConfig.rate_limit_per_ip_per_min` 保留於 seed 作為後續擴充來源，Phase 0 不要求 runtime 動態更新（後續如需後台改設定即時生效，再改成 custom throttler guard + `SystemConfigService`）
   - 輸出物：`app.module.ts` 的 throttler 設定
-  - 驗收：同 IP 在 1 分鐘內超過限流後回傳 429；限流參數可透過 SystemConfig 調整不需重啟
+  - 驗收：同 IP 在 1 分鐘內超過限制後回傳 429；`RATE_LIMIT_PER_IP_PER_MIN` 可透過 env 調整（需重啟生效）
 
-- [ ] **T0-012** `OPS` **確認 pg_trgm 可用性並準備 fallback 策略**
+- [X] **T0-012** `OPS` **確認 pg_trgm 可用性並準備 fallback 策略**
   - 說明：在開發環境 Postgres 執行 `CREATE EXTENSION IF NOT EXISTS pg_trgm` 確認是否成功；若成功，紀錄環境變數 `PG_TRGM_ENABLED=true`；若不支援，確認 ILIKE fallback 策略設計文件已記錄（OQ-001 保守預設：假設可用，ILIKE fallback 已備用）
   - 輸出物：`.env.example` 中 `PG_TRGM_ENABLED` 佔位符；`README` 或 `docs/` 中的說明
   - 驗收：開發環境可確認 `pg_trgm` 狀態；fallback 策略有文字說明
 
-- [ ] **T0-013** `TEST` **Phase 0 測試：GlobalExceptionFilter 單元測試 + Health E2E**
+- [X] **T0-013** `TEST` **Phase 0 測試：GlobalExceptionFilter 單元測試 + Health E2E**
   - 說明：為 `GlobalExceptionFilter` 撰寫單元測試（`ValidationError` → 400、`NotFoundException` → 404、未知 error → 500，stack trace 不外洩）；為 `GET /api/v1/health` 撰寫 E2E 測試（supertest）
   - 輸出物：`src/common/filters/global-exception.filter.spec.ts`、`test/health.e2e-spec.ts`
   - 驗收：所有測試通過；`npm run test` 和 `npm run test:e2e` 無失敗
@@ -298,9 +299,9 @@ Phase 7（品質補強與驗收準備）
   - 驗收：每步驟可被個別 mock 測試；PromptGuard / ConfidentialityCheck 均為非空實作（呼叫真實 SafetyService）；SSE 串流正確推送 token chunks
 
 - [ ] **T2-008** `CORE` **建立 ChatModule 與 Chat API endpoints（SSE + sessionToken + history + handoff）**
-  - 說明：`ChatController`（`POST /api/v1/chat/sessions`：建立 session，產生 UUID `sessionToken`，回傳 `{ sessionToken, createdAt }`（不回傳內部 sessionId）；`POST /api/v1/chat/sessions/:sessionToken/messages`：依 sessionToken 解析內部 sessionId → 呼叫 Pipeline → 以 `Content-Type: text/event-stream` 回傳 SSE 串流；`GET /api/v1/chat/sessions/:sessionToken/history`：依 sessionToken 回傳 ConversationMessage 列表；`POST /api/v1/chat/sessions/:sessionToken/handoff`：訪客主動觸發轉人工，建立 Lead（`trigger_reason=handoff`）+ Ticket，回傳 `{accepted, action, leadId, ticketId, message}`）；斷線偵測：`res.on('close', () => abortController.abort())`；取消串流以 AbortController/connection close 為正式機制，**不設計獨立 cancel endpoint**）；SSE 事件格式：`event: token\ndata: {"token":"..."}` / `event: done\ndata: {messageId, action, sourceReferences, usage}` / `event: error\ndata: {code, message}` / `event: timeout\ndata: {message}` / `event: interrupted\ndata: {message}`；`action` enum：`"answer" | "handoff" | "fallback" | "intercepted"`
+  - 說明：`ChatController`（`POST /api/v1/chat/sessions`：建立 session，產生 UUID `sessionToken`，回傳 `{ sessionToken, createdAt }`（不回傳內部 sessionId）；`POST /api/v1/chat/sessions/:sessionToken/messages`：依 sessionToken 解析內部 sessionId → 呼叫 Pipeline → 以 `Content-Type: text/event-stream` 回傳 SSE 串流；`GET /api/v1/chat/sessions/:sessionToken/history`：依 sessionToken 回傳 ConversationMessage 列表；`POST /api/v1/chat/sessions/:sessionToken/handoff`：訪客主動觸發轉人工，後端建立 Lead 與 / 或 Ticket（`trigger_reason=handoff`），回傳 `{ accepted, action: "handoff", leadId, ticketId, message }`；`leadId` / `ticketId` 依實際建立結果回傳（nullable），`accepted = true` 時不得同時為 `null`）；斷線偵測：`res.on('close', () => abortController.abort())`；取消串流以 AbortController/connection close 為正式機制，**不設計獨立 cancel endpoint**）；SSE 事件格式：`event: token\ndata: {"token":"..."}` / `event: done\ndata: {messageId, action, sourceReferences, usage}` / `event: error\ndata: {code, message}` / `event: timeout\ndata: {message}` / `event: interrupted\ndata: {message}`；`action` enum：`"answer" | "handoff" | "fallback" | "intercepted"`
   - 輸出物：`src/chat/chat.controller.ts`、`src/chat/chat.module.ts`、`src/chat/dto/`、`src/chat/types/`
-  - 驗收：`POST /api/v1/chat/sessions` 回傳 201 + `sessionToken`（UUID）；SSE stream 含正確事件格式；`GET .../history` 回傳 ConversationMessage 列表；`POST .../handoff` 建立 Lead + Ticket；sessionToken 不存在時回傳 404
+  - 驗收：`POST /api/v1/chat/sessions` 回傳 201 + `sessionToken`（UUID）；SSE stream 含正確事件格式；`GET .../history` 回傳 ConversationMessage 列表；`POST .../handoff` 觸發 Lead 與 / 或 Ticket 建立，`accepted = true` 時 `leadId` / `ticketId` 不得同時為 `null`；sessionToken 不存在時回傳 404
 
 - [ ] **T2-009** `CORE` **實作 AiStatusService degraded 邏輯與 fallback 機制**
   - 說明：`AiStatusService` 追蹤連續 LLM 失敗次數；達 `SystemConfig.ai_degraded_threshold`（預設 3）後設定 `status=degraded`；`GET /api/v1/health/ai-status` 回傳 degraded 狀態；degraded 時 Pipeline 跳過 LLM，透過 SSE 直接推送 fallback 回覆（`fallback_message_zh` / `fallback_message_en` 來自 SystemConfig）後送 `event: done`；degraded 時 `GET /api/v1/widget/config` 的 `status` 自動切換為 `"degraded"`
@@ -348,7 +349,7 @@ Phase 7（品質補強與驗收準備）
   - 驗收：`GET /api/v1/widget/config` 回傳 200 + 正確多語系格式；DB 值更新後下次請求即時反映；AI degraded 時 `status` 回傳 `"degraded"`
 
 - [ ] **T2-016** `TEST` **Phase 2 測試：SSE 串流、sessionToken、Widget Config、history、handoff 測試**
-  - 說明：SSE 串流單元測試（mock LLM stream）：`event: token` + `data: {"token":"..."}` token chunks 依序推送；`event: done` 含 `{messageId, action:"answer"|"handoff"|"fallback"|"intercepted", sourceReferences, usage}`；`event: timeout\ndata: {"message":"string"}` 在 LLM timeout 時觸發；前端斷線時 AbortController 被呼叫（無 cancel endpoint）；sessionToken 測試：`POST /api/v1/chat/sessions` 回傳 UUID sessionToken；`findBySessionToken()` 正確解析；sessionToken 不存在時 404；`GET /api/v1/chat/sessions/:sessionToken/history` 回傳 ConversationMessage 列表；`POST /api/v1/chat/sessions/:sessionToken/handoff` 建立 Lead + Ticket，回傳 `{accepted, action, leadId, ticketId, message}`；Widget Config 測試：`GET /api/v1/widget/config` 回傳多語系 JSONB 格式；AI degraded 時 `status` 切換為 `"degraded"`
+  - 說明：SSE 串流單元測試（mock LLM stream）：`event: token` + `data: {"token":"..."}` token chunks 依序推送；`event: done` 含 `{messageId, action:"answer"|"handoff"|"fallback"|"intercepted", sourceReferences, usage}`；`event: timeout\ndata: {"message":"string"}` 在 LLM timeout 時觸發；前端斷線時 AbortController 被呼叫（無 cancel endpoint）；sessionToken 測試：`POST /api/v1/chat/sessions` 回傳 UUID sessionToken；`findBySessionToken()` 正確解析；sessionToken 不存在時 404；`GET /api/v1/chat/sessions/:sessionToken/history` 回傳 ConversationMessage 列表；`POST /api/v1/chat/sessions/:sessionToken/handoff` 觸發後端建立 Lead 與 / 或 Ticket，回傳 `{ accepted, action: "handoff", leadId, ticketId, message }`；`accepted = true` 時 `leadId` / `ticketId` 不得同時為 `null`；Widget Config 測試：`GET /api/v1/widget/config` 回傳多語系 JSONB 格式；AI degraded 時 `status` 切換為 `"degraded"`
   - 輸出物：`src/chat/sse-stream.spec.ts`、`src/conversation/conversation.repository.spec.ts`（更新）、`src/widget-config/widget-config.controller.spec.ts`
   - 驗收：SSE 事件格式、sessionToken 對映、history API、handoff API、Widget Config 多語系讀取的測試均通過
 
@@ -491,9 +492,9 @@ Phase 7（品質補強與驗收準備）
   - 驗收：Lead 建立後 `notification_jobs` 有一筆 `channel=webhook, status=pending`；同時 `Ticket` 建立（`status=open`）；AuditLog 有 `lead_created` + `ticket_created` 事件；交接欄位從 Conversation 正確帶入
 
 - [ ] **T5-003** `CORE` **實作留資 API（POST /api/v1/chat/sessions/:sessionToken/lead）**
-  - 說明：`POST /api/v1/chat/sessions/:sessionToken/lead`（依 sessionToken 查找對應 Conversation；接收 `CreateLeadDto`：`name`（必填）、`email`（必填）、`company?`（選填）、`phone?`（選填）、`message?`（選填）、`language?`（選填，前端語系如 `zh-TW` / `en`））；驗證 session 存在；驗證同一 session 未重複留資；呼叫 `LeadService.createLead()`；回傳 `{ leadId, ticketId, status: 'pending' }`；DTO 使用 `class-validator`
+  - 說明：`POST /api/v1/chat/sessions/:sessionToken/lead`（依 sessionToken 查找對應 Conversation；接收 `CreateLeadDto`：`name`（必填）、`email`（必填）、`company?`（選填）、`phone?`（選填）、`message?`（選填）、`language?`（選填，前端語系如 `zh-TW` / `en`））；驗證 session 存在；驗證同一 session 未重複留資；呼叫 `LeadService.createLead()`；回傳 `{ leadId, ticketId, status: 'pending' }`（`leadId` 成功時不可為 `null`）；DTO 使用 `class-validator`
   - 輸出物：`src/chat/chat.controller.ts`（更新）、`src/lead/dto/create-lead.dto.ts`
-  - 驗收：API 可建立 Lead + Ticket；`name` 或 `email` 缺少時回傳 400；重複留資回傳 409；sessionToken 不存在回傳 404；回傳含 `ticketId`
+  - 驗收：API 可建立 Lead（`leadId` 必非 null）；`name` 或 `email` 缺少時回傳 400；重複留資回傳 409；sessionToken 不存在回傳 404；回傳 `leadId`（必非 null）與 `ticketId`
 
 - [ ] **T5-004** `INTG` **建立 NotificationModule 與 WebhookProvider**
   - 說明：定義 `INotificationQueue` 介面（`enqueue(leadId, channel): Promise<void>`）；`NotificationService.enqueue()`（寫入 `notification_jobs`，`status=pending`）；`WebhookProvider.send(payload: WebhookPayload): Promise<WebhookSendResult>`（HTTP POST 至 `WEBHOOK_URL`；timeout 來自 `SystemConfig.webhook_timeout_ms`，預設 5000ms；OQ-004 保守預設：使用 mock 接收端開發，FR-063 payload 已定義）；`IEmailProvider` 介面宣告存在（不實作）
@@ -548,7 +549,7 @@ Phase 7（品質補強與驗收準備）
 - [ ] **T5-014** `TEST` **Phase 5 測試：LeadService + TicketService 整合測試（含 handoff 閉環）**
   - 說明：整合測試（測試 DB）：Lead 建立後 `notification_jobs` 有一筆 pending webhook + `Ticket` 同步建立（`status=open`）；交接欄位（`type`、`riskLevel` 等）從 Conversation 正確帶入；AuditLog 有 `lead_created` + `ticket_created` 事件；重複留資被拒絕（409）；Ticket 狀態流轉正確，非法轉換 400
   - 輸出物：`src/lead/lead.service.spec.ts`（更新）、`src/ticket/ticket.service.spec.ts`
-  - 驗收：整合測試通過；handoff 閉環（Lead + Ticket 同步建立）有測試案例覆蓋
+  - 驗收：整合測試通過；handoff 閉環（Lead 與 / 或 Ticket 建立，`leadId` / `ticketId` nullable 語意正確，`accepted = true` 時兩者不同時為 `null`）有測試案例覆蓋
 
 - [ ] **T5-015** `TEST` **Phase 5 測試：Feedback API 測試**
   - 說明：`FeedbackService` 單元測試（mock DB）：`value: "up"` / `"down"` 有效；其他值無效（400）；重複評分 409；messageId 不屬於 session 404；`POST /api/v1/chat/sessions/:sessionToken/messages/:messageId/feedback` E2E 測試；Admin `GET /api/v1/admin/feedback` filter（`value`、`dateFrom`、`dateTo`、`sessionId`）+ 分頁測試
@@ -853,5 +854,6 @@ Phase 7（品質補強與驗收準備）
 | 1.1.0 | 2026-04-10 | 承接 spec.md v1.4.0 / design.md v1.6.0 / plan.md v1.1.0；同步 10 項拍板結果：(1) 新增 §0 本期實作總原則；(2) Phase 2 改為 SSE 串流主流程，T2-007/T2-008 全面重寫；(3) sessionToken 取代 sessionId 於所有前端 API 路徑；(4) T2-001 Conversation migration 加入 session_token 欄位；(5) T2-002 加入 findBySessionToken()；(6) T2-004 ILlmProvider 加入 stream() 方法；(7) T2-009 AiStatusService 聯動 Widget Config degraded_status；(8) 新增 T2-014/T2-015/T2-016（Widget Config migration/seed、WidgetConfigModule、SSE+sessionToken+Widget Config 測試）；(9) Phase 5 改名為 Lead/Webhook/Ticket/Feedback 閉環；(10) T5-001 加入 Ticket + Feedback migration；(11) T5-002/T5-003 handoff 同步建立 Ticket，API 路徑改用 sessionToken；(12) 新增 T5-010~T5-015（TicketModule、Ticket Admin API、FeedbackModule、Feedback API、整合測試）；(13) Phase 6 改名加入 Dashboard；(14) 重新編號 T6-007/T6-008（DashboardModule、Dashboard Admin API）；(15) T6-009 改為部署文件（原 T6-007），T6-010/T6-011 為測試；(16) §7 Deferred 移除 Streaming/Ticket/Dashboard/Feedback/Ticket實體化/FR-076，新增 handoff status API；(17) §8 新增 OQ-009/010/011；(18) §9 驗收條件補充 SSE/Ticket/Feedback/Dashboard 項目 |
 | 1.2.0 | 2026-04-13 | 最後一輪 API contract 對齊修訂（承接 spec.md v1.5.0 + design.md v1.7.0）：①§0 補入 fetch+ReadableStream、AbortController 取消機制、SSE 事件格式最終版、value:up/down、Lead 欄位最終版；②T5-001 Lead model（name/email 必填，company/phone/message 選填）+ Feedback model（value:up/down，移除 rating）；③T5-003 CreateLeadDto 欄位修正；④T5-005 Webhook payload 欄位映射修正；⑤T5-012/T5-013 FeedbackService/API 改為 value:up/down，Admin filter 移除 rating；⑥T5-015 Feedback 測試改為 value enum 驗證；⑦T6-007 Dashboard feedbackSummary 改為 {totalCount,upCount,downCount,upRate}；⑧T6-011 Dashboard 測試補入 feedbackSummary 正確格式驗證；⑨OQ-011 status 改為 online/offline/degraded（移除 inactive） |
 | 1.3.0 | 2026-04-14 | 依 spec.md v1.6.0 同步對齊（承接 spec.md v1.6.0 + design.md v1.8.0 + plan.md v1.3.0）：①承接文件版本更新；②§0 Lead API 欄位補入 `language`（選填）、補入「end session API 本期不做」原則、Handoff API response leadId/ticketId 為 nullable；③T5-001 Lead migration 新增 `language` 欄位（選填）；④T5-003 CreateLeadDto 新增 `language?: string`；⑤T5-005 Webhook payload 新增 `message`、`language`、`summary` 欄位說明（均為選填，可為 null）；⑥T5-009 Webhook 測試補入新欄位驗收；⑦§7 Deferred 新增 end session API 條目 |
+| 1.3.1 | 2026-04-14 | 最後一輪一致性小幅修補（承接 plan.md v1.3.1）：①handoff response contract 統一——§0 / T2-008 / T2-016 / T5-014 補充 nullable 語意（action="handoff" 穩定語意，accepted=true 時 leadId / ticketId 不得同時為 null）；②`/lead` API 成功時 leadId 不可為 null（T5-003 說明與驗收更新）；③`GET /api/v1/health/ai-status` 明確標示為 internal health / monitoring endpoint（§0 + T0-010），非前端 Widget 正式初始化依賴 |
 
-**版本**：1.3.0 | **建立日期**：2026-04-10 | **狀態**：Draft
+**版本**：1.3.1 | **建立日期**：2026-04-10 | **狀態**：Draft

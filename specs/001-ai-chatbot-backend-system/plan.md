@@ -1,6 +1,6 @@
 # 震南官網 AI 客服聊天機器人 — Backend 實作計畫
 
-**版本**：1.3.0 | **建立日期**：2026-04-10 | **狀態**：Draft  
+**版本**：1.3.1 | **建立日期**：2026-04-10 | **狀態**：Draft  
 **承接文件**：`spec.md` v1.6.0、`design.md` v1.8.0  
 **下游文件**：`task.md`
 
@@ -174,10 +174,10 @@ Phase 7：品質補強與驗收準備
 | Structured Logger | NestJS ConsoleLogger + JSON 格式，含 requestId / sessionId / module / message |
 | ConfigModule + 環境變數 | `@nestjs/config` 基礎設定、`.env` / `.env.example` 範本 |
 | SystemConfig 基礎機制 | `SystemConfig` 表 migration、`ConfigService` 啟動載入 + in-memory cache |
-| HealthModule | `GET /api/v1/health`（DB ping）、`GET /api/v1/health/ai-status`（in-memory degraded 狀態）|
+| HealthModule | `GET /api/v1/health`（DB ping）、`GET /api/v1/health/ai-status`（in-memory degraded 狀態；**此為 internal health / monitoring endpoint，非前端 Widget 正式初始化 contract**；前端 Widget 正式初始化狀態來源只有 `GET /api/v1/widget/config` 的 `status`）|
 | Migration 基礎規劃 | Prisma migration 流程確認；`prisma/seeds/` 目錄結構建立（含各子 seed 檔案空殼）|
 | `pg_trgm` 啟用確認 | 確認開發環境是否支援；若不支援，確認 ILIKE fallback 策略可正常執行 |
-| Rate Limiting | `@nestjs/throttler` 接線；限流參數來自 `SystemConfig.rate_limit_per_ip_per_min` |
+| Rate Limiting | `@nestjs/throttler` 接線；Phase 0 限流參數由 env `RATE_LIMIT_PER_IP_PER_MIN` / `AppConfigService` 讀取（預設 60/min）；`SystemConfig.rate_limit_per_ip_per_min` 保留於 seed / 後續擴充，Phase 0 不要求 runtime 動態更新 |
 | Docker / docker-compose 確認 | 確認本地開發容器可正常啟動 Postgres + NestJS |
 
 #### 前置依賴
@@ -282,7 +282,7 @@ Phase 7：品質補強與驗收準備
 | `ChatModule` — SSE 訊息端點 | `POST /api/v1/chat/sessions/:sessionToken/messages`（Content-Type: text/event-stream）|
 | SSE 串流控制器 | NestJS SSE（`@nestjs/platform-express`）；`event: token\ndata: {"token":"..."}` 逐 token 推送；`event: done`（含 `messageId`、`action`、`sourceReferences`、`usage`）、`event: error`、`event: timeout`、`event: interrupted`；前端以 **fetch + ReadableStream** 接收，不使用 EventSource |
 | **對話歷史 API** | `GET /api/v1/chat/sessions/:sessionToken/history`；依 sessionToken 回傳該會話 ConversationMessage 列表 |
-| **Handoff API** | `POST /api/v1/chat/sessions/:sessionToken/handoff`；訪客主動觸發轉人工；後端建立 Lead（`trigger_reason=handoff`）+ Ticket；回傳 `{accepted, action, leadId, ticketId, message}` |
+| **Handoff API** | `POST /api/v1/chat/sessions/:sessionToken/handoff`；訪客主動觸發轉人工；後端建立 Lead 與 / 或 Ticket（`trigger_reason=handoff`）；回傳 `{ accepted, action, leadId, ticketId, message }`；`action` 穩定語意為 `"handoff"`；`leadId` / `ticketId` 為 nullable，依實際建立結果回傳；`accepted = true` 時兩者不得同時為 `null` |
 | 取消串流機制 | **AbortController / connection close** 為正式取消機制；不設計獨立 cancel endpoint；`res.on('close')` 感知前端斷線後呼叫 `AbortController.abort()` |
 | `ILlmProvider` stream() 方法 | 介面新增 `stream(request, abortSignal?): AsyncIterable<LlmStreamChunk>`；`OpenAiProvider.stream()` 實作 OpenAI streaming API |
 | Chat Pipeline 骨架 | 完整 Pipeline 骨架接入（InputValidation → LanguageDetection → PromptGuard → ConfidentialityCheck → IntentRecognition → KnowledgeRetrieval → 信心判斷 → Prompt 組裝 → LLM Streaming → 寫入）|
@@ -317,7 +317,7 @@ Phase 7：品質補強與驗收準備
 - [ ] `POST /api/v1/chat/sessions` 建立 session，回傳 `sessionToken`（不含 sessionId）
 - [ ] `POST /api/v1/chat/sessions/:sessionToken/messages` SSE 串流執行，`event: token\ndata:` token chunk 推送 + `event: done` 含 `{messageId, action, sourceReferences, usage}`
 - [ ] `GET /api/v1/chat/sessions/:sessionToken/history` 可回傳 ConversationMessage 列表
-- [ ] `POST /api/v1/chat/sessions/:sessionToken/handoff` 可建立 Lead + Ticket，回傳 `{accepted, action, leadId, ticketId, message}`
+- [ ] `POST /api/v1/chat/sessions/:sessionToken/handoff` 觸發後端建立 Lead 與 / 或 Ticket；回傳 `{ accepted, action: "handoff", leadId, ticketId, message }`；`leadId` / `ticketId` 依實際建立結果回傳（nullable），`accepted = true` 時不得同時為 `null`
 - [ ] `sessionToken` 不存在時回傳 404
 - [ ] 前端斷線時 `res.on('close')` 觸發 `AbortController.abort()`，OpenAI streaming 中止
 - [ ] AuditLog 每筆：有 `requestId`、`knowledge_refs`、`prompt_tokens` + `total_tokens`
@@ -454,7 +454,7 @@ Phase 7：品質補強與驗收準備
 | `LeadModule` | `LeadService.createLead()`（建立 Lead + 更新 Conversation + 生成摘要 + 寫入 notification_jobs）、`LeadRepository` |
 | 留資 API | `POST /api/v1/chat/sessions/:sessionToken/lead`（接收留資表單）|
 | **`TicketModule`** | `TicketService.createTicket()`（handoff 時建立 Ticket，status=open）；Ticket CRUD 後台 API（`GET|PATCH /api/v1/admin/tickets/**`、狀態更新、備註新增）|
-| handoff 流程 | handoff 觸發時：`LeadService.createLead()` + `TicketService.createTicket()`；回傳 `action=handoff`；**無 handoff status 輪詢 API** |
+| handoff 流程 | handoff 觸發時：`LeadService.createLead()` + `TicketService.createTicket()`；回傳 `{ accepted, action: "handoff", leadId, ticketId, message }`；`leadId` / `ticketId` 依實際建立結果回傳（nullable）；`accepted = true` 時兩者不得同時為 `null`；**無 handoff status 輪詢 API** |
 | **`FeedbackModule`** | `FeedbackService.createFeedback()`；`POST /api/v1/chat/sessions/:sessionToken/messages/:messageId/feedback`（訪客評分；`value: "up" | "down"`、`reason?: string`）；`GET /api/v1/admin/feedback/**`（後台查詢）|
 | `NotificationModule` | `WebhookProvider`（POST Webhook URL）、`NotificationService`（寫入 notification_jobs）|
 | Cron Worker | `@nestjs/schedule` `@Interval(30000)`；`SELECT ... FOR UPDATE SKIP LOCKED`；指數退避重試（60s / 300s）|
@@ -480,7 +480,7 @@ Phase 7：品質補強與驗收準備
 #### 完成條件
 
 - [ ] `LeadService` 整合測試：Lead 建立後 `notification_jobs` 有一筆 `channel=webhook, status=pending`
-- [ ] handoff 觸發時：`Lead` 和 `Ticket`（status=open）同時建立；回傳 `action=handoff`
+- [ ] handoff 觸發時：後端建立 Lead 與 / 或 Ticket（status=open）；回傳 `{ accepted: true, action: "handoff", leadId, ticketId, message }`；`leadId` / `ticketId` 依實際建立結果回傳（nullable）；`accepted = true` 時兩者不得同時為 `null`
 - [ ] Ticket 狀態更新 API：`open → in_progress → resolved → closed` 流轉正確
 - [ ] Feedback API：`POST /api/v1/chat/sessions/:sessionToken/messages/:messageId/feedback` 可正確儲存評分
 - [ ] Cron Worker 測試：pending job 在下次輪詢後被處理，`NotificationDelivery` 有記錄
@@ -860,5 +860,6 @@ NODE_ENV=production：
 | 1.1.0 | 2026-04-10 | 依 10 項拍板結果同步修訂（承接 spec.md v1.4.0 + design.md v1.6.0）：①新增§0 本期實作總原則；②§4.1 範圍：新增 SSE/streaming、sessionToken、Ticket、Feedback、Dashboard、Widget Config；③§4.2 排除：移除 Streaming 回覆，新增 handoff status 查詢 API 為排除項，移除 Ticket 實體化；④里程碑：M2 更新為 SSE 串流，新增 M2a Widget Config，M5 納入 Ticket + Feedback，M6 納入 Dashboard；⑤Phase 2 全面更新：SSE 串流控制器、ILlmProvider.stream()、sessionToken 機制、Widget Config API；⑥Phase 5 更新：新增 TicketModule、FeedbackModule，handoff 同步建立 Ticket；⑦Phase 6 更新：新增 DashboardModule、Ticket/Feedback 查詢 API；⑧模組依賴表：新增 TicketModule / FeedbackModule / WidgetConfigModule / DashboardModule；⑨測試 Phase 表更新；⑩風險表：新增 R-009/R-010/R-011；⑪§11 Open Questions：新增 OQ-009/010/011；⑫§12 Deferred：移除 Streaming/Ticket/Dashboard/Feedback，新增 handoff status API |
 | 1.2.0 | 2026-04-13 | 最後一輪 API contract 對齊修訂（承接 spec.md v1.5.0 + design.md v1.7.0）：①承接文件版本更新；②Phase 2：SSE 事件格式改為 `event: token` 前綴，done event payload 精簡（messageId/action/sourceReferences/usage），明確前端以 fetch+ReadableStream 接收，取消串流以 AbortController/connection close 為正式機制（無 cancel endpoint）；③Phase 2 新增 Handoff API（`POST .../handoff`）與 History API（`GET .../history`）任務項目；④Phase 2 Widget Config seed/response 改為 JSONB 多語系結構，AI 失效時 status 改為 `degraded`；⑤Phase 5 FeedbackModule：評分改為 `value: "up"|"down"`，移除 rating；⑥Phase 6 DashboardModule：feedbackSummary 改為 `{totalCount,upCount,downCount,upRate}`；⑦風險 R-009 更新（fetch+ReadableStream，不使用 EventSource）；⑧風險 R-011 + OQ-011：widget_degraded_status 移除，改為 `status: degraded` |
 | 1.3.0 | 2026-04-14 | 依 spec.md v1.6.0 同步對齊（承接 spec.md v1.6.0 + design.md v1.8.0）：①承接文件版本更新；②§0 總原則：新增 Lead 欄位最終版（name/email 必填，company/phone/message/language 選填），end session API 明確延後；③§4.2 排除範圍：新增 end session API；④§12 Deferred：新增 end session API 條目 |
+| 1.3.1 | 2026-04-14 | 最後一輪一致性小幅修補（承接 design.md v1.8.0）：①handoff response contract 統一——Phase 2 / Phase 5 表格與完成條件改為 `{ accepted, action: "handoff", leadId, ticketId, message }`，補充 nullable 語意（accepted=true 時兩者不得同時為 null）；②`GET /api/v1/health/ai-status` 明確標示為 internal health / monitoring endpoint，非前端 Widget 正式初始化 contract，前端正式初始化狀態來源只有 `GET /api/v1/widget/config` 的 `status` |
 
-**版本**：1.3.0 | **建立日期**：2026-04-10 | **狀態**：Draft
+**版本**：1.3.1 | **建立日期**：2026-04-10 | **狀態**：Draft

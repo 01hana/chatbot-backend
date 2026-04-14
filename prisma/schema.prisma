@@ -8,15 +8,13 @@ datasource db {
   provider = "postgresql"
 }
 
-model Customer {
-  id         String   @id @default(uuid())
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-  email      String   @unique
-  hash       String
-  name       String
-  mobile     String
-  address    String
+/// System-wide configuration key-value store.
+/// All runtime-tunable thresholds and text are stored here.
+model SystemConfig {
+  key         String   @id
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
 
-  @@map("customers")
+  @@map("system_configs")
 }

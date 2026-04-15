@@ -6,6 +6,10 @@ import { PrismaModule } from './prisma/prisma.module';
 import { SystemConfigModule } from './system-config/system-config.module';
 import { HealthModule } from './health/health.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
+import { SafetyModule } from './safety/safety.module';
+import { IntentModule } from './intent/intent.module';
+import { KnowledgeModule } from './knowledge/knowledge.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -28,6 +32,10 @@ import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
     PrismaModule,
     SystemConfigModule,
     HealthModule,
+    SafetyModule,
+    IntentModule,
+    KnowledgeModule,
+    AdminModule,
   ],
   providers: [
     // Apply ThrottlerGuard globally to all routes

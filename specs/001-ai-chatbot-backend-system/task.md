@@ -211,32 +211,32 @@ Phase 7（品質補強與驗收準備）
   - 輸出物：`prisma/seed.ts`（完整版）
   - 驗收：`npx prisma db seed` 一次執行完所有 seed；每個子 seed 執行有日誌輸出；`NODE_ENV=production` 跳過 knowledge seed
 
-- [ ] **T1-007** `CORE` **建立 SafetyModule 骨架（SafetyService + SafetyRepository）**
+- [X] **T1-007** `CORE` **建立 SafetyModule 骨架（SafetyService + SafetyRepository）**
   - 說明：建立 `SafetyModule`；`SafetyRepository`（提供 `findAllRules()`、`findAllBlacklist()` 從 DB 查詢）；`SafetyService`（`onModuleInit` 時呼叫 `loadCache()` 將規則載入 in-memory；提供 `invalidateCache()` 重新載入；提供 `scanPrompt(input: string): SafetyScanResult` 骨架方法（Phase 2 接入 Pipeline，Phase 3 完善規則）；提供 `checkConfidentiality(input: string): ConfidentialityResult` 骨架方法）
   - 輸出物：`src/safety/safety.module.ts`、`src/safety/safety.service.ts`、`src/safety/safety.repository.ts`、`src/safety/types/safety-scan-result.type.ts`
   - 驗收：應用啟動時 `SafetyService` 可從 DB 載入規則；`scanPrompt()` 接受 input 並回傳結構化結果（即使規則邏輯尚未完整）
 
-- [ ] **T1-008** `CORE` **建立 IntentModule 骨架（IntentService + IntentRepository）**
+- [X] **T1-008** `CORE` **建立 IntentModule 骨架（IntentService + IntentRepository）**
   - 說明：建立 `IntentModule`；`IntentRepository`（`findAllTemplates()`、`findAllGlossary()`）；`IntentService`（`onModuleInit` 時載入 in-memory cache；`invalidateCache()`；`detect(input: string, language: string): IntentDetectResult` 骨架方法（keyword 比對 + 意圖路由邏輯，Phase 2 接入 Pipeline）；`isHighIntent(conversationHistory: ConversationMessage[]): boolean` 骨架方法）
   - 輸出物：`src/intent/intent.module.ts`、`src/intent/intent.service.ts`、`src/intent/intent.repository.ts`、`src/intent/types/`
   - 驗收：應用啟動時 `IntentService` 從 DB 載入意圖模板；`detect()` 可接受 input 並回傳結構化結果
 
-- [ ] **T1-009** `CORE` **建立 KnowledgeModule 骨架（KnowledgeService + KnowledgeRepository）**
+- [X] **T1-009** `CORE` **建立 KnowledgeModule 骨架（KnowledgeService + KnowledgeRepository）**
   - 說明：建立 `KnowledgeModule`；`KnowledgeRepository`（`findForRetrieval(query: RetrievalQuery): KnowledgeEntry[]` — 強制帶入 `WHERE status = 'approved' AND visibility = 'public'`，呼叫端無法繞過；`findById()`；`create()`；`update()`）；`KnowledgeService`（封裝 Repository，提供 CRUD 介面）
   - 輸出物：`src/knowledge/knowledge.module.ts`、`src/knowledge/knowledge.service.ts`、`src/knowledge/knowledge.repository.ts`
   - 驗收：`KnowledgeRepository.findForRetrieval()` 無論傳入任何 filter 參數，SQL 查詢一律附帶 `status='approved' AND visibility='public'`
 
-- [ ] **T1-010** `CORE` **建立 Admin 路由骨架（Knowledge + SystemConfig）**
+- [X] **T1-010** `CORE` **建立 Admin 路由骨架（Knowledge + SystemConfig）**
   - 說明：建立 `/api/v1/admin/knowledge/` 路由骨架（Controller + DTO + 空實作的 Service 方法）；建立 `/api/v1/admin/system-config/` 路由骨架（Controller + DTO + 空實作）；路由存在但回傳 501 Not Implemented 佔位回應
   - 輸出物：`src/admin/knowledge/`（controller、dto）、`src/admin/system-config/`（controller、dto）
   - 驗收：`GET /api/v1/admin/knowledge` 回傳 501（骨架存在）；路由結構正確，後續 Phase 填充實作
 
-- [ ] **T1-011** `TEST` **Phase 1 測試：SafetyService、IntentService、KnowledgeRepository 單元測試**
+- [X] **T1-011** `TEST` **Phase 1 測試：SafetyService、IntentService、KnowledgeRepository 單元測試**
   - 說明：`SafetyService` 單元測試（mock PrismaService；驗證規則從 DB 正確載入至 cache；`invalidateCache()` 觸發重新載入）；`IntentService` 單元測試（mock；意圖模板正確載入）；`KnowledgeRepository` 單元測試（`findForRetrieval()` 不論傳入參數，不回傳 `visibility != 'public'` 或 `status != 'approved'` 的條目）
   - 輸出物：`src/safety/safety.service.spec.ts`、`src/intent/intent.service.spec.ts`、`src/knowledge/knowledge.repository.spec.ts`
   - 驗收：所有單元測試通過；`findForRetrieval()` 可見性過濾有測試案例覆蓋
 
-- [ ] **T1-012** `TEST` **Phase 1 測試：Seed 整合測試（NODE_ENV 條件分支）**
+- [X] **T1-012** `TEST` **Phase 1 測試：Seed 整合測試（NODE_ENV 條件分支）**
   - 說明：撰寫整合測試確認：`NODE_ENV=development` 時 `knowledge.seed.ts` 被執行；`NODE_ENV=production` 時 `knowledge.seed.ts` 被跳過；seed 執行後各資料表有正確初始資料
   - 輸出物：`test/seed.integration-spec.ts`（或 `prisma/seed.spec.ts`）
   - 驗收：NODE_ENV 條件測試通過；seed 資料可在測試 DB 查詢確認

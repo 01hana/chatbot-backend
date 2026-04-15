@@ -26,6 +26,25 @@ const mockPrismaService = {
     /** Called by SystemConfigService.onModuleInit — returns empty cache. */
     findMany: jest.fn().mockResolvedValue([]),
   },
+  // SafetyModule — SafetyRepository.findAllRules / findAllBlacklist
+  safetyRule: {
+    findMany: jest.fn().mockResolvedValue([]),
+  },
+  blacklistEntry: {
+    findMany: jest.fn().mockResolvedValue([]),
+  },
+  // IntentModule — IntentRepository.findAllTemplates / findAllGlossary
+  intentTemplate: {
+    findMany: jest.fn().mockResolvedValue([]),
+  },
+  glossaryTerm: {
+    findMany: jest.fn().mockResolvedValue([]),
+  },
+  // KnowledgeModule — no onModuleInit, but cover any incidental calls
+  knowledgeEntry: {
+    findMany: jest.fn().mockResolvedValue([]),
+    findUnique: jest.fn().mockResolvedValue(null),
+  },
 };
 
 describe('HealthController (e2e)', () => {

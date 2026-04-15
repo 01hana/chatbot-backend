@@ -23,3 +23,33 @@ export * from './enums.js';
  * All runtime-tunable thresholds and text are stored here.
  */
 export type SystemConfig = Prisma.SystemConfigModel
+/**
+ * Model SafetyRule
+ * Prompt-injection and jailbreak detection patterns.
+ */
+export type SafetyRule = Prisma.SafetyRuleModel
+/**
+ * Model BlacklistEntry
+ * Confidential / sensitive keyword blacklist.
+ */
+export type BlacklistEntry = Prisma.BlacklistEntryModel
+/**
+ * Model IntentTemplate
+ * Intent classification templates including follow-up question templates.
+ */
+export type IntentTemplate = Prisma.IntentTemplateModel
+/**
+ * Model GlossaryTerm
+ * Product glossary — term aliases and synonym mapping.
+ */
+export type GlossaryTerm = Prisma.GlossaryTermModel
+/**
+ * Model KnowledgeEntry
+ * Knowledge base entries used for RAG retrieval.
+ */
+export type KnowledgeEntry = Prisma.KnowledgeEntryModel
+/**
+ * Model KnowledgeVersion
+ * Immutable version snapshots of KnowledgeEntry content.
+ */
+export type KnowledgeVersion = Prisma.KnowledgeVersionModel

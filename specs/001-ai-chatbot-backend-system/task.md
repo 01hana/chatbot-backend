@@ -181,32 +181,32 @@ Phase 7（品質補強與驗收準備）
 
 ---
 
-- [ ] **T1-001** `DATA` **建立規則資料表 Migration（6 張表）**
+- [X] **T1-001** `DATA` **建立規則資料表 Migration（6 張表）**
   - 說明：在 `prisma/schema.prisma` 定義以下 6 張表的 model：`SafetyRule`（`id`、`type`、`pattern`、`isRegex`、`isActive`、`createdAt`）、`BlacklistEntry`（`id`、`keyword`、`isActive`）、`IntentTemplate`（`id`、`intent`、`label`、`keywords`、`templateZh`、`templateEn`、`priority`）、`GlossaryTerm`（`id`、`term`、`synonyms`、`intentLabel`）、`KnowledgeEntry`（`id`、`title`、`content`、`intentLabel`、`tags`、`status`、`visibility`、`version`、`createdAt`、`updatedAt`、`deletedAt`）、`KnowledgeVersion`（`id`、`knowledgeEntryId`、`versionNumber`、`contentSnapshot`、`createdAt`）；執行 migration
   - 輸出物：`prisma/schema.prisma`（更新）、`prisma/migrations/`（新 migration）
   - 驗收：`npx prisma migrate dev` 成功；6 張表可在 DB 查詢
 
-- [ ] **T1-002** `DATA` **建立 `pg_trgm` extension migration**
+- [X] **T1-002** `DATA` **建立 `pg_trgm` extension migration**
   - 說明：建立獨立 migration，在 migration SQL 中執行 `CREATE EXTENSION IF NOT EXISTS pg_trgm`；在 `KnowledgeEntry` 的 `content` 欄位建立 `gin_trgm_ops` 索引（`CREATE INDEX IF NOT EXISTS idx_knowledge_content_trgm ON knowledge_entries USING GIN (content gin_trgm_ops)`）
   - 輸出物：`prisma/migrations/`（pg_trgm migration）
   - 驗收：migration 在支援環境執行成功；不支援時 `IF NOT EXISTS` 確保不報錯（使用 ILIKE fallback）
 
-- [ ] **T1-003** `DATA` **實作 `safety-rules.seed.ts`**
+- [X] **T1-003** `DATA` **實作 `safety-rules.seed.ts`**
   - 說明：填充初始 `SafetyRule` 資料（至少包含：prompt injection 常見 pattern regex、jailbreak 嘗試 pattern、ignore previous instructions 等 5 種以上）；填充初始 `BlacklistEntry`（至少 10 個保守預設機密觸發關鍵字，OQ-002：等待甲方補充完整清單）
   - 輸出物：`prisma/seeds/safety-rules.seed.ts`、`prisma/seeds/blacklist.seed.ts`
   - 驗收：執行 seed 後 `SafetyRule` 表有初始資料；`BlacklistEntry` 有至少 10 筆；每筆有明確 `type` 標記
 
-- [ ] **T1-004** `DATA` **實作 `intent-templates.seed.ts` 與 `glossary-terms.seed.ts`**
+- [X] **T1-004** `DATA` **實作 `intent-templates.seed.ts` 與 `glossary-terms.seed.ts`**
   - 說明：填充 `IntentTemplate`（至少包含：`product-inquiry`、`product-diagnosis`、`price-inquiry`、`general-faq` 4 種意圖，每種含中英文追問模板）；問診追問文字採保守預設（OQ-003：甲方確認後透過後台 API 更新即可，不阻擋開發）；填充 `GlossaryTerm`（至少 10 筆產品術語 + 同義詞）
   - 輸出物：`prisma/seeds/intent-templates.seed.ts`、`prisma/seeds/glossary-terms.seed.ts`
   - 驗收：執行 seed 後 `IntentTemplate` 有 4 種以上意圖；`GlossaryTerm` 有至少 10 筆
 
-- [ ] **T1-005** `DATA` **實作 `knowledge.seed.ts`（開發 / 測試用）**
+- [X] **T1-005** `DATA` **實作 `knowledge.seed.ts`（開發 / 測試用）**
   - 說明：建立至少 5 筆示範知識條目（含不同 `intentLabel`、`tags`、`status=approved`、`visibility=public`）；在 `seed.ts` 主進入點以 `NODE_ENV !== 'production'` 條件決定是否執行此 seed
   - 輸出物：`prisma/seeds/knowledge.seed.ts`、`prisma/seed.ts`（更新 NODE_ENV 條件）
   - 驗收：`NODE_ENV=development` 時執行 seed 後知識條目存在；`NODE_ENV=production` 時此 seed 跳過不執行
 
-- [ ] **T1-006** `DATA` **完成 `prisma/seed.ts` 主進入點整合**
+- [X] **T1-006** `DATA` **完成 `prisma/seed.ts` 主進入點整合**
   - 說明：整合所有子 seed 的呼叫順序（safety → blacklist → intent-templates → glossary-terms → knowledge（conditional））；加入錯誤處理與執行日誌輸出
   - 輸出物：`prisma/seed.ts`（完整版）
   - 驗收：`npx prisma db seed` 一次執行完所有 seed；每個子 seed 執行有日誌輸出；`NODE_ENV=production` 跳過 knowledge seed

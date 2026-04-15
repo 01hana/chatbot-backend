@@ -51,7 +51,13 @@ export const AnyNull = runtime.AnyNull
 
 
 export const ModelName = {
-  SystemConfig: 'SystemConfig'
+  SystemConfig: 'SystemConfig',
+  SafetyRule: 'SafetyRule',
+  BlacklistEntry: 'BlacklistEntry',
+  IntentTemplate: 'IntentTemplate',
+  GlossaryTerm: 'GlossaryTerm',
+  KnowledgeEntry: 'KnowledgeEntry',
+  KnowledgeVersion: 'KnowledgeVersion'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -78,6 +84,83 @@ export const SystemConfigScalarFieldEnum = {
 } as const
 
 export type SystemConfigScalarFieldEnum = (typeof SystemConfigScalarFieldEnum)[keyof typeof SystemConfigScalarFieldEnum]
+
+
+export const SafetyRuleScalarFieldEnum = {
+  id: 'id',
+  type: 'type',
+  pattern: 'pattern',
+  isRegex: 'isRegex',
+  isActive: 'isActive',
+  createdAt: 'createdAt'
+} as const
+
+export type SafetyRuleScalarFieldEnum = (typeof SafetyRuleScalarFieldEnum)[keyof typeof SafetyRuleScalarFieldEnum]
+
+
+export const BlacklistEntryScalarFieldEnum = {
+  id: 'id',
+  keyword: 'keyword',
+  type: 'type',
+  isActive: 'isActive',
+  createdAt: 'createdAt'
+} as const
+
+export type BlacklistEntryScalarFieldEnum = (typeof BlacklistEntryScalarFieldEnum)[keyof typeof BlacklistEntryScalarFieldEnum]
+
+
+export const IntentTemplateScalarFieldEnum = {
+  id: 'id',
+  intent: 'intent',
+  label: 'label',
+  keywords: 'keywords',
+  templateZh: 'templateZh',
+  templateEn: 'templateEn',
+  priority: 'priority',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type IntentTemplateScalarFieldEnum = (typeof IntentTemplateScalarFieldEnum)[keyof typeof IntentTemplateScalarFieldEnum]
+
+
+export const GlossaryTermScalarFieldEnum = {
+  id: 'id',
+  term: 'term',
+  synonyms: 'synonyms',
+  intentLabel: 'intentLabel',
+  createdAt: 'createdAt'
+} as const
+
+export type GlossaryTermScalarFieldEnum = (typeof GlossaryTermScalarFieldEnum)[keyof typeof GlossaryTermScalarFieldEnum]
+
+
+export const KnowledgeEntryScalarFieldEnum = {
+  id: 'id',
+  title: 'title',
+  content: 'content',
+  intentLabel: 'intentLabel',
+  tags: 'tags',
+  status: 'status',
+  visibility: 'visibility',
+  version: 'version',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  deletedAt: 'deletedAt'
+} as const
+
+export type KnowledgeEntryScalarFieldEnum = (typeof KnowledgeEntryScalarFieldEnum)[keyof typeof KnowledgeEntryScalarFieldEnum]
+
+
+export const KnowledgeVersionScalarFieldEnum = {
+  id: 'id',
+  knowledgeEntryId: 'knowledgeEntryId',
+  versionNumber: 'versionNumber',
+  contentSnapshot: 'contentSnapshot',
+  createdAt: 'createdAt'
+} as const
+
+export type KnowledgeVersionScalarFieldEnum = (typeof KnowledgeVersionScalarFieldEnum)[keyof typeof KnowledgeVersionScalarFieldEnum]
 
 
 export const SortOrder = {

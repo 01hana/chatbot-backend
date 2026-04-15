@@ -18,3 +18,89 @@ model SystemConfig {
 
   @@map("system_configs")
 }
+
+// ─── Phase 1: Safety ─────────────────────────────────────────────────────────
+
+/// Prompt-injection and jailbreak detection patterns.
+model SafetyRule {
+  id        Int      @id @default(autoincrement())
+  type      String   /// e.g. "prompt_injection" | "jailbreak" | "confidential"
+  pattern   String   /// regex string or plain keyword
+  isRegex   Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("safety_rules")
+}
+
+/// Confidential / sensitive keyword blacklist.
+model BlacklistEntry {
+  id        Int      @id @default(autoincrement())
+  keyword   String   @unique
+  type      String   /// confidential | internal | pricing_sensitive
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("blacklist_entries")
+}
+
+// ─── Phase 1: Intent ─────────────────────────────────────────────────────────
+
+/// Intent classification templates including follow-up question templates.
+model IntentTemplate {
+  id          Int      @id @default(autoincrement())
+  intent      String   @unique /// e.g. "product-inquiry"
+  label       String   /// human-readable label
+  keywords    String[] /// keyword hints used for detection
+  templateZh  String   /// follow-up question template (zh-TW)
+  templateEn  String   /// follow-up question template (en)
+  priority    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("intent_templates")
+}
+
+/// Product glossary — term aliases and synonym mapping.
+model GlossaryTerm {
+  id          Int      @id @default(autoincrement())
+  term        String   @unique
+  synonyms    String[] /// alternate forms / abbreviations
+  intentLabel String?  /// associated intent (optional)
+  createdAt   DateTime @default(now())
+
+  @@map("glossary_terms")
+}
+
+// ─── Phase 1: Knowledge ──────────────────────────────────────────────────────
+
+/// Knowledge base entries used for RAG retrieval.
+model KnowledgeEntry {
+  id          Int               @id @default(autoincrement())
+  title       String
+  content     String
+  intentLabel String?
+  tags        String[]
+  status      String            @default("draft") /// draft | approved | archived
+  visibility  String            @default("private") /// public | private
+  version     Int               @default(1)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  deletedAt   DateTime?
+
+  versions    KnowledgeVersion[]
+
+  @@map("knowledge_entries")
+}
+
+/// Immutable version snapshots of KnowledgeEntry content.
+model KnowledgeVersion {
+  id             Int            @id @default(autoincrement())
+  knowledgeEntry KnowledgeEntry @relation(fields: [knowledgeEntryId], references: [id])
+  knowledgeEntryId Int
+  versionNumber  Int
+  contentSnapshot String
+  createdAt      DateTime       @default(now())
+
+  @@map("knowledge_versions")
+}

@@ -9,4 +9,10 @@
  * 🟢 You can import this file directly.
  */
 export type * from './models/SystemConfig.js'
+export type * from './models/SafetyRule.js'
+export type * from './models/BlacklistEntry.js'
+export type * from './models/IntentTemplate.js'
+export type * from './models/GlossaryTerm.js'
+export type * from './models/KnowledgeEntry.js'
+export type * from './models/KnowledgeVersion.js'
 export type * from './commonInputTypes.js'

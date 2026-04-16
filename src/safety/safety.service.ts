@@ -133,4 +133,20 @@ export class SafetyService implements OnModuleInit {
 
     return { triggered: false };
   }
+
+  /**
+   * Return a fixed refusal response in the requested language.
+   *
+   * The text is deliberately vague — it must not reveal which rule was
+   * triggered or what the confidential topic is.
+   *
+   * Phase 3 (T3-002) may enrich this with category-specific wording, but
+   * the response will always be pre-defined (never LLM-generated).
+   */
+  buildRefusalResponse(language: string): string {
+    if (language === 'en') {
+      return 'I\'m sorry, I\'m unable to assist with that request. If you need further help, please contact our customer service team.';
+    }
+    return '很抱歉，我無法回答此類問題。如需進一步協助，請聯繫我們的客服團隊。';
+  }
 }

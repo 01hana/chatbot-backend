@@ -104,3 +104,98 @@ model KnowledgeVersion {
 
   @@map("knowledge_versions")
 }
+
+// ─── Phase 2: Conversation ────────────────────────────────────────────────────
+
+/// A chat session, identified externally by `session_token` (UUID).
+/// The `sessionId` field is the internal unique string key; `session_token` is
+/// what the frontend stores and sends to all Chat API endpoints.
+model Conversation {
+  id                   Int                   @id @default(autoincrement())
+  /// Internal UUID used inside the backend (not exposed to frontend)
+  sessionId            String                @unique @default(uuid())
+  /// External UUID returned to the frontend on session creation
+  session_token        String                @unique @default(uuid())
+  /// Session lifecycle status: active | closed
+  status               String                @default("active")
+  /// Conversation classification: normal | confidential
+  type                 String                @default("normal")
+  /// Aggregated risk level: low | medium | high | null
+  riskLevel            String?
+  /// Accumulated count of blocked/sensitive turns in this session
+  sensitiveIntentCount Int                   @default(0)
+  /// Running high-intent score for lead-capture triggering
+  highIntentScore      Int                   @default(0)
+  /// JSONB blob for product-diagnosis state machine context (Phase 4)
+  diagnosisContext     Json?
+  /// Detected language of the conversation: zh-TW | en
+  language             String                @default("zh-TW")
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  deletedAt            DateTime?
+
+  messages ConversationMessage[]
+
+  @@map("conversations")
+}
+
+/// Individual messages within a Conversation.
+model ConversationMessage {
+  id             Int          @id @default(autoincrement())
+  conversationId Int
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  /// Message author: user | assistant | system
+  role           String
+  content        String
+  /// Message classification: normal | confidential | blocked
+  type           String       @default("normal")
+  /// Risk level of this specific message: low | medium | high | null
+  riskLevel      String?
+  /// Reason the message was blocked, if applicable
+  blockedReason  String?
+  createdAt      DateTime     @default(now())
+
+  @@map("conversation_messages")
+}
+
+// ─── Phase 2: Audit ───────────────────────────────────────────────────────────
+
+/// Append-only audit trail of all pipeline events.
+/// IMPORTANT: Rows must NEVER be updated or deleted.
+/// `sessionId` is a plain String reference (no FK constraint) to avoid
+/// cascade-delete risks on an immutable audit table.
+model AuditLog {
+  id               Int      @id @default(autoincrement())
+  /// X-Request-ID header value (traceability)
+  requestId        String?
+  /// References Conversation.sessionId (no FK — intentional)
+  sessionId        String?
+  /// Event type: chat_response | prompt_guard_blocked | confidential_refused |
+  ///   sensitive_intent_alert | llm_fallback | lead_created | ticket_created …
+  eventType        String
+  /// Arbitrary JSON payload for the event
+  eventData        Json?
+  /// Array of KnowledgeEntry IDs used in the RAG step
+  knowledgeRefs    String[] @default([])
+  /// Top RAG similarity score for this turn (null when RAG was skipped)
+  ragConfidence    Float?
+  /// Human-readable block reason (PromptGuard / confidentiality)
+  blockedReason    String?
+  /// SHA-256 hex digest of the raw user input (for prompt-injection audit)
+  promptHash       String?
+  /// LLM token usage — 0 when LLM was not called
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  totalTokens      Int      @default(0)
+  /// Actual wall-clock time for this pipeline turn in milliseconds
+  durationMs       Int      @default(0)
+  /// LLM model identifier (e.g. "gpt-5.4-mini") — null when LLM not called
+  aiModel          String?
+  /// LLM provider identifier (e.g. "openai") — null when LLM not called
+  aiProvider       String?
+  /// Snapshot of relevant SystemConfig values at the time of the event
+  configSnapshot   Json?
+  createdAt        DateTime @default(now())
+
+  @@map("audit_logs")
+}

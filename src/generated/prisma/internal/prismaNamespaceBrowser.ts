@@ -57,7 +57,10 @@ export const ModelName = {
   IntentTemplate: 'IntentTemplate',
   GlossaryTerm: 'GlossaryTerm',
   KnowledgeEntry: 'KnowledgeEntry',
-  KnowledgeVersion: 'KnowledgeVersion'
+  KnowledgeVersion: 'KnowledgeVersion',
+  Conversation: 'Conversation',
+  ConversationMessage: 'ConversationMessage',
+  AuditLog: 'AuditLog'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -163,12 +166,76 @@ export const KnowledgeVersionScalarFieldEnum = {
 export type KnowledgeVersionScalarFieldEnum = (typeof KnowledgeVersionScalarFieldEnum)[keyof typeof KnowledgeVersionScalarFieldEnum]
 
 
+export const ConversationScalarFieldEnum = {
+  id: 'id',
+  sessionId: 'sessionId',
+  session_token: 'session_token',
+  status: 'status',
+  type: 'type',
+  riskLevel: 'riskLevel',
+  sensitiveIntentCount: 'sensitiveIntentCount',
+  highIntentScore: 'highIntentScore',
+  diagnosisContext: 'diagnosisContext',
+  language: 'language',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  deletedAt: 'deletedAt'
+} as const
+
+export type ConversationScalarFieldEnum = (typeof ConversationScalarFieldEnum)[keyof typeof ConversationScalarFieldEnum]
+
+
+export const ConversationMessageScalarFieldEnum = {
+  id: 'id',
+  conversationId: 'conversationId',
+  role: 'role',
+  content: 'content',
+  type: 'type',
+  riskLevel: 'riskLevel',
+  blockedReason: 'blockedReason',
+  createdAt: 'createdAt'
+} as const
+
+export type ConversationMessageScalarFieldEnum = (typeof ConversationMessageScalarFieldEnum)[keyof typeof ConversationMessageScalarFieldEnum]
+
+
+export const AuditLogScalarFieldEnum = {
+  id: 'id',
+  requestId: 'requestId',
+  sessionId: 'sessionId',
+  eventType: 'eventType',
+  eventData: 'eventData',
+  knowledgeRefs: 'knowledgeRefs',
+  ragConfidence: 'ragConfidence',
+  blockedReason: 'blockedReason',
+  promptHash: 'promptHash',
+  promptTokens: 'promptTokens',
+  completionTokens: 'completionTokens',
+  totalTokens: 'totalTokens',
+  durationMs: 'durationMs',
+  aiModel: 'aiModel',
+  aiProvider: 'aiProvider',
+  configSnapshot: 'configSnapshot',
+  createdAt: 'createdAt'
+} as const
+
+export type AuditLogScalarFieldEnum = (typeof AuditLogScalarFieldEnum)[keyof typeof AuditLogScalarFieldEnum]
+
+
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
 } as const
 
 export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
+
+
+export const NullableJsonNullValueInput = {
+  DbNull: DbNull,
+  JsonNull: JsonNull
+} as const
+
+export type NullableJsonNullValueInput = (typeof NullableJsonNullValueInput)[keyof typeof NullableJsonNullValueInput]
 
 
 export const QueryMode = {
@@ -185,4 +252,13 @@ export const NullsOrder = {
 } as const
 
 export type NullsOrder = (typeof NullsOrder)[keyof typeof NullsOrder]
+
+
+export const JsonNullValueFilter = {
+  DbNull: DbNull,
+  JsonNull: JsonNull,
+  AnyNull: AnyNull
+} as const
+
+export type JsonNullValueFilter = (typeof JsonNullValueFilter)[keyof typeof JsonNullValueFilter]
 

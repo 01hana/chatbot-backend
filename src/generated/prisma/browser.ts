@@ -53,3 +53,23 @@ export type KnowledgeEntry = Prisma.KnowledgeEntryModel
  * Immutable version snapshots of KnowledgeEntry content.
  */
 export type KnowledgeVersion = Prisma.KnowledgeVersionModel
+/**
+ * Model Conversation
+ * A chat session, identified externally by `session_token` (UUID).
+ * The `sessionId` field is the internal unique string key; `session_token` is
+ * what the frontend stores and sends to all Chat API endpoints.
+ */
+export type Conversation = Prisma.ConversationModel
+/**
+ * Model ConversationMessage
+ * Individual messages within a Conversation.
+ */
+export type ConversationMessage = Prisma.ConversationMessageModel
+/**
+ * Model AuditLog
+ * Append-only audit trail of all pipeline events.
+ * IMPORTANT: Rows must NEVER be updated or deleted.
+ * `sessionId` is a plain String reference (no FK constraint) to avoid
+ * cascade-delete risks on an immutable audit table.
+ */
+export type AuditLog = Prisma.AuditLogModel

@@ -2,12 +2,13 @@
  * prisma/seeds/seed.ts — main seed entry point
  *
  * Execution order:
- *   1. system-config  (always — needed for all phases)
- *   2. safety-rules   (Phase 1: T1-003)
- *   3. blacklist      (Phase 1: T1-003)
- *   4. intent-templates (Phase 1: T1-004)
- *   5. glossary-terms   (Phase 1: T1-004)
- *   6. knowledge        (Phase 1: T1-005 — skipped in production)
+ *   1. system-config    (always — needed for all phases)
+ *   2. widget-config    (Phase 2: T2-014 — always, needed for Widget API)
+ *   3. safety-rules     (Phase 1: T1-003)
+ *   4. blacklist        (Phase 1: T1-003)
+ *   5. intent-templates (Phase 1: T1-004)
+ *   6. glossary-terms   (Phase 1: T1-004)
+ *   7. knowledge        (Phase 1: T1-005 — skipped in production)
  *
  * Run with: npx prisma db seed
  */
@@ -20,6 +21,7 @@ import { seedBlacklist } from './blacklist.seed';
 import { seedIntentTemplates } from './intent-templates.seed';
 import { seedGlossaryTerms } from './glossary-terms.seed';
 import { seedKnowledge } from './knowledge.seed';
+import { seedWidgetConfig } from './widget-config.seed';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
@@ -81,6 +83,7 @@ async function main(): Promise<void> {
   console.log(`Running seeds (NODE_ENV=${nodeEnv})...`);
 
   await seedSystemConfig();
+  await seedWidgetConfig(prisma);
   await seedSafetyRules(prisma);
   await seedBlacklist(prisma);
   await seedIntentTemplates(prisma);

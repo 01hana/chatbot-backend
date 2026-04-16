@@ -10,6 +10,10 @@ import { SafetyModule } from './safety/safety.module';
 import { IntentModule } from './intent/intent.module';
 import { KnowledgeModule } from './knowledge/knowledge.module';
 import { AdminModule } from './admin/admin.module';
+import { AuditModule } from './audit/audit.module';
+import { ConversationModule } from './conversation/conversation.module';
+import { ChatModule } from './chat/chat.module';
+import { WidgetConfigModule } from './widget-config/widget-config.module';
 
 @Module({
   imports: [
@@ -36,6 +40,10 @@ import { AdminModule } from './admin/admin.module';
     IntentModule,
     KnowledgeModule,
     AdminModule,
+    AuditModule,
+    ConversationModule,
+    ChatModule,
+    WidgetConfigModule,
   ],
   providers: [
     // Apply ThrottlerGuard globally to all routes

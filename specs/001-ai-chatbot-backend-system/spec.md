@@ -1,6 +1,6 @@
 # 震南官網 AI 客服聊天機器人 — Backend Spec
 
-**版本**：1.6.0 | **建立日期**：2026-04-09 | **狀態**：Draft
+**版本**：1.7.0 | **建立日期**：2026-04-09 | **狀態**：Draft
 
 ---
 
@@ -13,7 +13,7 @@
 - 明確界定本期範圍與排除範圍
 - 提供可量測的驗收條件，供測試與 QA 使用
 
-> **本期實作總原則**：本期後端聊天主流程採 SSE / streaming 串接 OpenAI；前端以 `sessionToken` 作為匿名訪客會話識別，後端內部映射至 `sessionId`。本期正式提供 Widget Config API。本期正式納入 Dashboard、Feedback API、Ticket。本期不做 Auth / Login / RBAC、Email 通知、handoff status API。
+> **本期實作總原則**：本期後端聊天主流程採 SSE / streaming 串接外部 LLM provider；本期預設 provider 為 OpenAI，provider 需可替換（未來可擴充 ClaudeProvider 等）；前端以 `sessionToken` 作為匿名訪客會話識別，後端內部映射至 `sessionId`。本期正式提供 Widget Config API。本期正式納入 Dashboard、Feedback API、Ticket。本期不做 Auth / Login / RBAC、Email 通知、handoff status API。
 
 本文件**不定義**技術實作細節
 
@@ -173,7 +173,7 @@
 | 外部訪客 | 震南官網的不特定訪客 | 透過前端呼叫聊天 API（後端不限制身份） |
 | 後台管理者 | 負責維護知識庫、審核知識條目、查看對話紀錄 | 透過後台 API（本期無應用層 Auth，需基礎設施保護） |
 | 業務 / 客服人員 | 接收轉人工通知、處理 Lead | 透過 Webhook 接收（本期主要方式）；Email 通知本期不做 |
-| 外部 LLM Provider | 外部 AI 生成服務（本期預設整合 OpenAI）| 由後端統一呼叫，對外不可見；provider 需可替換 |
+| 外部 LLM Provider | 外部 AI 生成服務（本期預設整合 OpenAI，provider 可替換）| 由後端統一呼叫，對外不可見；provider 需可替換 |
 | Webhook 接收端 | 接收 Lead / 轉人工通知的外部系統 | 後端主動推送 |
 
 ---
@@ -271,7 +271,7 @@
 | FR-001 | 系統可建立新的聊天會話，返回前端可用的唯一 `sessionToken`；後端內部以 `sessionId` 作為資料關聯主鍵 | P0 |
 | FR-002 | 系統可接收訪客的文字訊息，前端帶 `sessionToken`，後端映射至對應 `sessionId` 並關聯 | P0 |
 | FR-003 | 系統可在同一會話中保存多輪對話歷史，作為後續回覆的上下文 | P0 |
-| FR-004 | 系統可對每條訊息產生回覆：正常流程為 Prompt Guard 通過 → 知識庫檢索（RAG）→ 信心分數達閾值 → 送外部 LLM（本期為 OpenAI）透過 **SSE / streaming** 逐 token 串流回覆；低信心時返回追問，LLM 失效時返回 fallback | P0 |
+| FR-004 | 系統可對每條訊息產生回覆：正常流程為 Prompt Guard 通過 → 知識庫檢索（RAG）→ 信心分數達閾値 → 送外部 LLM provider（本期預設為 OpenAI）透過 **SSE / streaming** 逐 token 串流回覆；低信心時返回追問，LLM 失效時返回 fallback | P0 |
 | FR-004a | SSE / streaming 回覆需支援以下狀態事件：`token`（token chunk）、`done`（完成）、`error`（後端錯誤）、`timeout`（超時）、`interrupted`（中斷）；前端以 `fetch + ReadableStream` 接收，可依事件類型決定顯示行為 | P0 |
 | FR-004b | 後端需提供中止串流的控制機制（前端斷線時後端可感知並中止 LLM 呼叫，不繼續消耗 token）| P0 |
 | FR-005 | 每次回覆需包含：回覆文字、引用知識來源（ID + 版本）、意圖標籤、信心分數 | P0 |
@@ -422,7 +422,7 @@
 
 | ID | 需求描述 | 優先級 |
 |----|----------|--------|
-| NFR-040 | LLM provider 必須可替換，不鎖定任何單一供應商；業務邏輯不可直接耦合特定 LLM SDK；本期預設整合 OpenAI，為系統核心回覆生成器 | **Must** |
+| NFR-040 | LLM provider 必須可替換，不鎖定任何單一供應商；業務邏輯不可直接耸合特定 LLM SDK；本期預設整合 OpenAI（實作 `OpenAiProvider`，業務層依賴 `ILlmProvider`），為系統核心回覆生成器；未來可擴充 `ClaudeProvider` | **Must** |
 | NFR-041 | 知識檢索策略必須可替換；本期採用何種方案由 `design.md` 定義，但架構需支援未來升級 | **Must** |
 | NFR-042 | 所有業務規則（機密判斷、意圖路由、留資觸發）需集中管理，不可散落各處 | **Must** |
 | NFR-043 | 設計需允許從 MVP 漸進擴充，不可一開始就過度設計 | **Should** |
@@ -530,7 +530,7 @@
 | prompt_guard_result | `pass` / `blocked` |
 | blocked_reason | 攔截原因（若有）|
 | knowledge_refs | 引用知識條目 `[{id, version}]` |
-| ai_provider | 使用的 AI 供應商（如 `openai`）|
+| ai_provider | 使用的 AI 供應商（如 `openai`、未來可擴充 `claude` 等）|
 | ai_model | 模型名稱 |
 | ai_model_version | 模型版本 |
 | prompt_tokens | 本次 LLM 呼叫的 prompt token 數（未呼叫 LLM 時為 0）|
@@ -568,9 +568,17 @@
 
 ### 11.2 外部 LLM Provider
 
-- 後端透過統一的 LLM 介面呼叫外部生成服務；本期預設整合 OpenAI Chat Completions API
-- 需具備超時、retry、fallback 能力；具體數值由 `design.md` 定義
-- 需確認 data opt-out 設定，確保甲方資料不用於訓練
+- 後端透過統一的 `ILlmProvider` 介面呼叫外部生成服務；本期預設 實作為 `OpenAiProvider`（OpenAI Chat Completions API），未來可擴充 `ClaudeProvider`
+- 本期建議模型策略：
+  - 主力 / demo：`gpt-5.4-mini`
+  - 高品質測試：`gpt-5.4`
+  - 廉價快速 / fallback：`gpt-5.4-nano`
+  - 模型可透過 `LLM_MODEL` 環境變數切換，不可硬編碼在業務邏輯中
+- 需具備超時、retry、雙層 fallback 能力：
+  - 第一層：主模型失敗→ 改用較便宜、較快的模型（`gpt-5.4-nano`）
+  - 第二層：次級模型仍失敗→ 顯示固定 fallback 訊息：「目前 AI 忙磁中，請留下聯絡資訊／聯絡業務」
+  - fallback 為正式產品流程，非臨時補丁；fallback 事件必須寫入 AuditLog（`fallbackTriggered=true`）
+- 需確認所選 provider 的資料使用政策符合甲方要求，不得將甲方資料用於外部訓練
 - Provider / model / version 需由環境變數設定，便於替換
 
 ### 11.3 Email 通知（本期不做，列為後續擴充）
@@ -691,13 +699,14 @@
 
 ## 修訂記錄
 
-| 版本 | 日期 | 修訂摘要 |
-|------|------|----------|
+| 版本  | 日期       | 修訂摘要 |
+|-------|------------|----------|
 | 1.0.0 | 2026-04-09 | 初版建立，涵蓋 14 章節，對齊 constitution v1.1.0 |
 | 1.1.0 | 2026-04-09 | 二次修訂：收斂 spec/design 邊界、統一 Lead 實體、補強後台 API 運行前提、調整效能指標（P90）、新增資料治理 NFR、補強 AC-018/019、移除硬編碼技術數值 |
 | 1.3.0 | 2026-04-10 | 最後一輪精修：①FR-004 明確回覆主流程（Prompt Guard → RAG → 信心閾值 → LLM）；②新增 NFR-044 LLM 呼叫成本與可觀測性需求；③NFR-040 補強 OpenAI 為本期核心回覆生成器說明；④§10.4 AuditLog 補入 prompt_tokens / completion_tokens / total_tokens 欄位；⑤§11.4 Webhook HMAC 明確改為「本期不強制，後續擴充」語氣；⑥NFR-031/033 移除 Email 語氣改為 Webhook only；⑦§11.5 推送失敗紀錄移除 Email；⑧§6 業務客服角色說明更新為 Webhook 為主 |
 | 1.4.0 | 2026-04-12 | 同步修訂（對齊前端規格）：①聊天主流程正式採 SSE / streaming（FR-004/004a/004b），移除 streaming 為 deferred 的說明；②建立會話改回傳 `sessionToken`，前端以 sessionToken 識別，後端映射至 sessionId（FR-001/002）；③新增 Widget Config API（FR-078、§10.7、§11.1）；④正式納入 Ticket（FR-070a/b/c、§10.5）、Feedback（FR-076 改為 P1、§10.6）、Dashboard（FR-077 改為 P1）；⑤handoff 語意修正為建立 Lead + Ticket + 回傳 action=handoff，不提供 handoff status 輪詢 API（FR-069）；⑥§5.2 Out of Scope 更新，加入 Phase 化取捨說明；⑦§14 移除 Streaming 為未來擴充，改為 handoff status API 與 Email 為延後項目 |
 | 1.5.0 | 2026-04-13 | 最後一輪 API contract 對齊修訂：①§10.6 Feedback：`rating: thumbs_up/thumbs_down` → `value: up/down`，移除 `comment` 欄位；②§10.7 Widget Config：`status` 改為 `online/offline/degraded`，welcomeMessage/quickReplies/disclaimer/fallbackMessage 改為多語系 JSONB 結構；③§11.1 API 能力表：更新 SSE 事件格式說明（event: token/done/error/timeout/interrupted），新增獨立 handoff API 能力（`POST .../handoff`），新增 history API（`GET .../history`），明確 feedback API 路徑與 `value: up/down` 欄位，說明前端以 fetch + ReadableStream 接收 |
 | 1.6.0 | 2026-04-13 | API contract 一致性修訂（對齊前端 spec）：①FR-004a SSE 事件 `data` → `token`，明確前端以 fetch + ReadableStream 接收；②FR-060 補入 Lead API request contract（name/email 必填，company/phone/message/language 選填）；③FR-063 Webhook payload 補入 `message`、`language` 欄位；④§10.3 Lead 資料模型新增 `message`、`language`、`summary` 欄位說明，明確 API contract 與內部模型對應關係；⑤§11.1 提交留資 API 說明補入完整 request body；⑥§11.1 「取得降級狀態」改為 internal health/monitoring endpoint，非前端正式 init contract；⑦§11.4 Webhook payload 補入 `message`、`language`、區分 `summary` 欄位；⑧§5.2 Out of Scope 新增 end session API；⑨Q-005 改為已定案（本期不做 end session API）；⑩§5.2 Out of Scope「報表 Dashboard 前端」改為「Dashboard 前端介面」，消除 Reports scope 歧義；⑪SC-05 補入留資 API request contract 說明 |
+| 1.7.0 | 2026-04-16 | LLM provider 抽象化修訂（承接 design.md v1.9.0）：①本期實作總原則更新為 provider-agnostic + 預設 OpenAI；②角色表「外部 LLM Provider」加入可替換說明；③FR-004 送外部 LLM 語言改為 provider-neutral；④NFR-040 補強 `ILlmProvider` 抽象 + `ClaudeProvider` 未來擴充；⑤§11.2 全面改寫：`ILlmProvider`、本期模型策略（gpt-5.4-mini/gpt-5.4/gpt-5.4-nano）、雙層 fallback 策略 |
 
-**版本**：1.6.0 | **建立日期**：2026-04-09 | **狀態**：Draft
+**版本**：1.7.0 | **建立日期**：2026-04-09 | **狀態**：Draft

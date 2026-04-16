@@ -1,6 +1,6 @@
 # 震南官網 AI 客服聊天機器人（Backend Constitution）
 
-**版本**：1.1.0 | **Ratified**：2026-04-08 | **Last Amended**：2026-04-08
+**版本**：1.2.0 | **Ratified**：2026-04-08 | **Last Amended**：2026-04-16
 
 ---
 
@@ -67,7 +67,7 @@
 - **禁止 Prompt Injection**：所有使用者輸入在進入 prompt 之前，必須通過後端的 Prompt Guard 服務進行顯式判斷；不可只靠 prompt 中的文字指令防禦。
 - **禁止越獄與規則覆寫**：Prompt Guard 必須偵測並攔截：試圖覆寫 system prompt、要求揭露 system prompt 內容、要求扮演無限制角色、blacklist 關鍵字比對等攻擊模式。
 - **禁止揭露 System Prompt**：不得在任何回覆或日誌中揭露完整 system prompt；若使用者索取，必須明確拒絕。
-- **資料不可用於外部訓練**：甲方知識庫、對話資料、客戶資料不得作為外部模型再訓練素材；API 呼叫必須明確關閉 OpenAI 資料使用授權（`user` 欄位與 opt-out 設定）。
+- **資料不可用於外部訓練**：甲方知識庫、對話資料、客戶資料不得作為外部模型再訓練素材；必須確認所選 LLM provider 的資料使用政策符合甲方要求，並明確關閉任何允許 provider 使用甲方資料進行訓練的選項。
 - **知識分級強制執行**：知識條目寫入資料庫時必須帶有 `visibility` 欄位（`public` / `internal` / `confidential`）；送入 LLM 的 context 只能包含 `public` 分級條目。
 - **信心閾值為硬性門檻**：RAG 信心分數低於閾值時，後端必須短路（short-circuit），不得繼續組裝 prompt 送往 LLM。
 
@@ -86,7 +86,7 @@
 - **三層分離**：Module → Controller → Service；Controller 只做 request 驗證與路由回應，業務邏輯全在 Service 層。
 - **業務規則集中**：機密判斷、信心閾值判斷、意圖路由、留資觸發等業務規則必須在 Service / Domain 層明確實作，不可散落於 controller route handler 或 middleware。
 - **安全攔截優先於生成**：Prompt Guard 與知識分級判斷必須在 LLM 呼叫之前執行，不可交由 LLM 自行判斷是否回答。
-- **AI Provider 可替換**：LLM 呼叫必須通過抽象介面（`AiProviderPort`），底層可替換為 OpenAI / Azure OpenAI / 本地模型；不可在業務邏輯層直接呼叫 OpenAI SDK。
+- **AI Provider 可替換**：LLM 呼叫必須通過抽象介面（`ILlmProvider`），底層可替換為不同 provider（本期預設 `OpenAiProvider`，未來可擴充 `ClaudeProvider`）；不可在業務邏輯層直接呼叫任何特定 provider SDK。
 - **檢索策略可替換**：RAG 檢索層必須通過抽象介面（`KnowledgeRetrieverPort`），MVP 階段可用 SQL full-text search，後續可替換為向量檢索，不影響上層邏輯。
 - **知識分級不可混用**：`public`、`internal`、`confidential` 三個分級的資料存取路徑必須在程式碼層面物理隔離，不可靠 if/else 臨時判斷。
 - **所有高風險決策可追溯**：意圖判斷結果、機密觸發、RAG 短路、留資觸發、轉人工觸發，均需在稽核日誌中記錄決策依據與時間戳。
@@ -110,8 +110,8 @@
 - **對外只能使用 approved + public 知識**：RAG 檢索必須在 query 層過濾，只取 `status = approved AND visibility = public` 的條目。
 - **對話紀錄保留完整 metadata**：每輪對話需記錄：sessionId、turnId、requestId、timestamp、使用者輸入（脫敏後）、系統回覆、引用知識條目 ID 與版本、意圖標籤、信心分數、Prompt Guard 結果。
 - **Lead 資料最小必要原則**：留資表單只收集完成通知與後續跟進所需的最少欄位（姓名、聯絡方式、需求摘要）；不得蒐集與當前需求無關的個人資料。
-- **甲方資料隔離**：知識庫、對話記錄、Lead 資料必須存於甲方控制的資料庫（Postgres），不得將原始資料推送至外部服務（包含 OpenAI 訓練用途）。
-- **環境變數管理機密**：資料庫連線字串、OpenAI API Key、Webhook Secret 等敏感設定全部透過環境變數注入；不可硬編碼在程式碼或設定檔中。
+- **甲方資料隔離**：知識庫、對話記錄、Lead 資料必須存於甲方控制的資料庫（Postgres），不得將原始資料推送至外部服務（包含任何 LLM provider 的訓練用途）。
+- **環境變數管理機密**：資料庫連線字串、LLM API Key（`LLM_API_KEY`）、Webhook Secret 等敏感設定全部透過環境變數注入；不可硬編碼在程式碼或設定檔中。
 
 **建議遵守：**
 
@@ -128,7 +128,7 @@
 - **輸入驗證**：所有外部輸入（使用者訊息、查詢參數、Webhook payload）必須通過 DTO 與 `class-validator` 驗證，不接受未知欄位（`whitelist: true, forbidNonWhitelisted: true`）。
 - **SQL Injection 防護**：所有資料庫操作必須使用 Prisma ORM 參數化查詢，不可拼接 raw SQL 字串。
 - **API 速率限制**：聊天 API 必須設定速率限制（`@nestjs/throttler`），防止濫用與暴力攻擊。
-- **敏感回應不可 log 明文**：OpenAI API 回應若含敏感資訊，log 時只記錄 hash；不得將完整 response 以明文寫入一般日誌。
+- **敏感回應不可 log 明文**：LLM provider API 回應若含敏感資訊，log 時只記錄 hash；不得將完整 response 以明文寫入一般日誌。
 - **HTTP 安全標頭**：透過 Helmet 設定 `X-Content-Type-Options`、`X-Frame-Options`、`Content-Security-Policy` 等安全標頭。
 
 > 🔖 **未來擴充**：Auth 機制、JWT Guard、CSRF Token 視需求於後續階段加入。
@@ -136,7 +136,7 @@
 **建議遵守：**
 
 - 對外 API 回傳的錯誤訊息不可洩露 stack trace 或內部路徑；使用全域 Exception Filter 統一格式。
-- OpenAI API 呼叫加入 `user` 欄位（匿名化的 session hash），便於 OpenAI 側濫用偵測，同時確認已設定 data opt-out。
+- LLM provider API 呼叫時傳入匿名化的 session hash，便於 provider 側濫用偵測；同時確認所使用 provider 的資料政策已符合甲方要求（不用於訓練）。
 
 ---
 
@@ -178,7 +178,7 @@
 
 **必須遵守：**
 
-- **OpenAI 呼叫透過 Adapter 封裝**：業務邏輯不可直接呼叫 OpenAI SDK；所有呼叫必須通過 `AiAdapter`（實作 `AiProviderPort` 介面），便於替換與測試。
+- **LLM Provider 呼叫透過 `ILlmProvider` 封裝**：業務邏輯不可直接呼叫任何特定 provider SDK；所有呼叫必須通過實作 `ILlmProvider` 介面的 provider（本期預設 `OpenAiProvider`，未來可擴充 `ClaudeProvider`），便於替換與測試。
 - **超時與 Retry**：AI API 呼叫必須設定請求超時（建議 15s，可由環境變數設定）與 retry（最多 2 次，帶指數退避）。
 - **Fallback 為強制要求**：AI 呼叫失敗（超時、5xx、rate limit）時，必須觸發 fallback 流程：返回預設回覆並記錄降級事件；不可讓系統拋出未處理錯誤。
 - **Webhook 通知具備 retry**：Lead 通知、轉人工 Webhook 呼叫失敗時必須 retry（最多 3 次，指數退避）；失敗後需記錄失敗事件，不可靜默丟棄。
@@ -196,7 +196,7 @@
 **必須遵守：**
 
 - **單元測試**：覆蓋 Service 層業務規則、Prompt Guard 邏輯、意圖分類、信心閾值判斷、知識分級過濾、Lead 觸發條件、DTO 驗證。
-- **整合測試**：覆蓋聊天 API 完整請求流程、RAG 知識檢索、OpenAI Adapter（使用 mock）、留資流程、Webhook 呼叫、降級模式。
+- **整合測試**：覆蓋聊天 API 完整請求流程、RAG 知識檢索、LLM Adapter（`ILlmProvider` mock）、留資流程、Webhook 呼叫、降級模式。
 - **E2E / API 流程測試**：覆蓋聊天主流程（正常回覆、機密拒答、低信心追問）、完整留資流程、轉人工流程、AI 失效降級。
 - **安全測試**：Prompt Injection 測試案例（至少 10 種攻擊模式）、機密題庫測試（confidential 問題不得被回答）、分級誤用測試（internal / confidential 知識不得出現在對外回覆）。
 - **不可只測 happy path**：每個功能的測試必須包含失敗路徑（timeout、service unavailable、invalid input、低信心短路、機密攔截）。
@@ -254,7 +254,7 @@
 
 **必須遵守：**
 
-- **AI 呼叫超時設定**：OpenAI API 呼叫超時上限 15 秒（可環境變數調整）；超時必須觸發 fallback，不可無限等待。
+- **AI 呼叫超時設定**：LLM provider API 呼叫超時上限 15 秒（可透過 `LLM_TIMEOUT_MS` 環境變數調整）；超時必須觸發 fallback，不可無限等待。
 - **Fallback 回應時間 < 2 秒**：AI 不可用時，fallback 回應（預設訊息 + 留資選項）需在 2 秒內返回。
 - **資料庫查詢不可無上限**：所有列表查詢必須帶分頁（`limit` / `offset` 或 cursor-based）；禁止 `findAll()` 無條件全表掃描。
 - **速率限制**：聊天 API 對同一 IP / sessionId 設定請求頻率上限（建議 30 req/min，可環境變數調整）。
@@ -378,7 +378,7 @@
 6. **不可把 RBAC / Auth 列為本期必做**：本期不實作登入與角色驗證；不可因等待 Auth 機制而阻擋核心後端功能交付。
 7. **不可使用 `any` 型別**：所有變數與函式參數必須明確定義型別。
 8. **不可把對話原始輸入未脫敏存入一般日誌**：使用者輸入在進入日誌前必須先執行 PII redaction。
-9. **不可讓甲方資料流入外部模型訓練**：OpenAI API 呼叫必須確認資料不被用於訓練（API 預設行為需定期確認）。
+9. **不可讓甲方資料流入外部模型訓練**：所有 LLM provider API 呼叫必須確認資料不被用於訓練；需確認所使用 provider 的資料政策，並關閉任何允許訓練用途的選項（各 provider 政策不同，須逐一確認）。
 10. **不可缺少 fallback**：AI 呼叫路徑必須有明確的降級路徑；fallback 缺失視同功能不完整。
 
 ---
@@ -399,5 +399,6 @@
 |------|------|----------|
 | 1.0.0 | 2026-03-30 | 初版建立（安全優先 / 可稽核 / 可靠性三原則） |
 | 1.1.0 | 2026-04-08 | 全面改版：依震南官網 AI 客服後端需求補完 22 章節，新增產品邏輯、AI/RAG 安全、DoD、Quality Gate、禁止事項等條文 |
+| 1.2.0 | 2026-04-16 | LLM provider 抽象化修訂：①`AiProviderPort` → `ILlmProvider`；②本期預設 `OpenAiProvider`，未來可擴充 `ClaudeProvider`；③環境變數機密管理改為 `LLM_API_KEY`；④資料治理、安全原則、禁止事項等 OpenAI-specific 語言全面改為 provider-neutral；⑤測試原則更新 |
 
-**版本**：1.1.0 | **Ratified**：2026-04-08 | **Last Amended**：2026-04-08
+**版本**：1.2.0 | **Ratified**：2026-04-08 | **Last Amended**：2026-04-16

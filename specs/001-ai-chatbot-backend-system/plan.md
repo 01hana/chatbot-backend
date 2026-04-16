@@ -1,7 +1,7 @@
 # 震南官網 AI 客服聊天機器人 — Backend 實作計畫
 
-**版本**：1.3.1 | **建立日期**：2026-04-10 | **狀態**：Draft  
-**承接文件**：`spec.md` v1.6.0、`design.md` v1.8.0  
+**版本**：1.4.0 | **建立日期**：2026-04-10 | **狀態**：Draft  
+**承接文件**：`spec.md` v1.7.0、`design.md` v1.9.0  
 **下游文件**：`task.md`
 
 ---
@@ -65,7 +65,7 @@
 - **sessionToken 前端識別機制**（`Conversation.session_token`，前端識別，後端映射至 sessionId）
 - Prompt Guard + 機密保護
 - Knowledge RAG（`pg_trgm + metadata filter + intent/glossary boost`，含 fallback 策略）
-- LLM Provider 抽象 + OpenAI 實作（含 streaming）+ LLM observability
+- LLM Provider 抽象（`ILlmProvider`）+ `OpenAiProvider` 實作（含 streaming，本期預設）+ LLM observability
 - 問診式推薦流程（四欄位固定順序）
 - 高意向偵測（rule-based）
 - **Ticket 實體**：人工接手案件追蹤、CRUD、狀態流轉、處理備註（handoff 時建立）
@@ -100,7 +100,7 @@
 |------|------|------------|
 | Postgres 14+ 環境 | 基礎開發環境 | 是（必須在 Phase 0 完成）|
 | `pg_trgm` 擴充支援 | 主要 RAG 策略的 DB 擴充 | **否**（可先用 ILIKE fallback 開發，部署前確認）|
-| OpenAI API Key | LLM 呼叫所需 | 是（Phase 2 開始前必須取得）|
+| LLM provider API key | LLM 呼叫所需；本期預設 OpenAI，使用 `LLM_API_KEY` 環境變數 | 是（Phase 2 開始前必須取得）|
 | Webhook 接收端 endpoint | 通知閉環所需 | **否**（Phase 5 之前可用本地 mock 接收端開發與測試）|
 | 甲方機密關鍵字清單 | SafetyRule / BlacklistEntry seed 完整性 | **否**（先用保守預設佔位，後續由甲方補充）|
 | 問診模板內容細節 | `IntentTemplate` seed 的完整範本文字 | **否**（四欄位結構已拍板，範本文字先用預設值，甲方補充後 DB 更新即可）|
@@ -284,7 +284,7 @@ Phase 7：品質補強與驗收準備
 | **對話歷史 API** | `GET /api/v1/chat/sessions/:sessionToken/history`；依 sessionToken 回傳該會話 ConversationMessage 列表 |
 | **Handoff API** | `POST /api/v1/chat/sessions/:sessionToken/handoff`；訪客主動觸發轉人工；後端建立 Lead 與 / 或 Ticket（`trigger_reason=handoff`）；回傳 `{ accepted, action, leadId, ticketId, message }`；`action` 穩定語意為 `"handoff"`；`leadId` / `ticketId` 為 nullable，依實際建立結果回傳；`accepted = true` 時兩者不得同時為 `null` |
 | 取消串流機制 | **AbortController / connection close** 為正式取消機制；不設計獨立 cancel endpoint；`res.on('close')` 感知前端斷線後呼叫 `AbortController.abort()` |
-| `ILlmProvider` stream() 方法 | 介面新增 `stream(request, abortSignal?): AsyncIterable<LlmStreamChunk>`；`OpenAiProvider.stream()` 實作 OpenAI streaming API |
+| `ILlmProvider` stream() 方法 | 介面新增 `stream(request, abortSignal?): AsyncIterable<LlmStreamChunk>`；`OpenAiProvider.stream()` 實作 OpenAI streaming（本期預設）；未來可替換為 `ClaudeProvider` |
 | Chat Pipeline 骨架 | 完整 Pipeline 骨架接入（InputValidation → LanguageDetection → PromptGuard → ConfidentialityCheck → IntentRecognition → KnowledgeRetrieval → 信心判斷 → Prompt 組裝 → LLM Streaming → 寫入）|
 | Language Detection | `franc` 套件整合；`zh-TW` / `en` 偵測；其他 fallback `zh-TW` |
 | PromptGuard 接入 | `SafetyService.scanPrompt()` 接入 Pipeline；攔截時以 SSE `event: done` 推送拒答 |
@@ -292,7 +292,7 @@ Phase 7：品質補強與驗收準備
 | `IntentService.detect()` | keyword + 意圖模板 rule-based；意圖路由 |
 | `RetrievalModule` | `PostgresRetrievalService.retrieve()`；主方案 `pg_trgm` 查詢（含 `IRetrievalService` 介面）；ILIKE fallback 備用 |
 | 信心分數判斷 | `rag_confidence_threshold` / `rag_minimum_score` 來自 `SystemConfig` |
-| `LlmModule` | `ILlmProvider` 介面（含 `chat()` + `stream()`）、`OpenAiProvider` 實作；`PromptBuilder` |
+| `LlmModule` | `ILlmProvider` 介面（含 `chat()` + `stream()`）、`OpenAiProvider` 預設實作；`PromptBuilder`；未來可擴充 `ClaudeProvider` |
 | LLM Observability | `promptTokens`、`completionTokens`、`totalTokens`、`durationMs`、`model`、`provider` 全部寫入 AuditLog；未呼叫 LLM 時記為 0 |
 | `AuditModule` | `AuditService.log()` append-only；含 config_snapshot |
 | `AiStatusService` | in-memory degraded 狀態管理 |
@@ -302,7 +302,7 @@ Phase 7：品質補強與驗收準備
 
 #### 前置依賴
 - Phase 0、Phase 1 完成
-- OpenAI API Key 取得
+- LLM provider API key 已取得（本期預設 OpenAI，使用 `LLM_API_KEY` 環境變數）
 
 #### 主要產出物
 
@@ -319,7 +319,7 @@ Phase 7：品質補強與驗收準備
 - [ ] `GET /api/v1/chat/sessions/:sessionToken/history` 可回傳 ConversationMessage 列表
 - [ ] `POST /api/v1/chat/sessions/:sessionToken/handoff` 觸發後端建立 Lead 與 / 或 Ticket；回傳 `{ accepted, action: "handoff", leadId, ticketId, message }`；`leadId` / `ticketId` 依實際建立結果回傳（nullable），`accepted = true` 時不得同時為 `null`
 - [ ] `sessionToken` 不存在時回傳 404
-- [ ] 前端斷線時 `res.on('close')` 觸發 `AbortController.abort()`，OpenAI streaming 中止
+- [ ] 前端斷線時 `res.on('close')` 觸發 `AbortController.abort()`，LLM streaming 中止
 - [ ] AuditLog 每筆：有 `requestId`、`knowledge_refs`、`prompt_tokens` + `total_tokens`
 - [ ] PromptGuard 骨架攔截可觸發（攔截時 SSE `event: done` 推送拒答）
 - [ ] LLM timeout 時觸發 SSE `event: timeout`，`fallbackTriggered=true`
@@ -581,7 +581,7 @@ Phase 7：品質補強與驗收準備
 | LLM Token / Cost Observability 檢查 | 確認所有 LLM 呼叫（含摘要生成）均有 token 欄位寫入 AuditLog |
 | `.env.example` 最終確認 | 所有環境變數佔位符完整、Email 相關變數預留但無值 |
 | 操作說明 | seed 執行方式、migration 執行方式、Admin API 使用說明、Webhook 接收端設定說明 |
-| OpenAI Data Opt-out 確認 | 確認 OpenAI 組織設定已關閉訓練資料使用 |
+| LLM provider 資料政策確認 | 確認所選 LLM provider（本期 OpenAI）之資料使用政策符合甲方要求，並關閉任何允許 provider 使用甲方資料進行模型訓練的選項 |
 
 #### 前置依賴
 - Phase 2 ~ Phase 6 全部完成
@@ -702,7 +702,7 @@ DashboardModule ← Phase 6（讀 Lead/Ticket/Feedback/AuditLog）
 
 | 風險 ID | 風險描述 | 可能性 | 影響 | 應對策略 |
 |---------|---------|--------|------|---------|
-| **R-001** | OpenAI API latency 不穩定，P90 超過 3s | 中 | 高 | 設定 `llm_timeout_ms`（預設 10s）+ retry（最多 2 次）；fallback 機制確保不超時；SSE `event: timeout` 讓前端感知並顯示失效提示 |
+| **R-001** | LLM provider API latency 不穩定，P90 超過 3s | 中 | 高 | 設定 `LLM_TIMEOUT_MS`（預設 10s）+ retry（最多 2 次）；雙層 fallback 策略（主模型失敗 → `gpt-5.4-nano` → 固定訊息）確保不超時；SSE `event: timeout` 讓前端感知並顯示失效提示 |
 | **R-002** | `pg_trgm` 在目標部署環境不可用 | 低〜中 | 中 | ILIKE fallback 策略已實作（design.md §14.1）；調低 `rag_confidence_threshold`（如 0.4）；不阻擋 MVP 開發 |
 | **R-003** | 知識庫內容品質不足，RAG 命中率低 | 中 | 高 | Phase 1 先確保核心 FAQ 與產品規格知識條目存在且已審核；知識品質問題屬運營問題，不是技術問題 |
 | **R-004** | Prompt Injection 新型攻擊未覆蓋 | 低〜中 | 高 | BlacklistEntry / SafetyRule 設計為可動態更新（後台 API）；不依賴靜態 hardcode 規則 |
@@ -802,11 +802,12 @@ DashboardModule ← Phase 6（讀 Lead/Ticket/Feedback/AuditLog）
 | 變數名稱 | 類別 | 說明 | 本期是否必填 |
 |---------|------|------|------------|
 | `DATABASE_URL` | DB | Postgres 連線字串 | 是 |
-| `OPENAI_API_KEY` | LLM | OpenAI API Key | 是（Phase 2 起）|
-| `LLM_MODEL` | LLM | 預設模型（如 `gpt-4o-mini`）| 是 |
+| `LLM_PROVIDER` | LLM | LLM provider 識別（預設 `openai`，未來可設為 `claude`）| 是（Phase 2 起）|
+| `LLM_API_KEY` | LLM | LLM provider API key（本期對應 OpenAI API Key）| 是（Phase 2 起）|
+| `LLM_MODEL` | LLM | 預設模型（預設 `gpt-5.4-mini`）| 是 |
 | `LLM_MAX_TOKENS` | LLM | 最大 token 數（預設 1000）| 是 |
 | `LLM_TIMEOUT_MS` | LLM | 超時設定（預設 10000）| 是 |
-| `LLM_BASE_URL` | LLM | 可替換為 Azure OpenAI | 否 |
+| `LLM_BASE_URL` | LLM | 可替換為其他相容端點（選填）| 否 |
 | `WEBHOOK_URL` | Webhook | Webhook 接收端 URL | 是（Phase 5 起）|
 | `WEBHOOK_SECRET` | Webhook | HMAC 簽名 secret（本期可選）| 否 |
 | `WEBHOOK_TIMEOUT_MS` | Webhook | Webhook 超時（預設 5000）| 否 |
@@ -861,5 +862,6 @@ NODE_ENV=production：
 | 1.2.0 | 2026-04-13 | 最後一輪 API contract 對齊修訂（承接 spec.md v1.5.0 + design.md v1.7.0）：①承接文件版本更新；②Phase 2：SSE 事件格式改為 `event: token` 前綴，done event payload 精簡（messageId/action/sourceReferences/usage），明確前端以 fetch+ReadableStream 接收，取消串流以 AbortController/connection close 為正式機制（無 cancel endpoint）；③Phase 2 新增 Handoff API（`POST .../handoff`）與 History API（`GET .../history`）任務項目；④Phase 2 Widget Config seed/response 改為 JSONB 多語系結構，AI 失效時 status 改為 `degraded`；⑤Phase 5 FeedbackModule：評分改為 `value: "up"|"down"`，移除 rating；⑥Phase 6 DashboardModule：feedbackSummary 改為 `{totalCount,upCount,downCount,upRate}`；⑦風險 R-009 更新（fetch+ReadableStream，不使用 EventSource）；⑧風險 R-011 + OQ-011：widget_degraded_status 移除，改為 `status: degraded` |
 | 1.3.0 | 2026-04-14 | 依 spec.md v1.6.0 同步對齊（承接 spec.md v1.6.0 + design.md v1.8.0）：①承接文件版本更新；②§0 總原則：新增 Lead 欄位最終版（name/email 必填，company/phone/message/language 選填），end session API 明確延後；③§4.2 排除範圍：新增 end session API；④§12 Deferred：新增 end session API 條目 |
 | 1.3.1 | 2026-04-14 | 最後一輪一致性小幅修補（承接 design.md v1.8.0）：①handoff response contract 統一——Phase 2 / Phase 5 表格與完成條件改為 `{ accepted, action: "handoff", leadId, ticketId, message }`，補充 nullable 語意（accepted=true 時兩者不得同時為 null）；②`GET /api/v1/health/ai-status` 明確標示為 internal health / monitoring endpoint，非前端 Widget 正式初始化 contract，前端正式初始化狀態來源只有 `GET /api/v1/widget/config` 的 `status` |
+| 1.4.0 | 2026-04-16 | LLM provider 抽象化修訂（承接 spec.md v1.7.0 + design.md v1.9.0）：①§0 總原則：`OpenAI 實作` → `ILlmProvider` + `OpenAiProvider 預設實作（未來可擴充 ClaudeProvider）`；②§4.1 範圍描述更新；③前置依賴：`OpenAI API Key` → `LLM provider API key（LLM_API_KEY）`；④Phase 2 ILlmProvider.stream() 表格與 LlmModule 更新：加入 `ClaudeProvider` 可擴充備注；⑤Phase 2 完成條件：`OpenAI streaming 中止` → `LLM streaming 中止`；⑥Phase 7 checklist：`OpenAI Data Opt-out` → `LLM provider 資料政策確認`；⑦R-001 風險：`OpenAI API latency` → `LLM provider API latency`，補充雙層 fallback 策略；⑧附錄 A env var 表：`OPENAI_API_KEY` 拆為 `LLM_PROVIDER` + `LLM_API_KEY`，模型預設 `gpt-4o-mini` → `gpt-5.4-mini`，`LLM_BASE_URL` 說明 provider-neutral |
 
-**版本**：1.3.1 | **建立日期**：2026-04-10 | **狀態**：Draft
+**版本**：1.4.0 | **建立日期**：2026-04-10 | **狀態**：Draft

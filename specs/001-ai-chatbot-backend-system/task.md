@@ -1,13 +1,13 @@
 # 震南官網 AI 客服聊天機器人 — Backend 工程任務清單
 
-**版本**：1.3.1 | **建立日期**：2026-04-10 | **狀態**：Draft  
-**承接文件**：`spec.md` v1.6.0、`design.md` v1.8.0、`plan.md` v1.3.1  
+**版本**：1.4.0 | **建立日期**：2026-04-10 | **狀態**：Draft  
+**承接文件**：`spec.md` v1.7.0、`design.md` v1.9.0、`plan.md` v1.4.0
 
 ---
 
 ## 0. 本期實作總原則
 
-> 本期（spec.md v1.6.0 / design.md v1.8.0 / plan.md v1.3.1）明確定案下列事項：
+> 本期（spec.md v1.7.0 / design.md v1.9.0 / plan.md v1.4.0）明確定案下列事項：
 
 - **SSE 串流回覆** 為本期正式主流程（非延後），所有聊天回覆一律走 `text/event-stream`
 - **取消串流以 `AbortController.abort()` / connection close 為正式機制**；不設計獨立 cancel endpoint
@@ -112,7 +112,7 @@ Phase 7（品質補強與驗收準備）
   - 驗收：`docker compose up -d` 後 Postgres 可連線；`npm run start:dev` 不因缺少環境變數而崩潰
 
 - [X] **T0-002** `OPS` **建立 `.env.example` 初版**
-  - 說明：列出所有必要環境變數佔位符（`DATABASE_URL`、`NODE_ENV`、`PORT`、`OPENAI_API_KEY`、`LLM_MODEL`、`LLM_MAX_TOKENS`、`LLM_TIMEOUT_MS`、`WEBHOOK_URL`、`WEBHOOK_SECRET`、`EMAIL_PROVIDER` 等），Email 相關預留但無值
+  - 說明：列出所有必要環境變數佔位符（`DATABASE_URL`、`NODE_ENV`、`PORT`、`LLM_PROVIDER`、`LLM_API_KEY`、`LLM_MODEL`、`LLM_MAX_TOKENS`、`LLM_TIMEOUT_MS`、`LLM_BASE_URL`、`WEBHOOK_URL`、`WEBHOOK_SECRET`、`EMAIL_PROVIDER` 等），Email 相關預留但無値
   - 輸出物：`.env.example`
   - 驗收：所有 Phase 0 所需變數均有佔位符；Email / HMAC 相關變數預留標記
 
@@ -247,7 +247,7 @@ Phase 7（品質補強與驗收準備）
 
 > **目標**：打通完整 Chat Pipeline（10 步驟），以 SSE 串流回覆，`sessionToken` 前後端對映；實作 Widget Config 公開 API；含 LLM observability，PromptGuard 骨架接入  
 > **里程碑**：M2 — 聊天可問答（SSE）；M2a — Widget Config 可用  
-> **前置依賴**：Phase 0、Phase 1 全部完成；OpenAI API Key 已取得  
+> **前置依賴**：Phase 0、Phase 1 全部完成；LLM provider API key 已取得（本期預設 OpenAI，使用 `LLM_API_KEY` 環境變數）  
 > ⚠️ PromptGuard 與 ConfidentialityCheck 必須在本 Phase 接入 Pipeline，不可為空 stub  
 > ⚠️ 所有 Chat API 路由一律使用 `sessionToken`（UUID），不對外暴露內部 `sessionId`
 
@@ -269,9 +269,9 @@ Phase 7（品質補強與驗收準備）
   - 驗收：`AuditService.log()` 寫入 DB；非 LLM 事件的 token 欄位為 0；不允許 UPDATE / DELETE AuditLog
 
 - [ ] **T2-004** `INTG` **建立 LlmModule（ILlmProvider 介面 + OpenAiProvider 實作）**
-  - 說明：定義 `ILlmProvider` 介面（`chat(request: LlmChatRequest): Promise<LlmChatResponse>`；`stream(request: LlmChatRequest, signal?: AbortSignal): AsyncIterable<LlmStreamChunk>`）；`LlmChatRequest` 型別（`messages`、`model`、`maxTokens`、`temperature`）；`LlmChatResponse` 型別（`content`、`promptTokens`、`completionTokens`、`totalTokens`、`durationMs`、`model`、`provider`）；`LlmStreamChunk` 型別（`token: string`、`done: boolean`；done=true 時含 `usage` 欄位）；`OpenAiProvider` 實作（`chat()` 使用 `openai` npm 套件非 streaming；`stream()` 使用 `openai` streaming API（`stream: true`），支援 `AbortSignal` 傳入以中斷；timeout 讀取自 `SystemConfig.llm_timeout_ms`；retry 最多 2 次；所有欄位從 OpenAI response 正確填充）
+  - 說明：定義 `ILlmProvider` 介面（`chat(request: LlmChatRequest): Promise<LlmChatResponse>`；`stream(request: LlmChatRequest, signal?: AbortSignal): AsyncIterable<LlmStreamChunk>`）；`LlmChatRequest` 型別（`messages`、`model`、`maxTokens`、`temperature`）；`LlmChatResponse` 型別（`content` 、`promptTokens`、`completionTokens`、`totalTokens`、`durationMs`、`model`、`provider`）；`LlmStreamChunk` 型別（`token: string`、`done: boolean`；done=true 時含 `usage` 欄位）；`OpenAiProvider` 實作（本期預設 provider，使用 `openai` npm 套件）：`chat()` 非 streaming；`stream()` 使用 OpenAI streaming API（`stream: true`），支援 `AbortSignal` 傳入以中斷；模型預設讀取自 `LLM_MODEL`（本期預設 `gpt-5.4-mini`）；timeout 讀取自 `SystemConfig.llm_timeout_ms`；retry 最多 2 次；雙層 fallback：主模型失敗 → `gpt-5.4-nano` → 固定訊息（「目前 AI 忙糌中，請留下聯絡資訊 / 聯絡業務」）；`fallbackTriggered=true` 寫入 AuditLog；未來可擴充 `ClaudeProvider`（實作同一 `ILlmProvider` 介面）；所有欄位從 API response 正確填充
   - 輸出物：`src/llm/llm.module.ts`、`src/llm/interfaces/llm-provider.interface.ts`、`src/llm/providers/openai.provider.ts`、`src/llm/types/`
-  - 驗收：`OpenAiProvider.chat()` 可呼叫 OpenAI API 並回傳正確型別；`OpenAiProvider.stream()` 回傳 `AsyncIterable<LlmStreamChunk>`；`AbortSignal` 可中止 streaming；`durationMs` 為實際耗時；token 欄位從 API response 填充
+  - 驗收：`OpenAiProvider.chat()` 可呼叫 OpenAI API 並回傳正確型別；`OpenAiProvider.stream()` 回傳 `AsyncIterable<LlmStreamChunk>`；`AbortSignal` 可中止 streaming；`durationMs` 為實際耗時；token 欄位從 API response 填充；主模型失敗時自動 fallback 至 `gpt-5.4-nano`；`fallbackTriggered=true` 寫入 AuditLog
 
 - [ ] **T2-005** `CORE` **建立 RetrievalModule（IRetrievalService 介面 + PostgresRetrievalService 實作）**
   - 說明：定義 `IRetrievalService` 介面（`retrieve(query: RetrievalQuery): Promise<RetrievalResult[]>`）；`PostgresRetrievalService` 實作（主方案：`pg_trgm` similarity query + metadata filter（`intentLabel`、`tags`）+ glossary boost；fallback：ILIKE 查詢；`PG_TRGM_ENABLED` 環境變數控制使用哪種策略）；`RetrievalResult` 型別（`entry`、`score`）；信心分數計算邏輯
@@ -281,7 +281,7 @@ Phase 7（品質補強與驗收準備）
 - [ ] **T2-006** `CORE` **建立 PromptBuilder**
   - 說明：`PromptBuilder.build(context: PromptBuildContext): LlmMessage[]`；組裝 system prompt（含語言指令：`zh-TW` 回繁中、`en` 回英文）；注入 RAG context（知識條目摘要）；控制 context window（總 token 數不超過 `SystemConfig.llm_max_context_tokens`）；多輪歷史截斷策略
   - 輸出物：`src/chat/prompt-builder.ts`、`src/chat/types/prompt-build-context.type.ts`
-  - 驗收：輸出的 messages 格式符合 OpenAI API 規格；RAG context 正確注入；歷史超長時截斷不報錯
+  - 驗收：輸出的 messages 格式符合 LLM provider API 規格（本期為 OpenAI）；RAG context 正確注入；歷史超長時截斷不報錯
 
 - [ ] **T2-007** `CORE` **建立 Chat Pipeline 10 步驟骨架（SSE 串流輸出）**
   - 說明：建立 `ChatPipelineService`，實作完整 10 步驟流程（每步驟為獨立 private method，可單獨 mock 測試）：
@@ -678,14 +678,14 @@ Phase 7（品質補強與驗收準備）
   - 驗收：所有 Phase 0~7 所需環境變數均有佔位符；Email / HMAC 預留有標記
 
 - [ ] **T7-010** `OPS` **撰寫操作說明文件**
-  - 說明：撰寫 `docs/operations.md`，包含：Migration 執行方式（`npx prisma migrate deploy`）；Seed 執行方式（含 NODE_ENV 說明）；Admin API 使用說明（各端點用途 + 保護設定提醒）；Webhook 接收端設定說明（payload 格式、重試機制說明）；SystemConfig 業務閾值說明（可調整項目與預設值）；OpenAI Data Opt-out 確認步驟
+  - 說明：撰寫 `docs/operations.md`，包含：Migration 執行方式（`npx prisma migrate deploy`）；Seed 執行方式（含 NODE_ENV 說明）；Admin API 使用說明（各端點用途 + 保護設定提醒）；Webhook 接收端設定說明（payload 格式、重試機制說明）；SystemConfig 業務閾値說明（可調整項目與預設値）；LLM provider 資料政策確認步驟（本期為 OpenAI，需確認已關閉訓練資料使用選項）
   - 輸出物：`docs/operations.md`
   - 驗收：文件存在且涵蓋上述所有章節；可作為交付清單使用
 
-- [ ] **T7-011** `OPS` **OpenAI Data Opt-out 確認**
-  - 說明：確認 OpenAI 組織設定中已關閉「使用 API 資料訓練模型」的選項；在 `docs/operations.md` 中記錄確認步驟與截圖或確認說明
+- [ ] **T7-011** `OPS` **LLM provider 資料政策確認**
+  - 說明：確認所選 LLM provider（本期預設 OpenAI）組織設定中已關閉「使用 API 資料訓練模型」的選項；在 `docs/operations.md` 中記錄確認步驟與截圖或確認說明
   - 輸出物：`docs/operations.md`（更新，含確認步驟）
-  - 驗收：OpenAI 設定確認記錄存在於操作文件中
+  - 驗收：LLM provider 資料政策確認記錄存在於操作文件中
 
 - [ ] **T7-012** `TEST` **最終整合驗收：AC-001 ~ AC-019 全跑一遍**
   - 說明：依 `docs/ac-coverage.md` 對照表，執行所有有對應測試的 AC；確認所有測試通過；保守預設完成的 AC 標記說明（如「機密 10 題保守預設通過，甲方補充後補跑」）；整理最終驗收記錄
@@ -855,5 +855,6 @@ Phase 7（品質補強與驗收準備）
 | 1.2.0 | 2026-04-13 | 最後一輪 API contract 對齊修訂（承接 spec.md v1.5.0 + design.md v1.7.0）：①§0 補入 fetch+ReadableStream、AbortController 取消機制、SSE 事件格式最終版、value:up/down、Lead 欄位最終版；②T5-001 Lead model（name/email 必填，company/phone/message 選填）+ Feedback model（value:up/down，移除 rating）；③T5-003 CreateLeadDto 欄位修正；④T5-005 Webhook payload 欄位映射修正；⑤T5-012/T5-013 FeedbackService/API 改為 value:up/down，Admin filter 移除 rating；⑥T5-015 Feedback 測試改為 value enum 驗證；⑦T6-007 Dashboard feedbackSummary 改為 {totalCount,upCount,downCount,upRate}；⑧T6-011 Dashboard 測試補入 feedbackSummary 正確格式驗證；⑨OQ-011 status 改為 online/offline/degraded（移除 inactive） |
 | 1.3.0 | 2026-04-14 | 依 spec.md v1.6.0 同步對齊（承接 spec.md v1.6.0 + design.md v1.8.0 + plan.md v1.3.0）：①承接文件版本更新；②§0 Lead API 欄位補入 `language`（選填）、補入「end session API 本期不做」原則、Handoff API response leadId/ticketId 為 nullable；③T5-001 Lead migration 新增 `language` 欄位（選填）；④T5-003 CreateLeadDto 新增 `language?: string`；⑤T5-005 Webhook payload 新增 `message`、`language`、`summary` 欄位說明（均為選填，可為 null）；⑥T5-009 Webhook 測試補入新欄位驗收；⑦§7 Deferred 新增 end session API 條目 |
 | 1.3.1 | 2026-04-14 | 最後一輪一致性小幅修補（承接 plan.md v1.3.1）：①handoff response contract 統一——§0 / T2-008 / T2-016 / T5-014 補充 nullable 語意（action="handoff" 穩定語意，accepted=true 時 leadId / ticketId 不得同時為 null）；②`/lead` API 成功時 leadId 不可為 null（T5-003 說明與驗收更新）；③`GET /api/v1/health/ai-status` 明確標示為 internal health / monitoring endpoint（§0 + T0-010），非前端 Widget 正式初始化依賴 |
+| 1.4.0 | 2026-04-16 | LLM provider 抽象化修訂（承接 spec.md v1.7.0 + design.md v1.9.0 + plan.md v1.4.0）：①T0-002 `.env.example`：`OPENAI_API_KEY` 拆為 `LLM_PROVIDER`+`LLM_API_KEY`+`LLM_BASE_URL`；②Phase 2 前置依賴：`OpenAI API Key 已取得` → `LLM provider API key 已取得（本期預設 OpenAI，使用 LLM_API_KEY）`；③T2-004 全面更新：加入本期預設模型策略、雙層 fallback、`ClaudeProvider` 可擴充備註、fallbackTriggered AuditLog；④T2-006 驗收：`符合 OpenAI API 規格` → `符合 LLM provider API 規格（本期 OpenAI）`；⑤T7-010 ops doc 加入 LLM provider 資料政策確認步驟；⑥T7-011 改名為 LLM provider 資料政策確認，說明/驗收 provider-neutral |
 
-**版本**：1.3.1 | **建立日期**：2026-04-10 | **狀態**：Draft
+**版本**：1.4.0 | **建立日期**：2026-04-10 | **狀態**：Draft

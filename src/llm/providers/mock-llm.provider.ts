@@ -49,6 +49,9 @@ export class MockLlmProvider implements ILlmProvider {
       token: '',
       done: true,
       usage: { promptTokens: 10, completionTokens: tokens.length, totalTokens: 10 + tokens.length },
+      modelUsed: 'mock',
+      fallbackTriggered: false,
+      provider: 'mock',
     };
   }
 }

@@ -19,6 +19,13 @@ export interface PromptBuildContext {
    * Loaded from SystemConfig `llm_max_context_tokens`.
    */
   maxContextTokens: number;
+  /**
+   * RAG confidence level for this turn.
+   * - 'high': top score >= rag_answer_threshold → normal answer
+   * - 'low':  score between rag_minimum_score and rag_answer_threshold → cautious reply
+   * - undefined: not evaluated (e.g. degraded mode)
+   */
+  confidenceLevel?: 'high' | 'low';
 }
 
 /**

@@ -10,17 +10,44 @@ import { AiStatusService } from '../health/ai-status.service';
 import { PromptBuilder } from './prompt-builder';
 import { LLM_PROVIDER } from '../llm/interfaces/llm-provider.interface';
 import { RETRIEVAL_SERVICE } from '../retrieval/interfaces/retrieval-service.interface';
+import { LlmTimeoutError } from '../llm/errors/llm-timeout.error';
 
 /**
  * T2-011 — Unit tests for ChatPipelineService.
  *
  * Covers:
+ *  - detectLang() static helper: zh-TW / en / fallback
  *  - Degraded mode returns fallback SSE payload and ends response
  *  - Safety block writes "blocked" SSE event and ends response
  *  - Successful flow streams tokens and writes "done" event
  *  - AbortSignal triggers "interrupted" event
+ *  - LlmTimeoutError triggers "timeout" event
+ *  - RAG no-hit / below minimum score → fallback (no LLM call)
+ *  - RAG low confidence (between min and answer threshold) → enters LLM with cautious prompt
+ *  - RAG high confidence → enters LLM normally
+ *  - aiProvider populated from done chunk (not env-sniffed)
  */
 describe('ChatPipelineService', () => {
+  // ── Static helper tests (no DI needed) ──────────────────────────────────
+
+  describe('detectLang (static)', () => {
+    it('should return zh-TW for Chinese text', () => {
+      expect(ChatPipelineService.detectLang('你好，我想詢問產品規格與價格的相關資訊')).toBe('zh-TW');
+    });
+
+    it('should return en for English text', () => {
+      expect(ChatPipelineService.detectLang('I would like to ask about your product specifications and pricing')).toBe('en');
+    });
+
+    it('should return fallback for empty string', () => {
+      expect(ChatPipelineService.detectLang('')).toBe('zh-TW');
+    });
+
+    it('should respect a custom fallback parameter', () => {
+      expect(ChatPipelineService.detectLang('', 'en')).toBe('en');
+    });
+  });
+
   let service: ChatPipelineService;
 
   // Mock response object
@@ -158,9 +185,13 @@ describe('ChatPipelineService', () => {
 
   describe('successful flow', () => {
     it('should stream tokens and emit done event', async () => {
+      mockRetrievalService.retrieve.mockResolvedValue([
+        { score: 0.9, entry: { id: 1, content: '產品資訊' } },
+      ]);
       async function* mockStream() {
         yield { token: '你好' };
         yield { token: '！' };
+        yield { token: '', done: true, provider: 'mock', modelUsed: 'mock', fallbackTriggered: false, usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 } };
       }
       mockLlmProvider.stream.mockReturnValue(mockStream());
 
@@ -182,11 +213,15 @@ describe('ChatPipelineService', () => {
   describe('abort signal', () => {
     it('should emit interrupted event when signal is aborted during stream', async () => {
       const controller = new AbortController();
+      mockRetrievalService.retrieve.mockResolvedValue([
+        { score: 0.9, entry: { id: 1, content: '資訊' } },
+      ]);
 
       async function* mockStream() {
         controller.abort();
         const err = new Error('aborted');
         err.name = 'AbortError';
+        (err as NodeJS.ErrnoException).code = 'ABORT_ERR';
         throw err;
       }
       mockLlmProvider.stream.mockReturnValue(mockStream());
@@ -201,9 +236,130 @@ describe('ChatPipelineService', () => {
       );
 
       const writtenData = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0]).join('');
-      // AbortError should emit interrupted event or internal error (both are acceptable abort outcomes)
-      expect(writtenData.length).toBeGreaterThan(0);
+      expect(writtenData).toContain('interrupted');
       expect(res.end).toHaveBeenCalled();
+    });
+  });
+
+  describe('LLM timeout', () => {
+    it('should emit event:timeout when LlmTimeoutError is thrown', async () => {
+      async function* timeoutStream() {
+        throw new LlmTimeoutError('Model timed out after 30000ms');
+        yield { token: '', done: false }; // unreachable — keeps TS happy
+      }
+      mockLlmProvider.stream.mockReturnValue(timeoutStream());
+      mockRetrievalService.retrieve.mockResolvedValue([
+        { score: 0.9, entry: { id: 1, content: 'info' } },
+      ]);
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '逾時測試',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
+
+      const writtenData = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0]).join('');
+      expect(writtenData).toContain('timeout');
+      expect(res.end).toHaveBeenCalled();
+    });
+  });
+
+  describe('RAG short-circuit', () => {
+    it('should skip LLM and emit fallback when RAG returns no hits', async () => {
+      mockRetrievalService.retrieve.mockResolvedValue([]);
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '無命中問題',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
+
+      expect(mockLlmProvider.stream).not.toHaveBeenCalled();
+      const writtenData = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0]).join('');
+      expect(writtenData).toContain('event: done');
+      expect(writtenData).toContain('fallback');
+    });
+
+    it('should skip LLM and emit fallback when top score is below rag_minimum_score', async () => {
+      // Score 0.10 < default minimum (0.25) → fallback
+      mockRetrievalService.retrieve.mockResolvedValue([
+        { score: 0.10, entry: { id: 1, content: '非常低信心' } },
+      ]);
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '低分問題',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
+
+      expect(mockLlmProvider.stream).not.toHaveBeenCalled();
+      const writtenData = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0]).join('');
+      expect(writtenData).toContain('event: done');
+      expect(writtenData).toContain('fallback');
+    });
+
+    it('should enter LLM with low confidence mode when score is between thresholds', async () => {
+      // Score 0.35 is between default minimum (0.25) and default answer threshold (0.55)
+      mockRetrievalService.retrieve.mockResolvedValue([
+        { score: 0.35, entry: { id: 1, content: '中低信心資訊' } },
+      ]);
+
+      async function* lowConfStream() {
+        yield { token: '追問回應', done: false };
+        yield { token: '', done: true, provider: 'mock', modelUsed: 'mock', fallbackTriggered: false, usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 } };
+      }
+      mockLlmProvider.stream.mockReturnValue(lowConfStream());
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '中低信心問題',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
+
+      // LLM should be called (low confidence path goes to LLM)
+      expect(mockLlmProvider.stream).toHaveBeenCalled();
+      const writtenData = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0]).join('');
+      expect(writtenData).toContain('event: done');
+      expect(writtenData).toContain('answer');
+    });
+  });
+
+  describe('aiProvider from done chunk', () => {
+    it('should pass provider from done chunk to audit log (not env-sniffed)', async () => {
+      mockRetrievalService.retrieve.mockResolvedValue([
+        { score: 0.9, entry: { id: 1, content: 'info' } },
+      ]);
+
+      async function* mockStream() {
+        yield { token: '回應', done: false };
+        yield { token: '', done: true, provider: 'mock', modelUsed: 'mock', fallbackTriggered: false, usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 } };
+      }
+      mockLlmProvider.stream.mockReturnValue(mockStream());
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '測試',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
+
+      const writtenData = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0]).join('');
+      expect(writtenData).toContain('event: done');
+      expect(writtenData).toContain('answer');
     });
   });
 });

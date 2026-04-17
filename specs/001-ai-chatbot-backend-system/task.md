@@ -253,37 +253,37 @@ Phase 7（品質補強與驗收準備）
 
 ---
 
-- [ ] **T2-001** `DATA` **建立 Conversation / ConversationMessage / AuditLog Migration**
+- [X] **T2-001** `DATA` **建立 Conversation / ConversationMessage / AuditLog Migration**
   - 說明：定義 `Conversation` model（`id`、`sessionId`、`session_token`（UUID，unique，NOT NULL，indexed）、`status`、`type`（normal/confidential）、`riskLevel`、`sensitiveIntentCount`、`highIntentScore`、`diagnosisContext`（JSONB）、`language`、`createdAt`、`updatedAt`、`deletedAt`）；`ConversationMessage` model（`id`、`conversationId`、`role`、`content`、`type`、`riskLevel`、`blockedReason`、`createdAt`）；`AuditLog` model（`id`、`requestId`、`sessionId`、`eventType`、`eventData`（JSONB）、`knowledgeRefs`、`ragConfidence`、`blockedReason`、`promptHash`、`promptTokens`、`completionTokens`、`totalTokens`、`durationMs`、`aiModel`、`aiProvider`、`configSnapshot`（JSONB）、`createdAt`）；執行 migration
   - 輸出物：`prisma/schema.prisma`（更新）、migration 檔案
   - 驗收：migration 執行成功；`Conversation` 含 `session_token` 欄位（UUID UNIQUE NOT NULL）；`AuditLog` 含全部 LLM observability 欄位
 
-- [ ] **T2-002** `CORE` **建立 ConversationModule（ConversationService + ConversationRepository）**
+- [X] **T2-002** `CORE` **建立 ConversationModule（ConversationService + ConversationRepository）**
   - 說明：`ConversationRepository`（`createSession()`：建立 Conversation 並產生 UUID `session_token`；`findById(sessionId)`；`findBySessionToken(token)`：依 sessionToken 查詢對映的 Conversation；`addMessage()`；`getHistory(sessionId, limit)`；`updateConversation()`）；`ConversationService`（封裝 repository，提供業務層方法）
   - 輸出物：`src/conversation/conversation.module.ts`、`src/conversation/conversation.service.ts`、`src/conversation/conversation.repository.ts`
   - 驗收：可建立 session（回傳含 `session_token`）；`findBySessionToken()` 正確查詢；Prisma transaction 在批次寫入時正常運作
 
-- [ ] **T2-003** `CORE` **建立 AuditModule（AuditService append-only 寫入）**
+- [X] **T2-003** `CORE` **建立 AuditModule（AuditService append-only 寫入）**
   - 說明：`AuditService.log(event: AuditLogEvent): Promise<void>`（append-only，永不更新或刪除）；`AuditLogEvent` 型別含所有必要欄位（含 `promptTokens`、`completionTokens`、`totalTokens`、`durationMs`、`aiModel`、`aiProvider`）；未呼叫 LLM 時這些欄位記為 `0`；含 `configSnapshot`（記錄當下 RAG 閾值）
   - 輸出物：`src/audit/audit.module.ts`、`src/audit/audit.service.ts`、`src/audit/types/audit-log-event.type.ts`
   - 驗收：`AuditService.log()` 寫入 DB；非 LLM 事件的 token 欄位為 0；不允許 UPDATE / DELETE AuditLog
 
-- [ ] **T2-004** `INTG` **建立 LlmModule（ILlmProvider 介面 + OpenAiProvider 實作）**
+- [X] **T2-004** `INTG` **建立 LlmModule（ILlmProvider 介面 + OpenAiProvider 實作）**
   - 說明：定義 `ILlmProvider` 介面（`chat(request: LlmChatRequest): Promise<LlmChatResponse>`；`stream(request: LlmChatRequest, signal?: AbortSignal): AsyncIterable<LlmStreamChunk>`）；`LlmChatRequest` 型別（`messages`、`model`、`maxTokens`、`temperature`）；`LlmChatResponse` 型別（`content` 、`promptTokens`、`completionTokens`、`totalTokens`、`durationMs`、`model`、`provider`）；`LlmStreamChunk` 型別（`token: string`、`done: boolean`；done=true 時含 `usage` 欄位）；`OpenAiProvider` 實作（本期預設 provider，使用 `openai` npm 套件）：`chat()` 非 streaming；`stream()` 使用 OpenAI streaming API（`stream: true`），支援 `AbortSignal` 傳入以中斷；模型預設讀取自 `LLM_MODEL`（本期預設 `gpt-5.4-mini`）；timeout 讀取自 `SystemConfig.llm_timeout_ms`；retry 最多 2 次；雙層 fallback：主模型失敗 → `gpt-5.4-nano` → 固定訊息（「目前 AI 忙糌中，請留下聯絡資訊 / 聯絡業務」）；`fallbackTriggered=true` 寫入 AuditLog；未來可擴充 `ClaudeProvider`（實作同一 `ILlmProvider` 介面）；所有欄位從 API response 正確填充
   - 輸出物：`src/llm/llm.module.ts`、`src/llm/interfaces/llm-provider.interface.ts`、`src/llm/providers/openai.provider.ts`、`src/llm/types/`
   - 驗收：`OpenAiProvider.chat()` 可呼叫 OpenAI API 並回傳正確型別；`OpenAiProvider.stream()` 回傳 `AsyncIterable<LlmStreamChunk>`；`AbortSignal` 可中止 streaming；`durationMs` 為實際耗時；token 欄位從 API response 填充；主模型失敗時自動 fallback 至 `gpt-5.4-nano`；`fallbackTriggered=true` 寫入 AuditLog
 
-- [ ] **T2-005** `CORE` **建立 RetrievalModule（IRetrievalService 介面 + PostgresRetrievalService 實作）**
+- [X] **T2-005** `CORE` **建立 RetrievalModule（IRetrievalService 介面 + PostgresRetrievalService 實作）**
   - 說明：定義 `IRetrievalService` 介面（`retrieve(query: RetrievalQuery): Promise<RetrievalResult[]>`）；`PostgresRetrievalService` 實作（主方案：`pg_trgm` similarity query + metadata filter（`intentLabel`、`tags`）+ glossary boost；fallback：ILIKE 查詢；`PG_TRGM_ENABLED` 環境變數控制使用哪種策略）；`RetrievalResult` 型別（`entry`、`score`）；信心分數計算邏輯
   - 輸出物：`src/retrieval/retrieval.module.ts`、`src/retrieval/interfaces/retrieval-service.interface.ts`、`src/retrieval/services/postgres-retrieval.service.ts`、`src/retrieval/types/`
   - 驗收：`retrieve()` 回傳依信心分數排序的結果；`pg_trgm` 不可用時自動 fallback 至 ILIKE；`intentLabel` / `tags` filter 正確作用
 
-- [ ] **T2-006** `CORE` **建立 PromptBuilder**
+- [X] **T2-006** `CORE` **建立 PromptBuilder**
   - 說明：`PromptBuilder.build(context: PromptBuildContext): LlmMessage[]`；組裝 system prompt（含語言指令：`zh-TW` 回繁中、`en` 回英文）；注入 RAG context（知識條目摘要）；控制 context window（總 token 數不超過 `SystemConfig.llm_max_context_tokens`）；多輪歷史截斷策略
   - 輸出物：`src/chat/prompt-builder.ts`、`src/chat/types/prompt-build-context.type.ts`
   - 驗收：輸出的 messages 格式符合 LLM provider API 規格（本期為 OpenAI）；RAG context 正確注入；歷史超長時截斷不報錯
 
-- [ ] **T2-007** `CORE` **建立 Chat Pipeline 10 步驟骨架（SSE 串流輸出）**
+- [X] **T2-007** `CORE` **建立 Chat Pipeline 10 步驟骨架（SSE 串流輸出）**
   - 說明：建立 `ChatPipelineService`，實作完整 10 步驟流程（每步驟為獨立 private method，可單獨 mock 測試）：
     1. `validateInput()`（DTO 驗證，訊息長度上限來自 SystemConfig）
     2. `detectLanguage()`（`franc` 套件；`zh-TW` / `en`；其他 fallback `zh-TW`）
@@ -298,42 +298,42 @@ Phase 7（品質補強與驗收準備）
   - 輸出物：`src/chat/chat-pipeline.service.ts`
   - 驗收：每步驟可被個別 mock 測試；PromptGuard / ConfidentialityCheck 均為非空實作（呼叫真實 SafetyService）；SSE 串流正確推送 token chunks
 
-- [ ] **T2-008** `CORE` **建立 ChatModule 與 Chat API endpoints（SSE + sessionToken + history + handoff）**
+- [X] **T2-008** `CORE` **建立 ChatModule 與 Chat API endpoints（SSE + sessionToken + history + handoff）**
   - 說明：`ChatController`（`POST /api/v1/chat/sessions`：建立 session，產生 UUID `sessionToken`，回傳 `{ sessionToken, createdAt }`（不回傳內部 sessionId）；`POST /api/v1/chat/sessions/:sessionToken/messages`：依 sessionToken 解析內部 sessionId → 呼叫 Pipeline → 以 `Content-Type: text/event-stream` 回傳 SSE 串流；`GET /api/v1/chat/sessions/:sessionToken/history`：依 sessionToken 回傳 ConversationMessage 列表；`POST /api/v1/chat/sessions/:sessionToken/handoff`：訪客主動觸發轉人工，後端建立 Lead 與 / 或 Ticket（`trigger_reason=handoff`），回傳 `{ accepted, action: "handoff", leadId, ticketId, message }`；`leadId` / `ticketId` 依實際建立結果回傳（nullable），`accepted = true` 時不得同時為 `null`）；斷線偵測：`res.on('close', () => abortController.abort())`；取消串流以 AbortController/connection close 為正式機制，**不設計獨立 cancel endpoint**）；SSE 事件格式：`event: token\ndata: {"token":"..."}` / `event: done\ndata: {messageId, action, sourceReferences, usage}` / `event: error\ndata: {code, message}` / `event: timeout\ndata: {message}` / `event: interrupted\ndata: {message}`；`action` enum：`"answer" | "handoff" | "fallback" | "intercepted"`
   - 輸出物：`src/chat/chat.controller.ts`、`src/chat/chat.module.ts`、`src/chat/dto/`、`src/chat/types/`
   - 驗收：`POST /api/v1/chat/sessions` 回傳 201 + `sessionToken`（UUID）；SSE stream 含正確事件格式；`GET .../history` 回傳 ConversationMessage 列表；`POST .../handoff` 觸發 Lead 與 / 或 Ticket 建立，`accepted = true` 時 `leadId` / `ticketId` 不得同時為 `null`；sessionToken 不存在時回傳 404
 
-- [ ] **T2-009** `CORE` **實作 AiStatusService degraded 邏輯與 fallback 機制**
+- [X] **T2-009** `CORE` **實作 AiStatusService degraded 邏輯與 fallback 機制**
   - 說明：`AiStatusService` 追蹤連續 LLM 失敗次數；達 `SystemConfig.ai_degraded_threshold`（預設 3）後設定 `status=degraded`；`GET /api/v1/health/ai-status` 回傳 degraded 狀態；degraded 時 Pipeline 跳過 LLM，透過 SSE 直接推送 fallback 回覆（`fallback_message_zh` / `fallback_message_en` 來自 SystemConfig）後送 `event: done`；degraded 時 `GET /api/v1/widget/config` 的 `status` 自動切換為 `"degraded"`
   - 輸出物：`src/health/ai-status.service.ts`（更新）、`src/chat/chat-pipeline.service.ts`（更新）
   - 驗收：LLM 連續 timeout 3 次後 degraded 啟動；fallback 回覆語言與輸入語言一致；AuditLog 記錄 fallback 事件；Widget Config `status` 在 degraded 時回傳 `"degraded"`
 
-- [ ] **T2-010** `INTG` **實作 LLM Observability 完整寫入 AuditLog**
+- [X] **T2-010** `INTG` **實作 LLM Observability 完整寫入 AuditLog**
   - 說明：確認 Pipeline 中每次 LLM 呼叫結束後，`LlmChatResponse` 的 `promptTokens`、`completionTokens`、`totalTokens`、`durationMs`、`model`、`provider` 全部寫入 AuditLog；未呼叫 LLM 的 turn（被 PromptGuard 攔截、低信心跳過 LLM）記 0；摘要生成（Phase 4 SummaryService）呼叫 LLM 時亦需寫入 AuditLog
   - 輸出物：`src/chat/chat-pipeline.service.ts`（更新）、`src/audit/audit.service.ts`（確認）
   - 驗收：每筆 AuditLog 的 token 欄位：LLM 呼叫時為正整數；未呼叫 LLM 時為 0；`durationMs` 為實際測量值
 
-- [ ] **T2-011** `TEST` **Phase 2 測試：ChatPipeline 各步驟單元測試**
+- [X] **T2-011** `TEST` **Phase 2 測試：ChatPipeline 各步驟單元測試**
   - 說明：為 `ChatPipelineService` 的每個步驟撰寫獨立單元測試（mock 所有外部依賴 — DB、LLM、SafetyService、IntentService、RetrievalService）；測試案例覆蓋：正常流程、PromptGuard 短路、ConfidentialityCheck 命中、信心低於閾值跳過 LLM、LLM timeout fallback
   - 輸出物：`src/chat/chat-pipeline.service.spec.ts`
   - 驗收：所有步驟均有測試；各短路路徑有對應測試案例；mock 正確隔離外部依賴
 
-- [ ] **T2-012** `TEST` **Phase 2 測試：RetrievalService 信心分數與閾值單元測試**
+- [X] **T2-012** `TEST` **Phase 2 測試：RetrievalService 信心分數與閾值單元測試**
   - 說明：`PostgresRetrievalService` 單元測試（mock DB；信心分數計算正確；閾值短路邏輯正確；pg_trgm 結果與 ILIKE fallback 結果格式一致）
   - 輸出物：`src/retrieval/services/postgres-retrieval.service.spec.ts`
   - 驗收：信心分數計算有測試覆蓋；fallback 邏輯有測試覆蓋
 
-- [ ] **T2-013** `TEST` **Phase 2 測試：AuditLog 整合測試 + LLM fallback 測試**
+- [X] **T2-013** `TEST` **Phase 2 測試：AuditLog 整合測試 + LLM fallback 測試**
   - 說明：整合測試（使用測試 DB）：Pipeline 執行後 AuditLog 有正確的 token 欄位寫入；LLM timeout 時 SSE 送 `event: timeout` 且 AuditLog 有 fallback 事件記錄；`GET /api/v1/health/ai-status` degraded 後正確回傳
   - 輸出物：`test/audit-log.integration-spec.ts`、`test/chat-pipeline.integration-spec.ts`
   - 驗收：整合測試通過；所有 LLM 呼叫路徑的 AuditLog token 欄位非 null
 
-- [ ] **T2-014** `DATA` **Widget Config SystemConfig migration 與 seed**
+- [X] **T2-014** `DATA` **Widget Config SystemConfig migration 與 seed**
   - 說明：新增 Widget Config 相關 SystemConfig key-value seed；使用 JSONB 多語系結構：`widget_status`（預設 `"online"`）、`widget_welcome_message`（JSONB：`{"zh-TW":"歡迎使用震南客服，請問有什麼可以幫您？","en":"Welcome! How can I help you today?"}`）、`widget_quick_replies`（JSONB：`{"zh-TW":["查詢產品規格","聯絡業務","其他問題"],"en":["Product specs","Contact sales","Other"]}`）、`widget_disclaimer`（JSONB：`{"zh-TW":"本服務由 AI 提供，回覆僅供參考。","en":"This service is AI-powered. Responses are for reference only."}`）、`widget_fallback_message`（JSONB：`{"zh-TW":"目前服務暫時無法使用，請稍後再試或留下聯絡資訊。","en":"Service temporarily unavailable. Please try again later or leave your contact info."}`）；在 `prisma/seeds/widget-config.seed.ts` 建立；整合至 `seed.ts` 主進入點（生產環境也執行）
   - 輸出物：`prisma/seeds/widget-config.seed.ts`、`prisma/seed.ts`（更新）
   - 驗收：執行 seed 後 DB 含 5 個 Widget Config key；每個 JSONB 欄位均含 `zh-TW` 與 `en` 語系；`widget_status` 預設為 `"online"`
 
-- [ ] **T2-015** `CORE` **建立 WidgetConfigModule 與 Widget Config API**
+- [X] **T2-015** `CORE` **建立 WidgetConfigModule 與 Widget Config API**
   - 說明：`WidgetConfigService.getConfig()` 從 `SystemConfigService` 讀取所有 `widget_*` 前綴 key，組裝回傳物件；`WidgetConfigController` 實作 `GET /api/v1/widget/config`（公開端點，無需 Auth；`Cache-Control: no-store`）；回傳格式：
     ```json
     {
@@ -348,7 +348,7 @@ Phase 7（品質補強與驗收準備）
   - 輸出物：`src/widget-config/widget-config.module.ts`、`src/widget-config/widget-config.service.ts`、`src/widget-config/widget-config.controller.ts`
   - 驗收：`GET /api/v1/widget/config` 回傳 200 + 正確多語系格式；DB 值更新後下次請求即時反映；AI degraded 時 `status` 回傳 `"degraded"`
 
-- [ ] **T2-016** `TEST` **Phase 2 測試：SSE 串流、sessionToken、Widget Config、history、handoff 測試**
+- [X] **T2-016** `TEST` **Phase 2 測試：SSE 串流、sessionToken、Widget Config、history、handoff 測試**
   - 說明：SSE 串流單元測試（mock LLM stream）：`event: token` + `data: {"token":"..."}` token chunks 依序推送；`event: done` 含 `{messageId, action:"answer"|"handoff"|"fallback"|"intercepted", sourceReferences, usage}`；`event: timeout\ndata: {"message":"string"}` 在 LLM timeout 時觸發；前端斷線時 AbortController 被呼叫（無 cancel endpoint）；sessionToken 測試：`POST /api/v1/chat/sessions` 回傳 UUID sessionToken；`findBySessionToken()` 正確解析；sessionToken 不存在時 404；`GET /api/v1/chat/sessions/:sessionToken/history` 回傳 ConversationMessage 列表；`POST /api/v1/chat/sessions/:sessionToken/handoff` 觸發後端建立 Lead 與 / 或 Ticket，回傳 `{ accepted, action: "handoff", leadId, ticketId, message }`；`accepted = true` 時 `leadId` / `ticketId` 不得同時為 `null`；Widget Config 測試：`GET /api/v1/widget/config` 回傳多語系 JSONB 格式；AI degraded 時 `status` 切換為 `"degraded"`
   - 輸出物：`src/chat/sse-stream.spec.ts`、`src/conversation/conversation.repository.spec.ts`（更新）、`src/widget-config/widget-config.controller.spec.ts`
   - 驗收：SSE 事件格式、sessionToken 對映、history API、handoff API、Widget Config 多語系讀取的測試均通過

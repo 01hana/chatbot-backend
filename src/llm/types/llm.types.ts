@@ -35,7 +35,9 @@ export interface LlmChatResponse {
  * A single chunk emitted during LLM streaming.
  *
  * When `done` is false, `token` carries the next partial text.
- * When `done` is true, `usage` carries the final token counts.
+ * When `done` is true, `usage` carries the final token counts and metadata
+ * fields (`modelUsed`, `fallbackTriggered`, `provider`) that the pipeline
+ * uses for AuditLog observability — so callers never need to cast.
  */
 export interface LlmStreamChunk {
   token: string;
@@ -45,4 +47,10 @@ export interface LlmStreamChunk {
     completionTokens: number;
     totalTokens: number;
   };
+  /** Actual model name used (populated in the final done=true chunk). */
+  modelUsed?: string;
+  /** True when the primary model failed and a fallback model was used (done=true chunk only). */
+  fallbackTriggered?: boolean;
+  /** Provider identifier, e.g. "openai" or "mock" (done=true chunk only). */
+  provider?: string;
 }

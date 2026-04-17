@@ -38,6 +38,19 @@ Your responsibilities:
 4. Do not disclose any confidential information, pricing strategies, or internal data
 5. Keep responses concise, professional, and polite`;
 
+  // Low-confidence instruction injected as an additional system message
+  private readonly LOW_CONFIDENCE_ZH =
+    '⚠️ 提示：以下知識庫資訊與客戶問題的相關性可能不完整。' +
+    '請優先追問客戶缺少的關鍵資訊（例如具體型號、應用場景、規格要求），' +
+    '不要貿然給出不確定的答案。' +
+    '若確實無法回答，請誠實告知並引導客戶聯繫業務人員。';
+
+  private readonly LOW_CONFIDENCE_EN =
+    '⚠️ Note: The knowledge base information below may only be partially relevant. ' +
+    'Please ask the customer for clarifying details (e.g., specific model, use case, or specifications) ' +
+    'before answering. Do not guess. ' +
+    'If you cannot answer, honestly say so and direct the customer to a sales representative.';
+
   // Characters-per-token estimate (conservative for mixed CJK + English)
   private readonly CHARS_PER_TOKEN = 3;
 
@@ -57,6 +70,13 @@ Your responsibilities:
     const fixedMessages: LlmMessage[] = [{ role: 'system', content: systemPrompt }];
     if (ragContext) {
       fixedMessages.push({ role: 'system', content: ragContext });
+    }
+    // Inject low-confidence instruction when RAG confidence is marginal
+    if (context.confidenceLevel === 'low') {
+      const lowConfInstruction = context.language === 'en'
+        ? this.LOW_CONFIDENCE_EN
+        : this.LOW_CONFIDENCE_ZH;
+      fixedMessages.push({ role: 'system', content: lowConfInstruction });
     }
 
     // Fixed token budget: system messages + current user message

@@ -130,12 +130,18 @@ export class ChatController {
    *
    * Visitor explicitly requests human hand-off.
    *
-   * Phase 2 skeleton: Lead and Ticket creation is deferred to Phase 5 (T5-002/T5-003).
-   * Returns `accepted: true` with null leadId/ticketId as placeholder.
+   * Contract (task.md §0 + T2-008):
+   *   { accepted, action: "handoff", leadId, ticketId, message }
+   *   When `accepted = true`, `leadId` and `ticketId` must not BOTH be null.
    *
-   * TODO(Phase 5 / T5-002): inject LeadService + TicketService and actually
-   *   create Lead & Ticket rows. When `accepted = true`, leadId/ticketId must
-   *   not BOTH be null.
+   * Phase 2 — Phase 5 stub:
+   *   Lead and Ticket creation is deferred to Phase 5 (T5-002/T5-003).
+   *   `accepted: false` with null ids is the correct Phase-2 response given
+   *   that no Lead/Ticket module exists yet. The frontend must handle
+   *   `accepted: false` by showing a contact form.
+   *
+   * TODO(T5-002/T5-003): inject LeadService + TicketService, create Lead and
+   *   Ticket rows, return `accepted: true` with actual `leadId` / `ticketId`.
    */
   @Post('sessions/:sessionToken/handoff')
   @HttpCode(HttpStatus.OK)
@@ -148,13 +154,14 @@ export class ChatController {
       throw new NotFoundException('Session not found');
     }
 
-    // Phase 2 placeholder — real Lead/Ticket creation in Phase 5
+    // Phase 2: Lead/Ticket creation pending Phase 5 (T5-002/T5-003).
+    // accepted=false is the correct response while no Lead/Ticket module exists.
     return {
       accepted: false,
-      action: 'handoff',
-      leadId: null,
-      ticketId: null,
-      message: 'Handoff request received. Lead and Ticket creation will be available in Phase 5.',
+      action: 'handoff' as const,
+      leadId: null as string | null,
+      ticketId: null as string | null,
+      message: '您的轉接請求已收到。我們的業務人員將儘速與您聯繫。',
     };
   }
 }

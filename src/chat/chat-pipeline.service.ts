@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Response } from 'express';
+import { franc } from 'franc';
 import { Conversation, ConversationMessage } from '../generated/prisma/client';
 import { SafetyService } from '../safety/safety.service';
 import { IntentService } from '../intent/intent.service';
@@ -7,8 +8,12 @@ import { SystemConfigService } from '../system-config/system-config.service';
 import { AuditService } from '../audit/audit.service';
 import { ConversationService } from '../conversation/conversation.service';
 import { AiStatusService } from '../health/ai-status.service';
+import { LlmTimeoutError } from '../llm/errors/llm-timeout.error';
 import { ILlmProvider, LLM_PROVIDER } from '../llm/interfaces/llm-provider.interface';
-import { IRetrievalService, RETRIEVAL_SERVICE } from '../retrieval/interfaces/retrieval-service.interface';
+import {
+  IRetrievalService,
+  RETRIEVAL_SERVICE,
+} from '../retrieval/interfaces/retrieval-service.interface';
 import { PromptBuilder } from './prompt-builder';
 import {
   ChatAction,
@@ -31,6 +36,8 @@ interface PipelineContext {
   intentLabel: string | null;
   ragConfidence: number;
   promptHash?: string;
+  /** RAG confidence level, set in step 7. */
+  confidenceLevel: 'high' | 'low' | 'none';
 }
 
 /**
@@ -47,8 +54,8 @@ interface PipelineContext {
  *  4. checkConfidentiality — SafetyService.checkConfidentiality()
  *  5. detectIntent         — IntentService.detect()
  *  6. retrieveKnowledge    — RetrievalService.retrieve()
- *  7. evaluateConfidence   — compare against rag_confidence_threshold
- *  8. buildPrompt          — PromptBuilder.build()
+ *  7. evaluateConfidence   — dual threshold: minimum score vs answer threshold
+ *  8. buildPrompt          — PromptBuilder.build() with confidenceLevel
  *  9. callLlmStream        — ILlmProvider.stream()
  * 10. writeAndReturn       — persist messages + write AuditLog
  */
@@ -104,13 +111,17 @@ export class ChatPipelineService {
       ragResults: [],
       intentLabel: null,
       ragConfidence: 0,
+      confidenceLevel: 'none',
     };
 
     try {
       // ── Step 1: Validate ────────────────────────────────────────────────
       const maxLen = this.systemConfigService.getNumber('max_message_length') ?? 2000;
       if (!this.validateInput(userMessage, maxLen)) {
-        this.writeSseAndEnd(res, 'error', { code: 'MESSAGE_TOO_LONG', message: `最大長度 ${maxLen} 字元` } satisfies SseErrorPayload);
+        this.writeSseAndEnd(res, 'error', {
+          code: 'MESSAGE_TOO_LONG',
+          message: `最大長度 ${maxLen} 字元`,
+        } satisfies SseErrorPayload);
         return;
       }
 
@@ -134,12 +145,17 @@ export class ChatPipelineService {
 
         // Persist user message (blocked) + fixed refusal assistant message
         const userMsg = await this.conversationService.addMessage(conversation.id, {
-          role: 'user', content: userMessage, type: 'blocked', blockedReason: guardResult.blockedReason,
+          role: 'user',
+          content: userMessage,
+          type: 'blocked',
+          blockedReason: guardResult.blockedReason,
         });
 
         const refusal = this.safetyService.buildRefusalResponse(ctx.language);
         const assistantMsg = await this.conversationService.addMessage(conversation.id, {
-          role: 'assistant', content: refusal, type: 'blocked',
+          role: 'assistant',
+          content: refusal,
+          type: 'blocked',
         });
 
         res.write(formatSseEvent('token', { token: refusal } satisfies SseTokenPayload));
@@ -173,14 +189,25 @@ export class ChatPipelineService {
       ctx.ragConfidence = ctx.ragResults[0]?.score ?? 0;
 
       // ── Step 7: Confidence evaluation ────────────────────────────────────
-      const ragThreshold = this.systemConfigService.getNumber('rag_confidence_threshold') ?? 0.6;
-      const skipLlm = ctx.ragResults.length > 0 && ctx.ragConfidence < ragThreshold;
+      // Two thresholds:
+      //   rag_minimum_score    (default 0.25): below this → no useful context → direct fallback
+      //   rag_answer_threshold (default 0.55): above this → high confidence → normal LLM answer
+      //                                        between the two → low confidence → LLM with cautious prompt
+      // `rag_confidence_threshold` is kept as a backward-compatible alias for rag_answer_threshold.
+      const minimumScore = this.systemConfigService.getNumber('rag_minimum_score') ?? 0.25;
+      const answerThreshold =
+        this.systemConfigService.getNumber('rag_answer_threshold') ??
+        this.systemConfigService.getNumber('rag_confidence_threshold') ??
+        0.55;
 
-      if (skipLlm) {
-        // Low confidence — emit a generic fallback, no LLM call
+      const hasHits = ctx.ragResults.length > 0;
+      const topScore = ctx.ragConfidence; // = ragResults[0]?.score ?? 0
+
+      if (!hasHits || topScore < minimumScore) {
+        // No hits or below minimum score → user needs to leave contact info or talk to sales
         const fallback = ctx.language === 'en'
-          ? 'I couldn\'t find specific information about your question. Please contact our sales team for assistance.'
-          : '抱歉，我找不到與您問題相關的具體資訊。建議您直接聯繫業務人員以獲得更好的協助。';
+          ? 'I couldn\'t find relevant information in our knowledge base. Please leave your contact details and our team will follow up.'
+          : '抱歉，我在知識庫中找不到相關資訊。請留下您的聯絡資料，我們的業務人員將儘速與您聯繫。';
 
         const userMsg = await this.conversationService.addMessage(conversation.id, { role: 'user', content: userMessage });
         const assistantMsg = await this.conversationService.addMessage(conversation.id, { role: 'assistant', content: fallback });
@@ -189,10 +216,10 @@ export class ChatPipelineService {
           requestId,
           sessionId: conversation.sessionId,
           eventType: 'chat_response',
-          eventData: { action: 'fallback', skipReason: 'low_rag_confidence' },
-          ragConfidence: ctx.ragConfidence,
+          eventData: { action: 'fallback', skipReason: 'no_rag_hits' },
+          ragConfidence: topScore,
           durationMs: Date.now() - startMs,
-          configSnapshot: { rag_confidence_threshold: ragThreshold },
+          configSnapshot: { rag_minimum_score: minimumScore, rag_answer_threshold: answerThreshold },
         });
 
         res.write(formatSseEvent('token', { token: fallback } satisfies SseTokenPayload));
@@ -207,16 +234,26 @@ export class ChatPipelineService {
         return;
       }
 
+      // Between minimum and answer threshold → low confidence: enter LLM with cautious prompt
+      // At or above answer threshold → high confidence: normal LLM answer
+      ctx.confidenceLevel = topScore < answerThreshold ? 'low' : 'high';
+
       // ── Step 8: Build prompt ─────────────────────────────────────────────
       const maxContextTokens = this.systemConfigService.getNumber('llm_max_context_tokens') ?? 8000;
       const { messages } = this.buildPrompt(userMessage, ctx, maxContextTokens);
 
       // ── Step 9: Stream LLM response ──────────────────────────────────────
-      const userMsg = await this.conversationService.addMessage(conversation.id, { role: 'user', content: userMessage });
+      const userMsg = await this.conversationService.addMessage(conversation.id, {
+        role: 'user',
+        content: userMessage,
+      });
 
       let fullContent = '';
       let usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
       let llmError: Error | null = null;
+      let modelUsed = 'unknown';
+      let fallbackTriggered = false;
+      let aiProvider = 'unknown';
 
       const llmStartMs = Date.now();
 
@@ -228,6 +265,15 @@ export class ChatPipelineService {
             if (chunk.usage) {
               usage = chunk.usage;
             }
+            if (chunk.modelUsed) {
+              modelUsed = chunk.modelUsed;
+            }
+            if (chunk.fallbackTriggered !== undefined) {
+              fallbackTriggered = chunk.fallbackTriggered;
+            }
+            if (chunk.provider) {
+              aiProvider = chunk.provider;
+            }
             break;
           }
 
@@ -236,15 +282,36 @@ export class ChatPipelineService {
         }
 
         if (abortSignal.aborted) {
-          this.writeSseAndEnd(res, 'interrupted', { message: '連線已中斷' } satisfies SseStatusPayload);
+          this.writeSseAndEnd(res, 'interrupted', {
+            message: '連線已中斷',
+          } satisfies SseStatusPayload);
           return;
         }
-
       } catch (err) {
         llmError = err as Error;
 
-        if ((err as NodeJS.ErrnoException).code === 'ABORT_ERR') {
-          this.writeSseAndEnd(res, 'interrupted', { message: '連線已中斷' } satisfies SseStatusPayload);
+        // ── Timeout (LlmTimeoutError) ─────────────────────────────────────
+        if (err instanceof LlmTimeoutError) {
+          this.aiStatusService.recordFailure();
+          await this.auditService.log({
+            requestId,
+            sessionId: conversation.sessionId,
+            eventType: 'llm_timeout',
+            eventData: { message: (err as Error).message, fallbackTriggered: true },
+            durationMs: Date.now() - startMs,
+          });
+          this.writeSseAndEnd(res, 'timeout', {
+            message: 'AI 回應逾時，請稍後再試',
+          } satisfies SseStatusPayload);
+          void userMsg;
+          return;
+        }
+
+        // ── Client abort / connection close ──────────────────────────────
+        if ((err as NodeJS.ErrnoException).code === 'ABORT_ERR' || abortSignal.aborted) {
+          this.writeSseAndEnd(res, 'interrupted', {
+            message: '連線已中斷',
+          } satisfies SseStatusPayload);
           return;
         }
 
@@ -262,7 +329,10 @@ export class ChatPipelineService {
           durationMs: Date.now() - startMs,
         });
 
-        this.writeSseAndEnd(res, 'error', { code: 'LLM_ERROR', message: (err as Error).message } satisfies SseErrorPayload);
+        this.writeSseAndEnd(res, 'error', {
+          code: 'LLM_ERROR',
+          message: (err as Error).message,
+        } satisfies SseErrorPayload);
         void userMsg;
         return;
       }
@@ -277,22 +347,26 @@ export class ChatPipelineService {
       // LLM call succeeded — reset failure counter
       this.aiStatusService.recordSuccess();
 
-      const sourceRefs = ctx.ragResults.map((r) => r.entry.id);
+      const sourceRefs = ctx.ragResults.map(r => r.entry.id);
       await this.auditService.log({
         requestId,
         sessionId: conversation.sessionId,
         eventType: 'chat_response',
-        eventData: { action: 'answer', intentLabel: ctx.intentLabel },
+        eventData: { action: 'answer', intentLabel: ctx.intentLabel, fallbackTriggered, confidenceLevel: ctx.confidenceLevel },
         knowledgeRefs: sourceRefs.map(String),
         ragConfidence: ctx.ragConfidence,
         promptTokens: usage.promptTokens,
         completionTokens: usage.completionTokens,
         totalTokens: usage.totalTokens,
-        durationMs: Date.now() - startMs,
-        aiModel: 'mock', // replaced by real model in T2-004
-        aiProvider: 'mock',
+        durationMs: Date.now() - startMs, // pipeline total; LLM-only duration tracked separately via llmDurationMs
+        aiModel: modelUsed,
+        aiProvider, // populated from the provider's done chunk
         configSnapshot: {
-          rag_confidence_threshold: ragThreshold,
+          rag_minimum_score: this.systemConfigService.getNumber('rag_minimum_score') ?? 0.25,
+          rag_answer_threshold:
+            this.systemConfigService.getNumber('rag_answer_threshold') ??
+            this.systemConfigService.getNumber('rag_confidence_threshold') ??
+            0.55,
           llm_max_context_tokens: maxContextTokens,
         },
       });
@@ -306,9 +380,11 @@ export class ChatPipelineService {
         sourceReferences: sourceRefs,
         usage,
       } satisfies SseDonePayload);
-
     } catch (err) {
-      this.logger.error(`ChatPipeline unhandled error: ${(err as Error).message}`, (err as Error).stack);
+      this.logger.error(
+        `ChatPipeline unhandled error: ${(err as Error).message}`,
+        (err as Error).stack,
+      );
       await this.auditService.log({
         requestId,
         sessionId: conversation.sessionId,
@@ -316,7 +392,10 @@ export class ChatPipelineService {
         eventData: { error: (err as Error).message },
         durationMs: Date.now() - startMs,
       });
-      this.writeSseAndEnd(res, 'error', { code: 'INTERNAL_ERROR', message: '系統發生錯誤，請稍後再試' } satisfies SseErrorPayload);
+      this.writeSseAndEnd(res, 'error', {
+        code: 'INTERNAL_ERROR',
+        message: '系統發生錯誤，請稍後再試',
+      } satisfies SseErrorPayload);
     }
   }
 
@@ -327,16 +406,31 @@ export class ChatPipelineService {
   }
 
   /**
-   * Step 2: simple language detection.
-   * A full `franc` integration would go here; for now we use a heuristic.
-   * T2-004 refinement: install `franc` and use it here.
+   * Step 2: language detection using `franc`.
+   *
+   * Maps franc ISO 639-3 codes to the two languages supported by the pipeline:
+   *   - `cmn` / `zho` → `zh-TW`
+   *   - `eng`         → `en`
+   *   - anything else or `und` → `fallback` (default `zh-TW`)
+   *
+   * Extracted as a separate helper so unit tests can exercise it directly.
    */
   detectLanguage(input: string, fallback: string): string {
-    // Heuristic: if the text contains mostly CJK characters, it's zh-TW
+    return ChatPipelineService.detectLang(input, fallback);
+  }
+
+  /**
+   * Static helper — thin wrapper around `franc` so it can be unit-tested
+   * without constructing the full service.
+   */
+  static detectLang(input: string, fallback = 'zh-TW'): string {
+    if (!input || input.trim().length === 0) return fallback;
+    const code = franc(input, { minLength: 3 });
+    if (code === 'cmn' || code === 'zho') return 'zh-TW';
+    if (code === 'eng') return 'en';
+    // For very short or ambiguous text, fall back to a CJK heuristic
     const cjkCount = (input.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g) ?? []).length;
-    const ratio = cjkCount / Math.max(input.length, 1);
-    if (ratio > 0.3) return 'zh-TW';
-    if (/^[a-z0-9\s.,!?'"]+$/i.test(input)) return 'en';
+    if (cjkCount / Math.max(input.length, 1) > 0.3) return 'zh-TW';
     return fallback;
   }
 
@@ -364,10 +458,9 @@ export class ChatPipelineService {
     return this.promptBuilder.build({
       userMessage,
       language: ctx.language,
-      knowledgeEntries: ctx.ragResults.map((r) => r.entry),
+      knowledgeEntries: ctx.ragResults.map(r => r.entry),
       conversationHistory: ctx.history,
-      maxContextTokens,
-    });
+      maxContextTokens,      confidenceLevel: ctx.confidenceLevel === 'none' ? undefined : ctx.confidenceLevel,    });
   }
 
   // ─── SSE helpers ──────────────────────────────────────────────────────────
@@ -395,12 +488,21 @@ export class ChatPipelineService {
     startMs: number,
   ): Promise<void> {
     const language = this.detectLanguage(userMessage, conversation.language);
-    const fallback = language === 'en'
-      ? (this.systemConfigService.get('fallback_message_en') ?? 'Service temporarily unavailable. Please leave your contact info.')
-      : (this.systemConfigService.get('fallback_message_zh') ?? '目前服務暫時無法使用，請留下聯絡資訊，我們將儘速回覆。');
+    const fallback =
+      language === 'en'
+        ? (this.systemConfigService.get('fallback_message_en') ??
+          'Service temporarily unavailable. Please leave your contact info.')
+        : (this.systemConfigService.get('fallback_message_zh') ??
+          '目前服務暫時無法使用，請留下聯絡資訊，我們將儘速回覆。');
 
-    const userMsg = await this.conversationService.addMessage(conversation.id, { role: 'user', content: userMessage });
-    const assistantMsg = await this.conversationService.addMessage(conversation.id, { role: 'assistant', content: fallback });
+    const userMsg = await this.conversationService.addMessage(conversation.id, {
+      role: 'user',
+      content: userMessage,
+    });
+    const assistantMsg = await this.conversationService.addMessage(conversation.id, {
+      role: 'assistant',
+      content: fallback,
+    });
 
     await this.auditService.log({
       requestId,

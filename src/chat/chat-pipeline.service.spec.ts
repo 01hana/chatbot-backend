@@ -75,9 +75,10 @@ describe('ChatPipelineService', () => {
   });
 
   const mockSafetyService = {
-    scanPrompt: jest.fn().mockResolvedValue({ blocked: false }),
+    scanPrompt: jest.fn().mockReturnValue({ blocked: false }),
     buildRefusalResponse: jest.fn().mockReturnValue('拒絕'),
-    checkConfidentiality: jest.fn().mockResolvedValue({ triggered: false }),
+    buildHandoffGuidance: jest.fn().mockReturnValue('請留下聯絡資訊'),
+    checkConfidentiality: jest.fn().mockReturnValue({ triggered: false }),
   };
   const mockIntentService = {
     detect: jest.fn().mockResolvedValue({ label: 'general', score: 0.1, sensitive: false }),
@@ -92,6 +93,7 @@ describe('ChatPipelineService', () => {
     addMessage: jest.fn().mockResolvedValue({ id: 1 }),
     updateConversation: jest.fn().mockResolvedValue({}),
     getHistoryByToken: jest.fn().mockResolvedValue([]),
+    incrementSensitiveIntentCount: jest.fn().mockResolvedValue({ sensitiveIntentCount: 1 }),
   };
   const mockAiStatusService = {
     isDegraded: jest.fn().mockReturnValue(false),
@@ -128,7 +130,10 @@ describe('ChatPipelineService', () => {
 
     // Reset all mocks before each test
     jest.clearAllMocks();
-    mockSafetyService.scanPrompt.mockResolvedValue({ blocked: false });
+    mockSafetyService.scanPrompt.mockReturnValue({ blocked: false });
+    mockSafetyService.checkConfidentiality.mockReturnValue({ triggered: false });
+    mockSafetyService.buildRefusalResponse.mockReturnValue('拒絕');
+    mockSafetyService.buildHandoffGuidance.mockReturnValue('請留下聯絡資訊');
     mockIntentService.detect.mockResolvedValue({ label: 'general', score: 0.1, sensitive: false });
     mockSystemConfigService.get.mockReturnValue(null);
     mockAiStatusService.isDegraded.mockReturnValue(false);
@@ -137,6 +142,7 @@ describe('ChatPipelineService', () => {
     mockConversationService.addMessage.mockResolvedValue({ id: 1 });
     mockConversationService.updateConversation.mockResolvedValue({});
     mockConversationService.getHistoryByToken.mockResolvedValue([]);
+    mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
   });
 
   describe('degraded mode', () => {
@@ -164,7 +170,14 @@ describe('ChatPipelineService', () => {
 
   describe('safety block', () => {
     it('should emit blocked event when safety scan returns blocked=true', async () => {
-      mockSafetyService.scanPrompt.mockResolvedValue({ blocked: true, reason: 'profanity' });
+      mockSafetyService.scanPrompt.mockReturnValue({
+        blocked: true,
+        category: 'prompt_injection',
+        blockedReason: 'Pattern matched',
+        promptHash: 'abc123',
+      });
+      // sensitiveIntentCount=1 (below default threshold 3)
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
 
       const res = makeRes();
       await service.run(
@@ -360,6 +373,248 @@ describe('ChatPipelineService', () => {
       const writtenData = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0]).join('');
       expect(writtenData).toContain('event: done');
       expect(writtenData).toContain('answer');
+    });
+  });
+
+  // ── Phase 3: T3-002 confidentiality short-circuit ───────────────────────
+
+  describe('Phase 3 — confidentiality check (T3-002)', () => {
+    it('should short-circuit pipeline and emit intercepted when confidential topic detected', async () => {
+      mockSafetyService.checkConfidentiality.mockReturnValue({
+        triggered: true,
+        matchedType: 'confidential',
+        matchedKeyword: '保密協議',
+      });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '你們的保密協議內容是什麼？',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
+
+      // Pipeline should NOT reach retrieval
+      expect(mockRetrievalService.retrieve).not.toHaveBeenCalled();
+      // Pipeline should NOT call LLM
+      expect(mockLlmProvider.stream).not.toHaveBeenCalled();
+      // Should emit intercepted done event
+      const writtenData = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0]).join('');
+      expect(writtenData).toContain('intercepted');
+      expect(res.end).toHaveBeenCalled();
+    });
+
+    it('should write confidential_refused audit event on confidentiality trigger', async () => {
+      mockSafetyService.checkConfidentiality.mockReturnValue({
+        triggered: true,
+        matchedType: 'confidential',
+        matchedKeyword: 'NDA',
+      });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        'What is your NDA?',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
+
+      const auditCalls = (mockAuditService.log as jest.Mock).mock.calls.map(
+        (args: unknown[]) => (args[0] as { eventType: string }).eventType,
+      );
+      expect(auditCalls).toContain('confidential_refused');
+    });
+
+    it('should mark conversation type=confidential and riskLevel=high', async () => {
+      mockSafetyService.checkConfidentiality.mockReturnValue({
+        triggered: true,
+        matchedType: 'confidential',
+        matchedKeyword: '保密協議',
+      });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '保密協議問題',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
+
+      expect(mockConversationService.updateConversation).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ type: 'confidential', riskLevel: 'high' }),
+      );
+    });
+
+    it('should write assistant refusal message with riskLevel=high (T3-002)', async () => {
+      mockSafetyService.checkConfidentiality.mockReturnValue({
+        triggered: true,
+        matchedType: 'confidential',
+        matchedKeyword: '保密協議',
+      });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
+      mockSafetyService.buildRefusalResponse.mockReturnValue('很抱歉');
+      mockSafetyService.buildHandoffGuidance.mockReturnValue('請留下聯絡資訊');
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '保密協議問題',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
+
+      // addMessage is called twice: user msg then assistant msg
+      const calls = (mockConversationService.addMessage as jest.Mock).mock.calls as [number, Record<string, unknown>][];
+      const assistantCall = calls.find(([, data]) => data['role'] === 'assistant');
+      expect(assistantCall).toBeDefined();
+      expect(assistantCall![1]).toMatchObject({
+        role: 'assistant',
+        type: 'confidential',
+        riskLevel: 'high',
+      });
+    });
+  });
+
+  // ── Phase 3: T3-003 sensitiveIntentCount tracking ──────────────────────
+
+  describe('Phase 3 — sensitive intent count tracking (T3-003)', () => {
+    it('should increment sensitiveIntentCount when prompt_injection is blocked', async () => {
+      mockSafetyService.scanPrompt.mockReturnValue({
+        blocked: true,
+        category: 'prompt_injection',
+        blockedReason: 'Pattern matched',
+        promptHash: 'abc123',
+      });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, 'inject attempt', 'req-id', res as never, new AbortController().signal);
+
+      expect(mockConversationService.incrementSensitiveIntentCount).toHaveBeenCalledTimes(1);
+    });
+
+    it('should NOT increment sensitiveIntentCount for blacklist_keyword category', async () => {
+      mockSafetyService.scanPrompt.mockReturnValue({
+        blocked: true,
+        category: 'blacklist_keyword',
+        blockedReason: 'Keyword matched',
+        promptHash: 'abc123',
+      });
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, '成本價', 'req-id', res as never, new AbortController().signal);
+
+      expect(mockConversationService.incrementSensitiveIntentCount).not.toHaveBeenCalled();
+    });
+
+    it('should write sensitive_intent_alert audit when count reaches threshold', async () => {
+      mockSafetyService.scanPrompt.mockReturnValue({
+        blocked: true,
+        category: 'jailbreak',
+        blockedReason: 'Pattern matched',
+        promptHash: 'abc123',
+      });
+      // Return count = 3 which equals the default threshold of 3
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 3 });
+      mockSystemConfigService.getNumber.mockImplementation((key: string) => {
+        if (key === 'sensitive_intent_alert_threshold') return 3;
+        return null;
+      });
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, 'jailbreak attempt', 'req-id', res as never, new AbortController().signal);
+
+      const auditCalls = (mockAuditService.log as jest.Mock).mock.calls.map(
+        (args: unknown[]) => (args[0] as { eventType: string }).eventType,
+      );
+      expect(auditCalls).toContain('sensitive_intent_alert');
+    });
+
+    it('should NOT write sensitive_intent_alert when count is below threshold', async () => {
+      mockSafetyService.scanPrompt.mockReturnValue({
+        blocked: true,
+        category: 'prompt_injection',
+        blockedReason: 'Pattern matched',
+        promptHash: 'abc123',
+      });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 2 });
+      mockSystemConfigService.getNumber.mockImplementation((key: string) => {
+        if (key === 'sensitive_intent_alert_threshold') return 3;
+        return null;
+      });
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, 'inject', 'req-id', res as never, new AbortController().signal);
+
+      const auditCalls = (mockAuditService.log as jest.Mock).mock.calls.map(
+        (args: unknown[]) => (args[0] as { eventType: string }).eventType,
+      );
+      expect(auditCalls).not.toContain('sensitive_intent_alert');
+    });
+
+    it('should append handoff guidance to refusal when threshold is reached', async () => {
+      mockSafetyService.scanPrompt.mockReturnValue({
+        blocked: true,
+        category: 'jailbreak',
+        blockedReason: 'Pattern matched',
+        promptHash: 'abc123',
+      });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 3 });
+      mockSystemConfigService.getNumber.mockImplementation((key: string) => {
+        if (key === 'sensitive_intent_alert_threshold') return 3;
+        return null; // all other keys (max_message_length etc.) use defaults
+      });
+      mockSafetyService.buildRefusalResponse.mockReturnValue('很抱歉');
+      mockSafetyService.buildHandoffGuidance.mockReturnValue('請留下聯絡資訊');
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, 'jailbreak', 'req-id', res as never, new AbortController().signal);
+
+      const writtenData = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0]).join('');
+      // Both refusal text and handoff guidance should appear
+      expect(writtenData).toContain('很抱歉');
+      expect(writtenData).toContain('請留下聯絡資訊');
+    });
+  });
+
+  // ── Phase 3: T3-004 RAG isolation ─────────────────────────────────────
+
+  describe('Phase 3 — RAG isolation (T3-004)', () => {
+    it('should NOT call retrieve when promptGuard blocks the request', async () => {
+      mockSafetyService.scanPrompt.mockReturnValue({
+        blocked: true,
+        category: 'prompt_injection',
+        blockedReason: 'Pattern matched',
+        promptHash: 'abc123',
+      });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, 'inject', 'req-id', res as never, new AbortController().signal);
+
+      expect(mockRetrievalService.retrieve).not.toHaveBeenCalled();
+    });
+
+    it('should NOT call retrieve when confidentiality check triggers', async () => {
+      mockSafetyService.checkConfidentiality.mockReturnValue({
+        triggered: true,
+        matchedType: 'confidential',
+        matchedKeyword: '保密協議',
+      });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, '保密協議', 'req-id', res as never, new AbortController().signal);
+
+      expect(mockRetrievalService.retrieve).not.toHaveBeenCalled();
     });
   });
 });

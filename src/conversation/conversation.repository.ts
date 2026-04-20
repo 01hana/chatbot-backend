@@ -93,6 +93,20 @@ export class ConversationRepository {
   }
 
   /**
+   * Atomically increment `sensitiveIntentCount` by 1 for the given session.
+   * Returns the updated Conversation row (with the new count).
+   *
+   * Using Prisma's `{ increment: 1 }` syntax avoids the read-then-write race
+   * condition that would arise from reading the current value in application code.
+   */
+  async incrementSensitiveIntentCount(sessionId: string): Promise<Conversation> {
+    return this.prisma.conversation.update({
+      where: { sessionId },
+      data: { sensitiveIntentCount: { increment: 1 } },
+    });
+  }
+
+  /**
    * Partially update a Conversation row.
    */
   async updateConversation(

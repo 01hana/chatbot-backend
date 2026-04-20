@@ -68,6 +68,14 @@ export class ConversationService {
   }
 
   /**
+   * Atomically increment `sensitiveIntentCount` by 1 for the given session.
+   * Returns the updated Conversation (with the new count visible).
+   */
+  async incrementSensitiveIntentCount(sessionId: string): Promise<Conversation> {
+    return this.conversationRepository.incrementSensitiveIntentCount(sessionId);
+  }
+
+  /**
    * Partially update a Conversation.
    */
   async updateConversation(

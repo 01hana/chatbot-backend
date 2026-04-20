@@ -130,6 +130,7 @@ export class ChatPipelineService {
 
       // ── Step 3: PromptGuard ─────────────────────────────────────────────
       const guardResult = await this.runPromptGuard(userMessage);
+      // promptHash is always computed in Phase 3 (returned even when not blocked)
       ctx.promptHash = guardResult.promptHash;
 
       if (guardResult.blocked) {
@@ -143,19 +144,36 @@ export class ChatPipelineService {
           durationMs: Date.now() - startMs,
         });
 
+        // T3-003: increment sensitiveIntentCount for adversarial categories + check alert
+        const isSensitive = this.isSensitiveCategory(guardResult.category);
+        let includeHandoff = false;
+        if (isSensitive) {
+          includeHandoff = await this.incrementAndCheckSensitiveIntent(
+            conversation,
+            requestId,
+            startMs,
+          );
+        }
+
+        // Build refusal — optionally append handoff guidance when threshold reached
+        const refusal =
+          this.safetyService.buildRefusalResponse(ctx.language) +
+          (includeHandoff ? ' ' + this.safetyService.buildHandoffGuidance(ctx.language) : '');
+
         // Persist user message (blocked) + fixed refusal assistant message
         const userMsg = await this.conversationService.addMessage(conversation.id, {
           role: 'user',
           content: userMessage,
           type: 'blocked',
+          riskLevel: isSensitive ? 'high' : undefined,
           blockedReason: guardResult.blockedReason,
         });
 
-        const refusal = this.safetyService.buildRefusalResponse(ctx.language);
         const assistantMsg = await this.conversationService.addMessage(conversation.id, {
           role: 'assistant',
           content: refusal,
           type: 'blocked',
+          riskLevel: isSensitive ? 'high' : undefined,
         });
 
         res.write(formatSseEvent('token', { token: refusal } satisfies SseTokenPayload));
@@ -171,12 +189,71 @@ export class ChatPipelineService {
       }
 
       // ── Step 4: Confidentiality check ───────────────────────────────────
+      // Checks BlacklistEntry type='confidential'/'internal'.  These are NOT
+      // covered by scanPrompt() so that a distinct `confidential_refused` audit
+      // event can be written here (rather than `prompt_guard_blocked`).
       const confidentialResult = await this.checkConfidentiality(userMessage);
       if (confidentialResult.triggered) {
+        // Mark conversation as confidential/high-risk (T3-002)
         await this.conversationService.updateConversation(conversation.sessionId, {
           type: 'confidential',
           riskLevel: 'high',
         });
+
+        // T3-003: increment count + check alert threshold
+        const includeHandoff = await this.incrementAndCheckSensitiveIntent(
+          conversation,
+          requestId,
+          startMs,
+        );
+
+        // Build refusal — optionally append handoff guidance
+        const confidentialRefusal =
+          this.safetyService.buildRefusalResponse(ctx.language) +
+          (includeHandoff ? ' ' + this.safetyService.buildHandoffGuidance(ctx.language) : '');
+
+        // Persist messages with confidential type/riskLevel (T3-002)
+        const userMsg = await this.conversationService.addMessage(conversation.id, {
+          role: 'user',
+          content: userMessage,
+          type: 'confidential',
+          riskLevel: 'high',
+          blockedReason: `Confidential topic: ${confidentialResult.matchedKeyword ?? 'unknown'}`,
+        });
+
+        const assistantMsg = await this.conversationService.addMessage(conversation.id, {
+          role: 'assistant',
+          content: confidentialRefusal,
+          type: 'confidential',
+          riskLevel: 'high',
+        });
+
+        // T3-005: write confidential_refused audit event
+        await this.auditService.log({
+          requestId,
+          sessionId: conversation.sessionId,
+          eventType: 'confidential_refused',
+          blockedReason: `Confidential topic: ${confidentialResult.matchedKeyword ?? 'unknown'}`,
+          promptHash: ctx.promptHash,
+          eventData: {
+            category: confidentialResult.matchedType,
+            matchedKeyword: confidentialResult.matchedKeyword,
+            type: 'confidential',
+            riskLevel: 'high',
+          },
+          durationMs: Date.now() - startMs,
+        });
+
+        res.write(formatSseEvent('token', { token: confidentialRefusal } satisfies SseTokenPayload));
+        this.writeSseAndEnd(res, 'done', {
+          messageId: assistantMsg.id,
+          action: 'intercepted' satisfies ChatAction,
+          sourceReferences: [],
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        } satisfies SseDonePayload);
+
+        void userMsg;
+        return;
       }
 
       // ── Step 5: Intent detection ─────────────────────────────────────────
@@ -461,6 +538,52 @@ export class ChatPipelineService {
       knowledgeEntries: ctx.ragResults.map(r => r.entry),
       conversationHistory: ctx.history,
       maxContextTokens,      confidenceLevel: ctx.confidenceLevel === 'none' ? undefined : ctx.confidenceLevel,    });
+  }
+
+  // ─── T3-003 helpers ───────────────────────────────────────────────────────
+
+  /**
+   * Returns `true` when the given SafetyBlockCategory warrants incrementing
+   * `sensitiveIntentCount` (i.e. the input was adversarial or confidential).
+   */
+  private isSensitiveCategory(category: string | undefined): boolean {
+    return ['prompt_injection', 'jailbreak', 'confidential_topic', 'internal_topic'].includes(
+      category ?? '',
+    );
+  }
+
+  /**
+   * Atomically increments `Conversation.sensitiveIntentCount` and, if the new
+   * value meets or exceeds `sensitive_intent_alert_threshold`, writes a
+   * `sensitive_intent_alert` AuditLog event.
+   *
+   * @returns `true` when the threshold was reached (caller should append handoff guidance).
+   */
+  private async incrementAndCheckSensitiveIntent(
+    conversation: Conversation,
+    requestId: string,
+    startMs: number,
+  ): Promise<boolean> {
+    const updated = await this.conversationService.incrementSensitiveIntentCount(
+      conversation.sessionId,
+    );
+    const threshold =
+      this.systemConfigService.getNumber('sensitive_intent_alert_threshold') ?? 3;
+
+    if (updated.sensitiveIntentCount >= threshold) {
+      await this.auditService.log({
+        requestId,
+        sessionId: conversation.sessionId,
+        eventType: 'sensitive_intent_alert',
+        eventData: {
+          sensitiveIntentCount: updated.sensitiveIntentCount,
+          threshold,
+        },
+        durationMs: Date.now() - startMs,
+      });
+      return true;
+    }
+    return false;
   }
 
   // ─── SSE helpers ──────────────────────────────────────────────────────────

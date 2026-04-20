@@ -363,7 +363,7 @@ Phase 7（品質補強與驗收準備）
 
 ---
 
-- [ ] **T3-001** `SAFE` **完善 SafetyService.scanPrompt() 完整攔截分類邏輯**
+- [X] **T3-001** `SAFE` **完善 SafetyService.scanPrompt() 完整攔截分類邏輯**
   - 說明：實作 5 種攔截分類完整邏輯：
     1. `prompt_injection`（regex pattern 比對 SafetyRule DB；已知攻擊 SHA256 hash 比對）
     2. `jailbreak`（jailbreak pattern regex 比對）
@@ -375,42 +375,42 @@ Phase 7（品質補強與驗收準備）
   - 輸出物：`src/safety/safety.service.ts`（完整實作）
   - 驗收：5 種攔截分類各有測試案例；`promptHash`（SHA256）在每次攔截時正確計算
 
-- [ ] **T3-002** `SAFE` **完善 SafetyService.checkConfidentiality() 與固定拒答模板**
+- [X] **T3-002** `SAFE` **完善 SafetyService.checkConfidentiality() 與固定拒答模板**
   - 說明：`checkConfidentiality()` 比對機密觸發詞（來自 BlacklistEntry `type='confidential'`）；命中時 `Conversation.type = 'confidential'`、`Conversation.riskLevel = 'high'`、`ConversationMessage.type`、`ConversationMessage.riskLevel` 正確更新；`SafetyService.buildRefusalResponse(language: string): string` 實作固定拒答模板（中英文，不透過 LLM 生成）；拒答文字不含任何機密線索
   - 輸出物：`src/safety/safety.service.ts`（更新）、拒答模板常數
   - 驗收：機密命中時 Conversation 欄位正確標記；拒答文字固定、不含線索；雙語拒答均有
 
-- [ ] **T3-003** `SAFE` **實作敏感意圖累積記錄機制**
+- [X] **T3-003** `SAFE` **實作敏感意圖累積記錄機制**
   - 說明：`Conversation.sensitiveIntentCount` 在每次攔截（prompt_injection / jailbreak / confidential）時 `+= 1`；達 `SystemConfig.sensitive_intent_alert_threshold`（預設 3，OQ-007 保守預設）時，寫入 AuditLog `sensitive_intent_alert` 事件；同時在 Response DTO 中附加 `handoff` action 引導轉人工（不自動封鎖，OQ 核心方向）
   - 輸出物：`src/safety/safety.service.ts`（更新）、`src/chat/chat-pipeline.service.ts`（更新）
   - 驗收：累積 3 次後 AuditLog 有 alert 事件；不超出閾值時無 alert；`sensitiveIntentCount` 在 DB 正確更新
 
-- [ ] **T3-004** `SAFE` **確保 RAG 層知識隔離不洩露機密**
+- [X] **T3-004** `SAFE` **確保 RAG 層知識隔離不洩露機密**
   - 說明：確認 `KnowledgeRepository.findForRetrieval()` 的 `WHERE status='approved' AND visibility='public'` 無法被呼叫端繞過（已在 T1-009 實作，此任務為安全驗收確認）；在 Phase 3 的攔截分類完成後，補充確認：機密拒答路徑不會觸發 `findForRetrieval()`（被短路跳過）
   - 輸出物：測試案例（確認攔截短路後不呼叫 retrieval）
   - 驗收：攔截後的 Pipeline 不執行 KnowledgeRetrieval 步驟；knowledge isolation 測試通過
 
-- [ ] **T3-005** `SAFE` **完整安全稽核事件寫入**
+- [X] **T3-005** `SAFE` **完整安全稽核事件寫入**
   - 說明：確認以下 AuditLog 事件在對應情境正確寫入：`prompt_guard_blocked`（PromptGuard 攔截，含 `blockedReason`、`promptHash`、`category`）；`confidential_refused`（機密拒答，含 `sessionId`、`type`、`riskLevel`）；`sensitive_intent_alert`（累積閾值觸發）
   - 輸出物：`src/audit/audit.service.ts`（確認）、`src/chat/chat-pipeline.service.ts`（確認）
   - 驗收：每種安全事件的 AuditLog 有對應 `eventType` 且欄位完整
 
-- [ ] **T3-006** `ADMIN` **實作 Admin 規則管理 API（SafetyRule + BlacklistEntry）**
+- [x] **T3-006** `ADMIN` **實作 Admin 規則管理 API（SafetyRule + BlacklistEntry）**
   - 說明：`POST /api/v1/admin/safety-rules`（新增）；`PATCH /api/v1/admin/safety-rules/:id`（更新）；`DELETE /api/v1/admin/safety-rules/:id`（停用，`isActive=false`）；`POST /api/v1/admin/blacklist`；`PATCH /api/v1/admin/blacklist/:id`；`DELETE /api/v1/admin/blacklist/:id`；每次 CRUD 後呼叫 `SafetyService.invalidateCache()` 觸發重新載入；所有 DTO 含 `class-validator` 驗證
   - 輸出物：`src/admin/safety/safety-admin.controller.ts`、`src/admin/safety/dto/`
   - 驗收：CRUD API 可用；更新後 `invalidateCache()` 被呼叫；快取重新載入後 `scanPrompt()` 使用新規則
 
-- [ ] **T3-007** `TEST` **Phase 3 測試：SafetyService 攔截分類單元測試**
+- [x] **T3-007** `TEST` **Phase 3 測試：SafetyService 攔截分類單元測試**
   - 說明：為 5 種攔截分類各撰寫至少 2 個測試案例（命中 / 未命中）；`promptHash` SHA256 計算正確；`buildRefusalResponse()` 雙語拒答不含機密線索；`checkConfidentiality()` 命中時欄位標記正確
   - 輸出物：`src/safety/safety.service.spec.ts`（更新）
   - 驗收：5 種分類各有測試；`invalidateCache()` 測試通過
 
-- [ ] **T3-008** `TEST` **Phase 3 測試：Prompt Injection 測試集（≥ 10 種攻擊模式）**
+- [x] **T3-008** `TEST` **Phase 3 測試：Prompt Injection 測試集（≥ 10 種攻擊模式）**
   - 說明：建立 Prompt Injection 測試集（至少 10 種攻擊模式，如 ignore previous instructions、role play jailbreak、base64 編碼繞過、DAN prompt 等）；以 `it.each` 或 JSON fixture 方式組織；攔截率需 ≥ 95%
   - 輸出物：`test/fixtures/prompt-injection.fixtures.ts`、`test/safety/prompt-injection.spec.ts`
   - 驗收：10 種攻擊模式測試集全部執行；攔截率 ≥ 95%（記錄留存）
 
-- [ ] **T3-009** `TEST` **Phase 3 測試：機密題庫樣本測試集（≥ 10 題）**
+- [x] **T3-009** `TEST` **Phase 3 測試：機密題庫樣本測試集（≥ 10 題）**
   - 說明：建立至少 10 題機密樣本測試集（保守預設：OQ-002，等待甲方補充至 50 題；先以 10 題通過 100% 驗收）；測試確認：每題均被攔截（`blocked=true`）；拒答回覆不含任何機密線索；AuditLog 有對應 `confidential_refused` 事件
   - 輸出物：`test/fixtures/confidential-samples.fixtures.ts`、`test/safety/confidential-check.spec.ts`
   - 驗收：10 題樣本 100% 攔截；拒答文字合規；甲方補充後可直接擴充 fixtures 至 50 題再跑

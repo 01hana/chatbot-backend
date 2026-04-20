@@ -1,5 +1,4 @@
-import { Controller, Get, Res } from '@nestjs/common';
-import type { Response } from 'express';
+import { Controller, Get, Header } from '@nestjs/common';
 import { WidgetConfigService } from './widget-config.service';
 
 /**
@@ -31,9 +30,8 @@ export class WidgetConfigController {
    * }
    */
   @Get('config')
-  getConfig(@Res() res: Response): void {
-    // Bypass TransformInterceptor so we can set Cache-Control manually
-    res.setHeader('Cache-Control', 'no-store');
-    res.json(this.widgetConfigService.getConfig());
+  @Header('Cache-Control', 'no-store')
+  getConfig() {
+    return this.widgetConfigService.getConfig();
   }
 }

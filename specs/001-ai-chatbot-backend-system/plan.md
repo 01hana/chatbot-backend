@@ -404,7 +404,7 @@ Phase 7：品質補強與驗收準備
 |------|------|
 | `diagnosis_context` JSONB | `Conversation.diagnosis_context` 欄位 migration（若尚未建立）|
 | 問診流程 | `DiagnosisService`（或整合至 `ChatPipeline`）：初始化 context、依 `required_fields` 固定順序追問、欄位填充、`stage` 狀態轉換（`collecting` → `complete` → `recommended`）|
-| 問診欄位固定順序 | `purpose → material → thickness → environment`（不可由 LLM 決定）|
+| 問診欄位固定順序 | `purpose → material → length → environment`（不可由 LLM 決定）|
 | 規格比對 | `KnowledgeRepository` 以 `intent_label='product-spec'` + `tags` array filter 比對規格知識條目 |
 | LLM 推薦摘要 | 規格比對結果 → 呼叫 LLM 生成自然語言推薦文字（LLM 僅負責摘要，不決定規格匹配）|
 | 高意向偵測 | `IntentService.isHighIntent()`：rule-based，近 N 輪詢價關鍵字 + `high_intent_score >= high_intent_threshold`（來自 SystemConfig）|

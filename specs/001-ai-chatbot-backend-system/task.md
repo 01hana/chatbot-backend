@@ -431,7 +431,7 @@ Phase 7（品質補強與驗收準備）
   - 驗收：migration 中 `diagnosisContext` 欄位為 JSON 型別；TypeScript 型別有 `stage` 狀態定義
 
 - [ ] **T4-002** `CORE` **實作 DiagnosisService（問診四欄位固定順序流程）**
-  - 說明：`DiagnosisService.initContext(): DiagnosisContext`（初始化 context，`stage='idle'`，`requiredFields=['purpose','material','thickness','environment']`）；`DiagnosisService.processAnswer(context, field, value): DiagnosisContext`（填入欄位、移至下一個缺少的 field）；`DiagnosisService.getNextQuestion(context, language): string`（從 `IntentTemplate` DB 取得對應欄位的追問文字，不可硬編碼；OQ-003 保守預設：先用通用文字）；`DiagnosisService.isComplete(context): boolean`；追問順序強制為 `purpose → material → thickness → environment`，不可由 LLM 決定
+  - 說明：`DiagnosisService.initContext(): DiagnosisContext`（初始化 context，`stage='idle'`，`requiredFields=['purpose','material','length','environment']`）；`DiagnosisService.processAnswer(context, field, value): DiagnosisContext`（填入欄位、移至下一個缺少的 field）；`DiagnosisService.getNextQuestion(context, language): string`（從 `IntentTemplate` DB 取得對應欄位的追問文字，不可硬編碼；OQ-003 保守預設：先用通用文字）；`DiagnosisService.isComplete(context): boolean`；追問順序強制為 `purpose → material → length → environment`，不可由 LLM 決定
   - 輸出物：`src/chat/diagnosis.service.ts`
   - 驗收：四欄位依序追問；欄位已填不重複追問；`stage` 狀態機轉換正確
 
@@ -441,7 +441,7 @@ Phase 7（品質補強與驗收準備）
   - 驗收：問診途中回覆為追問文字；完成後進入比對；中途切換話題時 context 正確保留
 
 - [ ] **T4-004** `CORE` **實作規格比對邏輯**
-  - 說明：問診完成後，以 `intent_label='product-spec'` + `tags` array filter（`purpose`、`material`、`thickness`、`environment`）呼叫 `KnowledgeRepository.findForRetrieval()`；取得符合條目後呼叫 LLM 生成自然語言推薦摘要（LLM 只負責文字摘要，不決定規格匹配）；推薦結果寫入 `Conversation.diagnosisContext.stage='recommended'`；`sourceReferences` 含比對到的知識條目 ID
+  - 說明：問診完成後，以 `intent_label='product-spec'` + `tags` array filter（`purpose`、`material`、`length`、`environment`）呼叫 `KnowledgeRepository.findForRetrieval()`；取得符合條目後呼叫 LLM 生成自然語言推薦摘要（LLM 只負責文字摘要，不決定規格匹配）；推薦結果寫入 `Conversation.diagnosisContext.stage='recommended'`；`sourceReferences` 含比對到的知識條目 ID
   - 輸出物：`src/chat/chat-pipeline.service.ts`（更新）、`src/knowledge/knowledge.repository.ts`（確認 filter 支援）
   - 驗收：規格比對結果為 approved+public 的知識條目；LLM 摘要結果包含推薦理由；無符合條目時有 fallback 回覆
 

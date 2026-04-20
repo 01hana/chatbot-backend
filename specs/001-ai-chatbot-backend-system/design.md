@@ -525,7 +525,7 @@ data: {"message":"string"}
 **本期問診欄位固定為四項，追問順序固定：**
 1. `purpose`（用途）
 2. `material`（材質）
-3. `thickness`（厚度）
+3. `length`（長度）
 4. `environment`（使用環境）
 
 ```json
@@ -534,10 +534,10 @@ data: {"message":"string"}
   "collected": {
     "purpose": null,
     "material": null,
-    "thickness": null,
+    "length": null,
     "environment": null
   },
-  "required_fields": ["purpose", "material", "thickness", "environment"],
+  "required_fields": ["purpose", "material", "length", "environment"],
   "turn_count": 2
 }
 ```
@@ -565,7 +565,7 @@ flowchart TD
 ### 9.3 規格比對規則
 
 - 規格知識條目使用 `intent_label` 包含 `product-spec` 標籤
-- `tags` 欄位包含材質（`material:aluminum`）、厚度範圍（`thickness:1-3mm`）等
+- `tags` 欄位包含材質（`material:aluminum`）、長度範圍（`length:1-3mm`）等
 - 比對由 Repository 以 SQL `@>` JSON 操作或 tag filter 完成，**不由 LLM 決定規格匹配**
 - LLM 僅負責將符合規格的條目摘要成自然語言推薦文字
 
@@ -1651,7 +1651,7 @@ Postgres 中文搜尋設定說明：
 | **pg_trgm 優先但非強制（有 fallback）** | 若部署環境不支援 pg_trgm，退回 ILIKE 簡化策略（§14.1）；不阻擋 MVP 開發 |
 | **Email 通知本期不做** | 本期降低部署複雜度，Lead 通知以 Webhook 閉環為主；IEmailProvider 介面保留為後續擴充點 |
 | **意圖識別先用 rule-based** | ML 意圖分類需訓練資料，MVP 先用 keyword + template；準確率不足再引入 |
-| **問診先用 4 欄位固定範本（固定順序）** | 甲方產品線問診模板已拍板：purpose→material→thickness→environment，fixed order；後台可調整內容，不調整順序 |
+| **問診先用 4 欄位固定範本（固定順序）** | 甲方產品線問診模板已拍板：purpose→material→length→environment，fixed order；後台可調整內容，不調整順序 |
 
 ### 20.2 未來可擴充點
 
@@ -2052,7 +2052,7 @@ Postgres 中文搜尋設定說明：
 | **pg_trgm 優先但非強制（有 fallback）** | 若部署環境不支援 pg_trgm，退回 ILIKE 簡化策略（§14.1）；不阻擋 MVP 開發 |
 | **Email 通知本期不做** | 本期降低部署複雜度，Lead 通知以 Webhook 閉環為主；IEmailProvider 介面保留為後續擴充點 |
 | **意圖識別先用 rule-based** | ML 意圖分類需訓練資料，MVP 先用 keyword + template；準確率不足再引入 |
-| **問診先用 4 欄位固定範本（固定順序）** | 甲方產品線問診模板已拍板：purpose→material→thickness→environment，fixed order；後台可調整內容，不調整順序 |
+| **問診先用 4 欄位固定範本（固定順序）** | 甲方產品線問診模板已拍板：purpose→material→length→environment，fixed order；後台可調整內容，不調整順序 |
 
 ### 20.2 未來可擴充點
 

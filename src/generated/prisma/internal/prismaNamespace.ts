@@ -1257,6 +1257,8 @@ export const KnowledgeEntryScalarFieldEnum = {
   content: 'content',
   intentLabel: 'intentLabel',
   tags: 'tags',
+  aliases: 'aliases',
+  language: 'language',
   status: 'status',
   visibility: 'visibility',
   version: 'version',

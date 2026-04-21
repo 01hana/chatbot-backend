@@ -22,7 +22,8 @@ export async function seedWidgetConfig(prisma: PrismaClient): Promise<void> {
     {
       key: 'widget_welcome_message',
       value: JSON.stringify({
-        'zh-TW': '歡迎使用震南客服，請問有什麼可以幫您？',
+        'zh-TW':
+          '您好！歡迎來到智能客服中心 🏭\n\n我們專注於精密工業零件的研發與製造，提供全球客戶高品質的工業解決方案。\n\n請選擇您想了解的問題類別，或直接輸入您的問題',
         en: 'Welcome! How can I help you today?',
       }),
       description: 'Widget welcome message (multi-language JSONB)',
@@ -30,7 +31,7 @@ export async function seedWidgetConfig(prisma: PrismaClient): Promise<void> {
     {
       key: 'widget_quick_replies',
       value: JSON.stringify({
-        'zh-TW': ['查詢產品規格', '聯絡業務', '其他問題'],
+        'zh-TW': ['產品規格', '聯絡業務', '其他問題'],
         en: ['Product specs', 'Contact sales', 'Other'],
       }),
       description: 'Quick reply button labels (multi-language JSONB)',

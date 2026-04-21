@@ -64,6 +64,18 @@ export class KnowledgeRepository {
   }
 
   /**
+   * Find all non-deleted knowledge entries (admin use only).
+   * Unlike `findForRetrieval`, this does NOT filter by status or visibility —
+   * it is intended for the admin panel where all entries must be visible.
+   */
+  async findAll(): Promise<KnowledgeEntry[]> {
+    return this.prisma.knowledgeEntry.findMany({
+      where: { deletedAt: null },
+      orderBy: { updatedAt: 'desc' },
+    });
+  }
+
+  /**
    * Create a new knowledge entry with default status = 'draft'.
    */
   async create(
@@ -75,6 +87,8 @@ export class KnowledgeRepository {
         content: data.content,
         intentLabel: data.intentLabel,
         tags: data.tags,
+        aliases: data.aliases ?? [],
+        language: data.language ?? 'zh-TW',
         status: data.status ?? 'draft',
         visibility: data.visibility ?? 'private',
         version: data.version ?? 1,
@@ -88,7 +102,7 @@ export class KnowledgeRepository {
    */
   async update(
     id: number,
-    data: Partial<Pick<KnowledgeEntry, 'title' | 'content' | 'intentLabel' | 'tags' | 'status' | 'visibility'>>,
+    data: Partial<Pick<KnowledgeEntry, 'title' | 'content' | 'intentLabel' | 'tags' | 'aliases' | 'language' | 'status' | 'visibility'>>,
   ): Promise<KnowledgeEntry | null> {
     try {
       return await this.prisma.knowledgeEntry.update({
@@ -97,6 +111,22 @@ export class KnowledgeRepository {
       });
     } catch {
       return null;
+    }
+  }
+
+  /**
+   * Soft-delete a knowledge entry by setting `deletedAt`.
+   * Returns true when the entry was found and marked deleted; false otherwise.
+   */
+  async softDelete(id: number): Promise<boolean> {
+    try {
+      await this.prisma.knowledgeEntry.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
+      return true;
+    } catch {
+      return false;
     }
   }
 }

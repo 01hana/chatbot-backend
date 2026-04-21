@@ -71,6 +71,7 @@ export async function seedKnowledge(prisma: PrismaClient): Promise<void> {
           status: 'approved',
           visibility: 'public',
           version: 1,
+          language: 'zh-TW',
         },
       });
       created++;

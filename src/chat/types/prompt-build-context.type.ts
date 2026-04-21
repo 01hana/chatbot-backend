@@ -26,6 +26,12 @@ export interface PromptBuildContext {
    * - undefined: not evaluated (e.g. degraded mode)
    */
   confidenceLevel?: 'high' | 'low';
+  /**
+   * True when the RAG results came from the cross-language fallback path
+   * (no same-language entries matched). PromptBuilder will inject an
+   * extra note reminding the LLM to respond in the user's language.
+   */
+  isCrossLanguageFallback?: boolean;
 }
 
 /**

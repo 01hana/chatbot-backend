@@ -1,31 +1,83 @@
-import { Injectable, NotImplementedException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { KnowledgeEntry } from '../../generated/prisma/client';
+import { KnowledgeService } from '../../knowledge/knowledge.service';
 import { CreateKnowledgeDto, UpdateKnowledgeDto } from './dto/knowledge-admin.dto';
 
 /**
- * AdminKnowledgeService — Phase 1 skeleton.
+ * AdminKnowledgeService — admin CRUD for knowledge entries.
  *
- * All methods throw NotImplementedException until Phase 6 (T6-xxx) wires in
- * the real KnowledgeService / KnowledgeRepository logic.
+ * Delegates to KnowledgeService (which delegates to KnowledgeRepository).
+ * All DB access is strictly through the service layer — no direct Prisma calls here.
+ *
+ * Note: Auth / RBAC is explicitly deferred per spec.md v1.6.0.
  */
 @Injectable()
 export class AdminKnowledgeService {
-  listAll(): never {
-    throw new NotImplementedException('Knowledge list not yet implemented');
+  constructor(private readonly knowledgeService: KnowledgeService) {}
+
+  /** List all non-deleted knowledge entries (all statuses and visibilities). */
+  async listAll(): Promise<KnowledgeEntry[]> {
+    return this.knowledgeService.findAll();
   }
 
-  getOne(_id: number): never {
-    throw new NotImplementedException('Knowledge get not yet implemented');
+  /** Get a single knowledge entry by ID; throws 404 when not found. */
+  async getOne(id: number): Promise<KnowledgeEntry> {
+    const entry = await this.knowledgeService.findById(id);
+    if (!entry) {
+      throw new NotFoundException(`Knowledge entry #${id} not found`);
+    }
+    return entry;
   }
 
-  create(_data: CreateKnowledgeDto): never {
-    throw new NotImplementedException('Knowledge create not yet implemented');
+  /**
+   * Create a new knowledge entry.
+   * Defaults: status='draft', visibility='private', language='zh-TW'.
+   */
+  async create(dto: CreateKnowledgeDto): Promise<KnowledgeEntry> {
+    return this.knowledgeService.create({
+      title: dto.title,
+      content: dto.content,
+      intentLabel: dto.intentLabel ?? null,
+      tags: dto.tags ?? [],
+      aliases: dto.aliases ?? [],
+      language: dto.language ?? 'zh-TW',
+      status: 'draft',
+      visibility: 'private',
+      version: 1,
+    });
   }
 
-  update(_id: number, _data: UpdateKnowledgeDto): never {
-    throw new NotImplementedException('Knowledge update not yet implemented');
+  /**
+   * Update mutable fields of an existing knowledge entry.
+   * Only the provided fields are updated (partial update).
+   * Throws 404 when not found.
+   */
+  async update(id: number, dto: UpdateKnowledgeDto): Promise<KnowledgeEntry> {
+    const patch: Parameters<KnowledgeService['update']>[1] = {};
+    if (dto.title !== undefined) patch.title = dto.title;
+    if (dto.content !== undefined) patch.content = dto.content;
+    if (dto.intentLabel !== undefined) patch.intentLabel = dto.intentLabel;
+    if (dto.tags !== undefined) patch.tags = dto.tags;
+    if (dto.aliases !== undefined) patch.aliases = dto.aliases;
+    if (dto.language !== undefined) patch.language = dto.language;
+    if (dto.status !== undefined) patch.status = dto.status;
+    if (dto.visibility !== undefined) patch.visibility = dto.visibility;
+
+    const entry = await this.knowledgeService.update(id, patch);
+    if (!entry) {
+      throw new NotFoundException(`Knowledge entry #${id} not found`);
+    }
+    return entry;
   }
 
-  remove(_id: number): never {
-    throw new NotImplementedException('Knowledge delete not yet implemented');
+  /**
+   * Soft-delete a knowledge entry.
+   * Throws 404 when not found.
+   */
+  async remove(id: number): Promise<void> {
+    const deleted = await this.knowledgeService.softDelete(id);
+    if (!deleted) {
+      throw new NotFoundException(`Knowledge entry #${id} not found`);
+    }
   }
 }

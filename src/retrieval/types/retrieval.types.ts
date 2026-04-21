@@ -10,6 +10,12 @@ export interface RetrievalQuery {
   intentLabel?: string;
   /** Optional tag filter — entry must contain ALL listed tags. */
   tags?: string[];
+  /**
+   * Preferred language for retrieval (e.g. "zh-TW" | "en").
+   * When set, same-language entries are queried first;
+   * only falls back to cross-language if nothing is found.
+   */
+  language?: string;
   /** Maximum number of results to return (default 5). */
   limit?: number;
 }
@@ -21,4 +27,9 @@ export interface RetrievalResult {
   entry: KnowledgeEntry;
   /** Similarity score in [0, 1]. Higher = more similar. */
   score: number;
+  /**
+   * True when this result was returned by the cross-language fallback path
+   * (no same-language entries matched the query).
+   */
+  isCrossLanguageFallback?: boolean;
 }

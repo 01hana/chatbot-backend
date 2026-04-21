@@ -38,6 +38,8 @@ interface PipelineContext {
   promptHash?: string;
   /** RAG confidence level, set in step 7. */
   confidenceLevel: 'high' | 'low' | 'none';
+  /** True when RAG results came from cross-language fallback (no same-language hits). */
+  isCrossLanguageFallback: boolean;
 }
 
 /**
@@ -112,6 +114,7 @@ export class ChatPipelineService {
       intentLabel: null,
       ragConfidence: 0,
       confidenceLevel: 'none',
+      isCrossLanguageFallback: false,
     };
 
     try {
@@ -180,6 +183,7 @@ export class ChatPipelineService {
         this.writeSseAndEnd(res, 'done', {
           messageId: assistantMsg.id,
           action: 'intercepted' satisfies ChatAction,
+          intentLabel: null,
           sourceReferences: [],
           usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
         } satisfies SseDonePayload);
@@ -248,6 +252,7 @@ export class ChatPipelineService {
         this.writeSseAndEnd(res, 'done', {
           messageId: assistantMsg.id,
           action: 'intercepted' satisfies ChatAction,
+          intentLabel: null,
           sourceReferences: [],
           usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
         } satisfies SseDonePayload);
@@ -262,8 +267,9 @@ export class ChatPipelineService {
       ctx.intentLabel = intentResult.intentLabel;
 
       // ── Step 6: RAG retrieval ─────────────────────────────────────────────
-      ctx.ragResults = await this.retrieveKnowledge(userMessage, ctx.intentLabel);
+      ctx.ragResults = await this.retrieveKnowledge(userMessage, ctx.intentLabel, ctx.language);
       ctx.ragConfidence = ctx.ragResults[0]?.score ?? 0;
+      ctx.isCrossLanguageFallback = ctx.ragResults.length > 0 && ctx.ragResults[0].isCrossLanguageFallback === true;
 
       // ── Step 7: Confidence evaluation ────────────────────────────────────
       // Two thresholds:
@@ -303,6 +309,7 @@ export class ChatPipelineService {
         this.writeSseAndEnd(res, 'done', {
           messageId: assistantMsg.id,
           action: 'fallback',
+          intentLabel: ctx.intentLabel,
           sourceReferences: [],
           usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
         } satisfies SseDonePayload);
@@ -454,6 +461,7 @@ export class ChatPipelineService {
       this.writeSseAndEnd(res, 'done', {
         messageId: assistantMsg.id,
         action: 'answer' satisfies ChatAction,
+        intentLabel: ctx.intentLabel,
         sourceReferences: sourceRefs,
         usage,
       } satisfies SseDonePayload);
@@ -499,15 +507,30 @@ export class ChatPipelineService {
   /**
    * Static helper — thin wrapper around `franc` so it can be unit-tested
    * without constructing the full service.
+   *
+   * Detection order (highest to lowest priority):
+   *  1. Any CJK characters present → zh-TW  (fast, very reliable)
+   *  2. Input is entirely ASCII printable chars → en
+   *     Handles short product/FAQ terms: catalog, bolt, washer, wire, quote…
+   *  3. `franc` ISO-639-3 mapping: cmn/zho → zh-TW, eng → en
+   *  4. fallback (default: zh-TW)
    */
   static detectLang(input: string, fallback = 'zh-TW'): string {
     if (!input || input.trim().length === 0) return fallback;
-    const code = franc(input, { minLength: 3 });
+    const trimmed = input.trim();
+
+    // 1. Any CJK characters → Chinese (most reliable signal)
+    if (/[\u4e00-\u9fff\u3400-\u4dbf]/.test(trimmed)) return 'zh-TW';
+
+    // 2. Purely ASCII printable characters → English
+    //    Covers single words (catalog, bolt, washer) and short phrases
+    if (/^[\x20-\x7e]+$/.test(trimmed)) return 'en';
+
+    // 3. Use franc for non-ASCII, non-CJK content (e.g. mixed scripts)
+    const code = franc(trimmed, { minLength: 3 });
     if (code === 'cmn' || code === 'zho') return 'zh-TW';
     if (code === 'eng') return 'en';
-    // For very short or ambiguous text, fall back to a CJK heuristic
-    const cjkCount = (input.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g) ?? []).length;
-    if (cjkCount / Math.max(input.length, 1) > 0.3) return 'zh-TW';
+
     return fallback;
   }
 
@@ -523,10 +546,11 @@ export class ChatPipelineService {
     return this.intentService.detect(input, language);
   }
 
-  async retrieveKnowledge(query: string, intentLabel: string | null): Promise<RetrievalResult[]> {
+  async retrieveKnowledge(query: string, intentLabel: string | null, language: string): Promise<RetrievalResult[]> {
     return this.retrievalService.retrieve({
       query,
       intentLabel: intentLabel ?? undefined,
+      language,
       limit: 5,
     });
   }
@@ -537,7 +561,10 @@ export class ChatPipelineService {
       language: ctx.language,
       knowledgeEntries: ctx.ragResults.map(r => r.entry),
       conversationHistory: ctx.history,
-      maxContextTokens,      confidenceLevel: ctx.confidenceLevel === 'none' ? undefined : ctx.confidenceLevel,    });
+      maxContextTokens,
+      confidenceLevel: ctx.confidenceLevel === 'none' ? undefined : ctx.confidenceLevel,
+      isCrossLanguageFallback: ctx.isCrossLanguageFallback,
+    });
   }
 
   // ─── T3-003 helpers ───────────────────────────────────────────────────────
@@ -639,6 +666,7 @@ export class ChatPipelineService {
     this.writeSseAndEnd(res, 'done', {
       messageId: assistantMsg.id,
       action: 'fallback' satisfies ChatAction,
+      intentLabel: null,
       sourceReferences: [],
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     } satisfies SseDonePayload);

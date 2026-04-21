@@ -81,6 +81,11 @@ model KnowledgeEntry {
   content     String
   intentLabel String?
   tags        String[]
+  /// FAQ question variants and natural-language aliases for this entry.
+  /// Storing common user phrasings here enables FAQ-friendly ILIKE retrieval.
+  aliases     String[]          @default([])
+  /// ISO language tag for this entry — used for language-aware retrieval. zh-TW | en
+  language    String            @default("zh-TW")
   status      String            @default("draft") /// draft | approved | archived
   visibility  String            @default("private") /// public | private
   version     Int               @default(1)

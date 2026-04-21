@@ -1,0 +1,212 @@
+PASS src/retrieval/query-normalizer.spec.ts
+[31m[Nest] 6172  - [39m04/20/2026, 6:31:12 PM [31m  ERROR[39m [38;5;3m[GlobalExceptionFilter] [39m[31mUnexpected error: DB connection failed[39m
+Error: DB connection failed
+    at Object.<anonymous> (/Users/evalin/Documents/my proj/B2E/chatbot.com/src/common/filters/global-exception.filter.spec.ts:119:20)
+    at Promise.finally.completed (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:1557:28)
+    at new Promise (<anonymous>)
+    at callAsyncCircusFn (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:1497:10)
+    at _callCircusTest (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:1007:40)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at _runTest (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:947:3)
+    at /Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:849:7
+    at _runTestsForDescribeBlock (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:862:11)
+    at _runTestsForDescribeBlock (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:857:11)
+    at _runTestsForDescribeBlock (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:857:11)
+    at run (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:761:3)
+    at runAndTransformResultsToJestFormat (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:1918:21)
+    at jestAdapter (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/runner.js:101:19)
+    at runTestInternal (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-runner/build/testWorker.js:275:16)
+    at runTest (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-runner/build/testWorker.js:343:7)
+    at Object.worker (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-runner/build/testWorker.js:497:12)
+[31m[Nest] 6172  - [39m04/20/2026, 6:31:12 PM [31m  ERROR[39m [38;5;3m[GlobalExceptionFilter] [39m[31mUnexpected error: something bad[39m
+[31m[Nest] 6172  - [39m04/20/2026, 6:31:12 PM [31m  ERROR[39m [38;5;3m[GlobalExceptionFilter] [39m[31mUnexpected error: null[39m
+[31m[Nest] 6172  - [39m04/20/2026, 6:31:12 PM [31m  ERROR[39m [38;5;3m[GlobalExceptionFilter] [39m[31mUnexpected error: DB connection failed[39m
+Error: DB connection failed
+    at Object.<anonymous> (/Users/evalin/Documents/my proj/B2E/chatbot.com/src/common/filters/global-exception.filter.spec.ts:144:20)
+    at Promise.finally.completed (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:1557:28)
+    at new Promise (<anonymous>)
+    at callAsyncCircusFn (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:1497:10)
+    at _callCircusTest (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:1007:40)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at _runTest (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:947:3)
+    at /Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:849:7
+    at _runTestsForDescribeBlock (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:862:11)
+    at _runTestsForDescribeBlock (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:857:11)
+    at _runTestsForDescribeBlock (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:857:11)
+    at run (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:761:3)
+    at runAndTransformResultsToJestFormat (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:1918:21)
+    at jestAdapter (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/runner.js:101:19)
+    at runTestInternal (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-runner/build/testWorker.js:275:16)
+    at runTest (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-runner/build/testWorker.js:343:7)
+    at Object.worker (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-runner/build/testWorker.js:497:12)
+[31m[Nest] 6172  - [39m04/20/2026, 6:31:12 PM [31m  ERROR[39m [38;5;3m[GlobalExceptionFilter] [39m[31mUnexpected error: secret internal detail[39m
+Error: secret internal detail
+    at Object.<anonymous> (/Users/evalin/Documents/my proj/B2E/chatbot.com/src/common/filters/global-exception.filter.spec.ts:151:20)
+    at Promise.finally.completed (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:1557:28)
+    at new Promise (<anonymous>)
+    at callAsyncCircusFn (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:1497:10)
+    at _callCircusTest (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:1007:40)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at _runTest (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:947:3)
+    at /Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:849:7
+    at _runTestsForDescribeBlock (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:862:11)
+    at _runTestsForDescribeBlock (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:857:11)
+    at _runTestsForDescribeBlock (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:857:11)
+    at run (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:761:3)
+    at runAndTransformResultsToJestFormat (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:1918:21)
+    at jestAdapter (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/runner.js:101:19)
+    at runTestInternal (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-runner/build/testWorker.js:275:16)
+    at runTest (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-runner/build/testWorker.js:343:7)
+    at Object.worker (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-runner/build/testWorker.js:497:12)
+[31m[Nest] 6172  - [39m04/20/2026, 6:31:12 PM [31m  ERROR[39m [38;5;3m[GlobalExceptionFilter] [39m[31mUnexpected error: boom[39m
+Error: boom
+    at /Users/evalin/Documents/my proj/B2E/chatbot.com/src/common/filters/global-exception.filter.spec.ts:195:25
+    at _dispatchDescribe (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:604:26)
+    at describe (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:572:44)
+    at /Users/evalin/Documents/my proj/B2E/chatbot.com/src/common/filters/global-exception.filter.spec.ts:190:11
+    at _dispatchDescribe (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:604:26)
+    at describe (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/jestAdapterInit.js:572:44)
+    at Object.<anonymous> (/Users/evalin/Documents/my proj/B2E/chatbot.com/src/common/filters/global-exception.filter.spec.ts:11:9)
+    at Runtime._execModule (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-runtime/build/index.js:1264:24)
+    at Runtime._loadModule (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-runtime/build/index.js:940:12)
+    at Runtime.requireModule (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-runtime/build/index.js:828:12)
+    at jestAdapter (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-circus/build/runner.js:95:13)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at runTestInternal (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-runner/build/testWorker.js:275:16)
+    at runTest (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-runner/build/testWorker.js:343:7)
+    at Object.worker (/Users/evalin/Documents/my proj/B2E/chatbot.com/node_modules/jest-runner/build/testWorker.js:497:12)
+PASS src/common/filters/global-exception.filter.spec.ts
+PASS src/knowledge/knowledge.repository.spec.ts
+PASS src/safety/safety.service.spec.ts
+PASS src/safety/confidential-check.spec.ts
+PASS src/intent/intent.service.spec.ts
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 2 rules, 2 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 0 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 1 rules, 0 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 0 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 1 rules, 0 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache invalidated — reloading from DB[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 2 rules, 0 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 0 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache invalidated — reloading from DB[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 0 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 3 rules, 0 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 3 rules, 0 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 3 rules, 0 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 3 rules, 0 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 3 rules, 0 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 3 rules, 0 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 1 rules, 0 blacklist entries[39m
+[33m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [33m   WARN[39m [38;5;3m[SafetyService] [39m[33mSafetyService: invalid regex in SafetyRule id=99: [invalid(regex[39m
+[33m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [33m   WARN[39m [38;5;3m[SafetyService] [39m[33mSafetyService: invalid regex in SafetyRule id=99: [invalid(regex[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 3 rules, 0 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 1 rules, 0 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 3 rules, 0 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 1 rules, 0 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 3 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 3 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 3 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 1 rules, 0 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 1 rules, 0 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 1 rules, 0 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 4 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 4 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 4 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 4 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 4 blacklist entries[39m
+[32m[Nest] 6167  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 4 blacklist entries[39m
+[32m[Nest] 6172  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 13 rules, 0 blacklist entries[39m
+[32m[Nest] 6172  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 13 rules, 0 blacklist entries[39m
+[32m[Nest] 6172  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 13 rules, 0 blacklist entries[39m
+[32m[Nest] 6172  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 13 rules, 0 blacklist entries[39m
+[32m[Nest] 6172  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 13 rules, 0 blacklist entries[39m
+[32m[Nest] 6170  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 10 blacklist entries[39m
+[32m[Nest] 6170  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 10 blacklist entries[39m
+[32m[Nest] 6170  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 10 blacklist entries[39m
+[32m[Nest] 6170  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 10 blacklist entries[39m
+[32m[Nest] 6170  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 10 blacklist entries[39m
+[32m[Nest] 6170  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 10 blacklist entries[39m
+[32m[Nest] 6170  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 10 blacklist entries[39m
+[32m[Nest] 6170  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 10 blacklist entries[39m
+[32m[Nest] 6170  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 10 blacklist entries[39m
+[32m[Nest] 6170  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 10 blacklist entries[39m
+[32m[Nest] 6172  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 13 rules, 0 blacklist entries[39m
+[32m[Nest] 6170  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 10 blacklist entries[39m
+[32m[Nest] 6170  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 10 blacklist entries[39m
+[32m[Nest] 6170  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 10 blacklist entries[39m
+[32m[Nest] 6170  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 10 blacklist entries[39m
+[32m[Nest] 6170  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 10 blacklist entries[39m
+[32m[Nest] 6170  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 10 blacklist entries[39m
+[32m[Nest] 6170  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 10 blacklist entries[39m
+[32m[Nest] 6170  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 0 rules, 10 blacklist entries[39m
+[32m[Nest] 6171  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[IntentService] [39m[32mIntentService cache loaded: 2 templates, 1 glossary terms[39m
+[32m[Nest] 6171  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[IntentService] [39m[32mIntentService cache loaded: 0 templates, 0 glossary terms[39m
+[32m[Nest] 6171  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[IntentService] [39m[32mIntentService cache loaded: 1 templates, 0 glossary terms[39m
+[32m[Nest] 6171  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[IntentService] [39m[32mIntentService cache loaded: 0 templates, 0 glossary terms[39m
+[32m[Nest] 6171  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[IntentService] [39m[32mIntentService cache loaded: 1 templates, 0 glossary terms[39m
+[32m[Nest] 6171  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[IntentService] [39m[32mIntentService cache invalidated — reloading from DB[39m
+[32m[Nest] 6171  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[IntentService] [39m[32mIntentService cache loaded: 2 templates, 0 glossary terms[39m
+[32m[Nest] 6171  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[IntentService] [39m[32mIntentService cache loaded: 0 templates, 0 glossary terms[39m
+[32m[Nest] 6171  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[IntentService] [39m[32mIntentService cache invalidated — reloading from DB[39m
+[32m[Nest] 6171  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[IntentService] [39m[32mIntentService cache loaded: 0 templates, 0 glossary terms[39m
+[32m[Nest] 6171  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[IntentService] [39m[32mIntentService cache loaded: 3 templates, 1 glossary terms[39m
+[32m[Nest] 6171  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[IntentService] [39m[32mIntentService cache loaded: 3 templates, 1 glossary terms[39m
+[32m[Nest] 6171  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[IntentService] [39m[32mIntentService cache loaded: 3 templates, 1 glossary terms[39m
+[32m[Nest] 6171  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[IntentService] [39m[32mIntentService cache loaded: 3 templates, 1 glossary terms[39m
+[32m[Nest] 6171  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[IntentService] [39m[32mIntentService cache loaded: 3 templates, 1 glossary terms[39m
+[32m[Nest] 6172  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 13 rules, 0 blacklist entries[39m
+PASS src/safety/prompt-injection.spec.ts
+PASS src/retrieval/services/postgres-retrieval.service.spec.ts
+[32m[Nest] 6172  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 13 rules, 0 blacklist entries[39m
+[32m[Nest] 6172  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 13 rules, 0 blacklist entries[39m
+[32m[Nest] 6172  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 13 rules, 0 blacklist entries[39m
+[32m[Nest] 6172  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 13 rules, 0 blacklist entries[39m
+[32m[Nest] 6172  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 13 rules, 0 blacklist entries[39m
+[32m[Nest] 6172  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 13 rules, 0 blacklist entries[39m
+[32m[Nest] 6172  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 13 rules, 0 blacklist entries[39m
+[32m[Nest] 6172  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 13 rules, 0 blacklist entries[39m
+[32m[Nest] 6172  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 13 rules, 0 blacklist entries[39m
+[32m[Nest] 6172  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 13 rules, 0 blacklist entries[39m
+[32m[Nest] 6172  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 13 rules, 0 blacklist entries[39m
+[32m[Nest] 6172  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache invalidated — reloading from DB[39m
+[32m[Nest] 6172  - [39m04/20/2026, 6:31:13 PM [32m    LOG[39m [38;5;3m[SafetyService] [39m[32mSafetyService cache loaded: 14 rules, 0 blacklist entries[39m
+PASS src/chat/chat-pipeline.service.spec.ts
+PASS src/audit/audit-log-integration.spec.ts
+FAIL src/chat/sse-stream.spec.ts
+  ● T2-016 SSE / sessionToken / Widget acceptance (mock) › WidgetConfigController › should return multi-language widget config
+
+    expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+    Expected: {"disclaimer": {"en": "Disclaimer", "zh-TW": "免責聲明"}, "fallbackMessage": {"en": "Please wait", "zh-TW": "請稍後"}, "quickReplies": {"en": ["Enquire"], "zh-TW": ["查詢"]}, "status": "online", "welcomeMessage": {"en": "Welcome", "zh-TW": "歡迎"}}
+
+    Number of calls: 0
+
+      268 |       widgetController.getConfig(mockResponse);
+      269 |
+    > 270 |       expect(mockResponse.json).toHaveBeenCalledWith(config);
+          |                                 ^
+      271 |       const [result] = (mockResponse.json as jest.Mock).mock.calls[0] as [typeof config];
+      272 |       expect(result.status).toBe('online');
+      273 |       expect(result.welcomeMessage).toMatchObject({ 'zh-TW': '歡迎', en: 'Welcome' });
+
+      at Object.<anonymous> (chat/sse-stream.spec.ts:270:33)
+
+  ● T2-016 SSE / sessionToken / Widget acceptance (mock) › WidgetConfigController › should return status=degraded when AI is degraded
+
+    TypeError: undefined is not iterable (cannot read property Symbol(Symbol.iterator))
+
+      289 |       widgetController.getConfig(mockResponse);
+      290 |
+    > 291 |       const [result] = (mockResponse.json as jest.Mock).mock.calls[0] as [typeof config];
+          |                         ^
+      292 |       expect(result.status).toBe('degraded');
+      293 |     });
+      294 |   });
+
+      at Object.<anonymous> (chat/sse-stream.spec.ts:291:25)
+
+Test Suites: 1 failed, 10 passed, 11 total
+Tests:       2 failed, 241 passed, 243 total
+Snapshots:   0 total
+Time:        1.802 s
+Ran all test suites.

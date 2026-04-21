@@ -6,17 +6,17 @@ import { AdminSystemConfigService } from './system-config/admin-system-config.se
 import { AdminSafetyController } from './safety/safety-admin.controller.js';
 import { AdminSafetyService } from './safety/safety-admin.service.js';
 import { SafetyModule } from '../safety/safety.module.js';
+import { KnowledgeModule } from '../knowledge/knowledge.module';
 
 /**
  * AdminModule — aggregates all admin-facing route controllers.
  *
- * Phase 1 status: Knowledge and SystemConfig controllers return 501.
+ * Phase 1 status: SystemConfig controller returns 501.
  * Phase 3 (T3-006): Safety admin CRUD is fully implemented.
- * Phase 6 will import KnowledgeModule and SystemConfigModule here and wire
- * the remaining service dependencies.
+ * Knowledge admin CRUD is fully implemented (create/update support language + aliases).
  */
 @Module({
-  imports: [SafetyModule],
+  imports: [SafetyModule, KnowledgeModule],
   controllers: [
     AdminKnowledgeController,
     AdminSystemConfigController,

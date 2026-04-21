@@ -66,10 +66,23 @@ export class ChatController {
    *
    * SSE events:
    *   event: token\ndata: {"token":"..."}\n\n
-   *   event: done\ndata: {messageId, action, sourceReferences, usage}\n\n
+   *   event: done\ndata: {messageId, action, intentLabel, sourceReferences, usage}\n\n
    *   event: error\ndata: {code, message}\n\n
    *   event: timeout\ndata: {message}\n\n
    *   event: interrupted\ndata: {message}\n\n
+   *
+   * `done` event payload example:
+   *   {
+   *     "messageId": 42,
+   *     "action": "answer",
+   *     "intentLabel": "product-inquiry",
+   *     "sourceReferences": [1, 3],
+   *     "usage": { "promptTokens": 123, "completionTokens": 45, "totalTokens": 168 }
+   *   }
+   *
+   * `intentLabel` is null when no intent was matched, or when the pipeline was
+   * short-circuited before intent detection (safety guard / confidentiality block).
+   * It is never undefined — always a string or null.
    *
    * Client disconnection is detected via `res.on('close')` → AbortController.abort().
    * There is NO separate cancel endpoint — AbortController is the cancellation mechanism.

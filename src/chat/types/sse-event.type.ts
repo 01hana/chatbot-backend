@@ -3,7 +3,7 @@
  *
  * SSE wire format (per spec):
  *   event: token\ndata: {"token":"..."}\n\n
- *   event: done\ndata: {messageId, action, sourceReferences, usage}\n\n
+ *   event: done\ndata: {messageId, action, intentLabel, sourceReferences, usage}\n\n
  *   event: error\ndata: {code, message}\n\n
  *   event: timeout\ndata: {message}\n\n
  *   event: interrupted\ndata: {message}\n\n
@@ -29,6 +29,12 @@ export interface SseUsage {
 export interface SseDonePayload {
   messageId: number;
   action: ChatAction;
+  /**
+   * Detected intent label for this turn, e.g. "product-inquiry", "general-faq".
+   * null when no intent was detected or when the message was intercepted before
+   * intent detection could run (safety guard / confidentiality short-circuit).
+   */
+  intentLabel: string | null;
   sourceReferences: number[];
   usage: SseUsage;
 }

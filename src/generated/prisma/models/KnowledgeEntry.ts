@@ -41,6 +41,7 @@ export type KnowledgeEntryMinAggregateOutputType = {
   title: string | null
   content: string | null
   intentLabel: string | null
+  language: string | null
   status: string | null
   visibility: string | null
   version: number | null
@@ -54,6 +55,7 @@ export type KnowledgeEntryMaxAggregateOutputType = {
   title: string | null
   content: string | null
   intentLabel: string | null
+  language: string | null
   status: string | null
   visibility: string | null
   version: number | null
@@ -68,6 +70,8 @@ export type KnowledgeEntryCountAggregateOutputType = {
   content: number
   intentLabel: number
   tags: number
+  aliases: number
+  language: number
   status: number
   visibility: number
   version: number
@@ -93,6 +97,7 @@ export type KnowledgeEntryMinAggregateInputType = {
   title?: true
   content?: true
   intentLabel?: true
+  language?: true
   status?: true
   visibility?: true
   version?: true
@@ -106,6 +111,7 @@ export type KnowledgeEntryMaxAggregateInputType = {
   title?: true
   content?: true
   intentLabel?: true
+  language?: true
   status?: true
   visibility?: true
   version?: true
@@ -120,6 +126,8 @@ export type KnowledgeEntryCountAggregateInputType = {
   content?: true
   intentLabel?: true
   tags?: true
+  aliases?: true
+  language?: true
   status?: true
   visibility?: true
   version?: true
@@ -221,6 +229,8 @@ export type KnowledgeEntryGroupByOutputType = {
   content: string
   intentLabel: string | null
   tags: string[]
+  aliases: string[]
+  language: string
   status: string
   visibility: string
   version: number
@@ -258,6 +268,8 @@ export type KnowledgeEntryWhereInput = {
   content?: Prisma.StringFilter<"KnowledgeEntry"> | string
   intentLabel?: Prisma.StringNullableFilter<"KnowledgeEntry"> | string | null
   tags?: Prisma.StringNullableListFilter<"KnowledgeEntry">
+  aliases?: Prisma.StringNullableListFilter<"KnowledgeEntry">
+  language?: Prisma.StringFilter<"KnowledgeEntry"> | string
   status?: Prisma.StringFilter<"KnowledgeEntry"> | string
   visibility?: Prisma.StringFilter<"KnowledgeEntry"> | string
   version?: Prisma.IntFilter<"KnowledgeEntry"> | number
@@ -273,6 +285,8 @@ export type KnowledgeEntryOrderByWithRelationInput = {
   content?: Prisma.SortOrder
   intentLabel?: Prisma.SortOrderInput | Prisma.SortOrder
   tags?: Prisma.SortOrder
+  aliases?: Prisma.SortOrder
+  language?: Prisma.SortOrder
   status?: Prisma.SortOrder
   visibility?: Prisma.SortOrder
   version?: Prisma.SortOrder
@@ -291,6 +305,8 @@ export type KnowledgeEntryWhereUniqueInput = Prisma.AtLeast<{
   content?: Prisma.StringFilter<"KnowledgeEntry"> | string
   intentLabel?: Prisma.StringNullableFilter<"KnowledgeEntry"> | string | null
   tags?: Prisma.StringNullableListFilter<"KnowledgeEntry">
+  aliases?: Prisma.StringNullableListFilter<"KnowledgeEntry">
+  language?: Prisma.StringFilter<"KnowledgeEntry"> | string
   status?: Prisma.StringFilter<"KnowledgeEntry"> | string
   visibility?: Prisma.StringFilter<"KnowledgeEntry"> | string
   version?: Prisma.IntFilter<"KnowledgeEntry"> | number
@@ -306,6 +322,8 @@ export type KnowledgeEntryOrderByWithAggregationInput = {
   content?: Prisma.SortOrder
   intentLabel?: Prisma.SortOrderInput | Prisma.SortOrder
   tags?: Prisma.SortOrder
+  aliases?: Prisma.SortOrder
+  language?: Prisma.SortOrder
   status?: Prisma.SortOrder
   visibility?: Prisma.SortOrder
   version?: Prisma.SortOrder
@@ -328,6 +346,8 @@ export type KnowledgeEntryScalarWhereWithAggregatesInput = {
   content?: Prisma.StringWithAggregatesFilter<"KnowledgeEntry"> | string
   intentLabel?: Prisma.StringNullableWithAggregatesFilter<"KnowledgeEntry"> | string | null
   tags?: Prisma.StringNullableListFilter<"KnowledgeEntry">
+  aliases?: Prisma.StringNullableListFilter<"KnowledgeEntry">
+  language?: Prisma.StringWithAggregatesFilter<"KnowledgeEntry"> | string
   status?: Prisma.StringWithAggregatesFilter<"KnowledgeEntry"> | string
   visibility?: Prisma.StringWithAggregatesFilter<"KnowledgeEntry"> | string
   version?: Prisma.IntWithAggregatesFilter<"KnowledgeEntry"> | number
@@ -341,6 +361,8 @@ export type KnowledgeEntryCreateInput = {
   content: string
   intentLabel?: string | null
   tags?: Prisma.KnowledgeEntryCreatetagsInput | string[]
+  aliases?: Prisma.KnowledgeEntryCreatealiasesInput | string[]
+  language?: string
   status?: string
   visibility?: string
   version?: number
@@ -356,6 +378,8 @@ export type KnowledgeEntryUncheckedCreateInput = {
   content: string
   intentLabel?: string | null
   tags?: Prisma.KnowledgeEntryCreatetagsInput | string[]
+  aliases?: Prisma.KnowledgeEntryCreatealiasesInput | string[]
+  language?: string
   status?: string
   visibility?: string
   version?: number
@@ -370,6 +394,8 @@ export type KnowledgeEntryUpdateInput = {
   content?: Prisma.StringFieldUpdateOperationsInput | string
   intentLabel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tags?: Prisma.KnowledgeEntryUpdatetagsInput | string[]
+  aliases?: Prisma.KnowledgeEntryUpdatealiasesInput | string[]
+  language?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.StringFieldUpdateOperationsInput | string
   visibility?: Prisma.StringFieldUpdateOperationsInput | string
   version?: Prisma.IntFieldUpdateOperationsInput | number
@@ -385,6 +411,8 @@ export type KnowledgeEntryUncheckedUpdateInput = {
   content?: Prisma.StringFieldUpdateOperationsInput | string
   intentLabel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tags?: Prisma.KnowledgeEntryUpdatetagsInput | string[]
+  aliases?: Prisma.KnowledgeEntryUpdatealiasesInput | string[]
+  language?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.StringFieldUpdateOperationsInput | string
   visibility?: Prisma.StringFieldUpdateOperationsInput | string
   version?: Prisma.IntFieldUpdateOperationsInput | number
@@ -400,6 +428,8 @@ export type KnowledgeEntryCreateManyInput = {
   content: string
   intentLabel?: string | null
   tags?: Prisma.KnowledgeEntryCreatetagsInput | string[]
+  aliases?: Prisma.KnowledgeEntryCreatealiasesInput | string[]
+  language?: string
   status?: string
   visibility?: string
   version?: number
@@ -413,6 +443,8 @@ export type KnowledgeEntryUpdateManyMutationInput = {
   content?: Prisma.StringFieldUpdateOperationsInput | string
   intentLabel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tags?: Prisma.KnowledgeEntryUpdatetagsInput | string[]
+  aliases?: Prisma.KnowledgeEntryUpdatealiasesInput | string[]
+  language?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.StringFieldUpdateOperationsInput | string
   visibility?: Prisma.StringFieldUpdateOperationsInput | string
   version?: Prisma.IntFieldUpdateOperationsInput | number
@@ -427,6 +459,8 @@ export type KnowledgeEntryUncheckedUpdateManyInput = {
   content?: Prisma.StringFieldUpdateOperationsInput | string
   intentLabel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tags?: Prisma.KnowledgeEntryUpdatetagsInput | string[]
+  aliases?: Prisma.KnowledgeEntryUpdatealiasesInput | string[]
+  language?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.StringFieldUpdateOperationsInput | string
   visibility?: Prisma.StringFieldUpdateOperationsInput | string
   version?: Prisma.IntFieldUpdateOperationsInput | number
@@ -441,6 +475,8 @@ export type KnowledgeEntryCountOrderByAggregateInput = {
   content?: Prisma.SortOrder
   intentLabel?: Prisma.SortOrder
   tags?: Prisma.SortOrder
+  aliases?: Prisma.SortOrder
+  language?: Prisma.SortOrder
   status?: Prisma.SortOrder
   visibility?: Prisma.SortOrder
   version?: Prisma.SortOrder
@@ -459,6 +495,7 @@ export type KnowledgeEntryMaxOrderByAggregateInput = {
   title?: Prisma.SortOrder
   content?: Prisma.SortOrder
   intentLabel?: Prisma.SortOrder
+  language?: Prisma.SortOrder
   status?: Prisma.SortOrder
   visibility?: Prisma.SortOrder
   version?: Prisma.SortOrder
@@ -472,6 +509,7 @@ export type KnowledgeEntryMinOrderByAggregateInput = {
   title?: Prisma.SortOrder
   content?: Prisma.SortOrder
   intentLabel?: Prisma.SortOrder
+  language?: Prisma.SortOrder
   status?: Prisma.SortOrder
   visibility?: Prisma.SortOrder
   version?: Prisma.SortOrder
@@ -494,7 +532,16 @@ export type KnowledgeEntryCreatetagsInput = {
   set: string[]
 }
 
+export type KnowledgeEntryCreatealiasesInput = {
+  set: string[]
+}
+
 export type KnowledgeEntryUpdatetagsInput = {
+  set?: string[]
+  push?: string | string[]
+}
+
+export type KnowledgeEntryUpdatealiasesInput = {
   set?: string[]
   push?: string | string[]
 }
@@ -522,6 +569,8 @@ export type KnowledgeEntryCreateWithoutVersionsInput = {
   content: string
   intentLabel?: string | null
   tags?: Prisma.KnowledgeEntryCreatetagsInput | string[]
+  aliases?: Prisma.KnowledgeEntryCreatealiasesInput | string[]
+  language?: string
   status?: string
   visibility?: string
   version?: number
@@ -536,6 +585,8 @@ export type KnowledgeEntryUncheckedCreateWithoutVersionsInput = {
   content: string
   intentLabel?: string | null
   tags?: Prisma.KnowledgeEntryCreatetagsInput | string[]
+  aliases?: Prisma.KnowledgeEntryCreatealiasesInput | string[]
+  language?: string
   status?: string
   visibility?: string
   version?: number
@@ -565,6 +616,8 @@ export type KnowledgeEntryUpdateWithoutVersionsInput = {
   content?: Prisma.StringFieldUpdateOperationsInput | string
   intentLabel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tags?: Prisma.KnowledgeEntryUpdatetagsInput | string[]
+  aliases?: Prisma.KnowledgeEntryUpdatealiasesInput | string[]
+  language?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.StringFieldUpdateOperationsInput | string
   visibility?: Prisma.StringFieldUpdateOperationsInput | string
   version?: Prisma.IntFieldUpdateOperationsInput | number
@@ -579,6 +632,8 @@ export type KnowledgeEntryUncheckedUpdateWithoutVersionsInput = {
   content?: Prisma.StringFieldUpdateOperationsInput | string
   intentLabel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tags?: Prisma.KnowledgeEntryUpdatetagsInput | string[]
+  aliases?: Prisma.KnowledgeEntryUpdatealiasesInput | string[]
+  language?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.StringFieldUpdateOperationsInput | string
   visibility?: Prisma.StringFieldUpdateOperationsInput | string
   version?: Prisma.IntFieldUpdateOperationsInput | number
@@ -624,6 +679,8 @@ export type KnowledgeEntrySelect<ExtArgs extends runtime.Types.Extensions.Intern
   content?: boolean
   intentLabel?: boolean
   tags?: boolean
+  aliases?: boolean
+  language?: boolean
   status?: boolean
   visibility?: boolean
   version?: boolean
@@ -640,6 +697,8 @@ export type KnowledgeEntrySelectCreateManyAndReturn<ExtArgs extends runtime.Type
   content?: boolean
   intentLabel?: boolean
   tags?: boolean
+  aliases?: boolean
+  language?: boolean
   status?: boolean
   visibility?: boolean
   version?: boolean
@@ -654,6 +713,8 @@ export type KnowledgeEntrySelectUpdateManyAndReturn<ExtArgs extends runtime.Type
   content?: boolean
   intentLabel?: boolean
   tags?: boolean
+  aliases?: boolean
+  language?: boolean
   status?: boolean
   visibility?: boolean
   version?: boolean
@@ -668,6 +729,8 @@ export type KnowledgeEntrySelectScalar = {
   content?: boolean
   intentLabel?: boolean
   tags?: boolean
+  aliases?: boolean
+  language?: boolean
   status?: boolean
   visibility?: boolean
   version?: boolean
@@ -676,7 +739,7 @@ export type KnowledgeEntrySelectScalar = {
   deletedAt?: boolean
 }
 
-export type KnowledgeEntryOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "title" | "content" | "intentLabel" | "tags" | "status" | "visibility" | "version" | "createdAt" | "updatedAt" | "deletedAt", ExtArgs["result"]["knowledgeEntry"]>
+export type KnowledgeEntryOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "title" | "content" | "intentLabel" | "tags" | "aliases" | "language" | "status" | "visibility" | "version" | "createdAt" | "updatedAt" | "deletedAt", ExtArgs["result"]["knowledgeEntry"]>
 export type KnowledgeEntryInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   versions?: boolean | Prisma.KnowledgeEntry$versionsArgs<ExtArgs>
   _count?: boolean | Prisma.KnowledgeEntryCountOutputTypeDefaultArgs<ExtArgs>
@@ -695,6 +758,15 @@ export type $KnowledgeEntryPayload<ExtArgs extends runtime.Types.Extensions.Inte
     content: string
     intentLabel: string | null
     tags: string[]
+    /**
+     * FAQ question variants and natural-language aliases for this entry.
+     * Storing common user phrasings here enables FAQ-friendly ILIKE retrieval.
+     */
+    aliases: string[]
+    /**
+     * ISO language tag for this entry — used for language-aware retrieval. zh-TW | en
+     */
+    language: string
     /**
      * draft | approved | archived
      */
@@ -1136,6 +1208,8 @@ export interface KnowledgeEntryFieldRefs {
   readonly content: Prisma.FieldRef<"KnowledgeEntry", 'String'>
   readonly intentLabel: Prisma.FieldRef<"KnowledgeEntry", 'String'>
   readonly tags: Prisma.FieldRef<"KnowledgeEntry", 'String[]'>
+  readonly aliases: Prisma.FieldRef<"KnowledgeEntry", 'String[]'>
+  readonly language: Prisma.FieldRef<"KnowledgeEntry", 'String'>
   readonly status: Prisma.FieldRef<"KnowledgeEntry", 'String'>
   readonly visibility: Prisma.FieldRef<"KnowledgeEntry", 'String'>
   readonly version: Prisma.FieldRef<"KnowledgeEntry", 'Int'>

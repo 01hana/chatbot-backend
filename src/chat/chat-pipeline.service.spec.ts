@@ -46,6 +46,47 @@ describe('ChatPipelineService', () => {
     it('should respect a custom fallback parameter', () => {
       expect(ChatPipelineService.detectLang('', 'en')).toBe('en');
     });
+
+    // Short ASCII product/FAQ terms — must not fall back to zh-TW
+    it('should return en for short word: catalog', () => {
+      expect(ChatPipelineService.detectLang('catalog')).toBe('en');
+    });
+
+    it('should return en for short word: bolt', () => {
+      expect(ChatPipelineService.detectLang('bolt')).toBe('en');
+    });
+
+    it('should return en for short word: washer', () => {
+      expect(ChatPipelineService.detectLang('washer')).toBe('en');
+    });
+
+    it('should return en for short word: wire', () => {
+      expect(ChatPipelineService.detectLang('wire')).toBe('en');
+    });
+
+    it('should return en for short word: screw', () => {
+      expect(ChatPipelineService.detectLang('screw')).toBe('en');
+    });
+
+    it('should return en for short phrase: quote request', () => {
+      expect(ChatPipelineService.detectLang('quote request')).toBe('en');
+    });
+
+    it('should return en for product code query: M6 hex bolt', () => {
+      expect(ChatPipelineService.detectLang('M6 hex bolt')).toBe('en');
+    });
+
+    it('should return zh-TW for mixed Chinese+English: M3 螺絲', () => {
+      expect(ChatPipelineService.detectLang('M3 螺絲')).toBe('zh-TW');
+    });
+
+    it('should return zh-TW for short Chinese term: 型錄', () => {
+      expect(ChatPipelineService.detectLang('型錄')).toBe('zh-TW');
+    });
+
+    it('should return zh-TW for Chinese product query: 六角螺帽規格', () => {
+      expect(ChatPipelineService.detectLang('六角螺帽規格')).toBe('zh-TW');
+    });
   });
 
   let service: ChatPipelineService;
@@ -615,6 +656,183 @@ describe('ChatPipelineService', () => {
       await service.run(makeConversation() as never, '保密協議', 'req-id', res as never, new AbortController().signal);
 
       expect(mockRetrievalService.retrieve).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── intentLabel in SSE done payload ───────────────────────────────────
+
+  describe('intentLabel in SSE done payload', () => {
+    /**
+     * Helper: parse all SSE event lines from the recorded res.write calls.
+     * Returns an array of { event, data } objects for every 'done' event found.
+     */
+    const parseDonePayloads = (res: jest.Mocked<Partial<Response>>): Record<string, unknown>[] => {
+      const raw = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0] as string).join('');
+      const donePayloads: Record<string, unknown>[] = [];
+      const blocks = raw.split('\n\n').filter(Boolean);
+      for (const block of blocks) {
+        const lines = block.split('\n');
+        const eventLine = lines.find(l => l.startsWith('event:'));
+        const dataLine = lines.find(l => l.startsWith('data:'));
+        if (eventLine?.includes('done') && dataLine) {
+          donePayloads.push(JSON.parse(dataLine.replace(/^data:\s*/, '')) as Record<string, unknown>);
+        }
+      }
+      return donePayloads;
+    };
+
+    it('should include intentLabel in done payload when intent is detected (answer path)', async () => {
+      mockRetrievalService.retrieve.mockResolvedValue([
+        { score: 0.9, entry: { id: 1, content: '產品資訊' } },
+      ]);
+      mockIntentService.detect.mockResolvedValue({
+        intentLabel: 'product-inquiry',
+        confidence: 0.85,
+        language: 'zh-TW',
+      });
+      async function* mockStream() {
+        yield { token: '這是產品資訊' };
+        yield { token: '', done: true, provider: 'mock', modelUsed: 'mock', fallbackTriggered: false, usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 } };
+      }
+      mockLlmProvider.stream.mockReturnValue(mockStream());
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, '你們的螺絲產品有哪些', 'req-id', res as never, new AbortController().signal);
+
+      const donePayloads = parseDonePayloads(res);
+      expect(donePayloads).toHaveLength(1);
+      expect(donePayloads[0]['intentLabel']).toBe('product-inquiry');
+    });
+
+    it('should include intentLabel as null when intent detection returns null (answer path)', async () => {
+      mockRetrievalService.retrieve.mockResolvedValue([
+        { score: 0.9, entry: { id: 1, content: '資訊' } },
+      ]);
+      mockIntentService.detect.mockResolvedValue({
+        intentLabel: null,
+        confidence: 0,
+        language: 'zh-TW',
+      });
+      async function* mockStream() {
+        yield { token: '回應' };
+        yield { token: '', done: true, provider: 'mock', modelUsed: 'mock', fallbackTriggered: false, usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 } };
+      }
+      mockLlmProvider.stream.mockReturnValue(mockStream());
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, '未知問題', 'req-id', res as never, new AbortController().signal);
+
+      const donePayloads = parseDonePayloads(res);
+      expect(donePayloads[0]['intentLabel']).toBeNull();
+    });
+
+    it('intentLabel should be null (not undefined) in done payload when no intent matched', async () => {
+      mockRetrievalService.retrieve.mockResolvedValue([
+        { score: 0.9, entry: { id: 1, content: '資訊' } },
+      ]);
+      mockIntentService.detect.mockResolvedValue({
+        intentLabel: null,
+        confidence: 0,
+        language: 'zh-TW',
+      });
+      async function* mockStream() {
+        yield { token: '', done: true, provider: 'mock', modelUsed: 'mock', fallbackTriggered: false, usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } };
+      }
+      mockLlmProvider.stream.mockReturnValue(mockStream());
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, '測試', 'req-id', res as never, new AbortController().signal);
+
+      const donePayloads = parseDonePayloads(res);
+      expect(donePayloads[0]).toHaveProperty('intentLabel');
+      // Must be null, NOT undefined — undefined would be omitted by JSON.stringify
+      expect(donePayloads[0]['intentLabel']).toBeNull();
+    });
+
+    it('should include intentLabel in fallback done payload (RAG no-hit)', async () => {
+      mockRetrievalService.retrieve.mockResolvedValue([]);
+      mockIntentService.detect.mockResolvedValue({
+        intentLabel: 'general-faq',
+        confidence: 0.6,
+        language: 'zh-TW',
+      });
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, '詢價', 'req-id', res as never, new AbortController().signal);
+
+      const donePayloads = parseDonePayloads(res);
+      expect(donePayloads).toHaveLength(1);
+      expect(donePayloads[0]['action']).toBe('fallback');
+      expect(donePayloads[0]['intentLabel']).toBe('general-faq');
+    });
+
+    it('should set intentLabel=null in done payload when safety guard intercepts (no intent detection run)', async () => {
+      mockSafetyService.scanPrompt.mockReturnValue({
+        blocked: true,
+        category: 'prompt_injection',
+        blockedReason: 'Pattern matched',
+        promptHash: 'abc123',
+      });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, '注入攻擊', 'req-id', res as never, new AbortController().signal);
+
+      const donePayloads = parseDonePayloads(res);
+      expect(donePayloads).toHaveLength(1);
+      expect(donePayloads[0]['action']).toBe('intercepted');
+      expect(donePayloads[0]['intentLabel']).toBeNull();
+    });
+
+    it('should set intentLabel=null in done payload when confidentiality intercepts (no intent detection run)', async () => {
+      mockSafetyService.checkConfidentiality.mockReturnValue({
+        triggered: true,
+        matchedType: 'confidential',
+        matchedKeyword: 'NDA',
+      });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, 'NDA question', 'req-id', res as never, new AbortController().signal);
+
+      const donePayloads = parseDonePayloads(res);
+      expect(donePayloads).toHaveLength(1);
+      expect(donePayloads[0]['action']).toBe('intercepted');
+      expect(donePayloads[0]['intentLabel']).toBeNull();
+    });
+
+    it('should set intentLabel=null in done payload when AI is degraded (fallback response)', async () => {
+      mockAiStatusService.isDegraded.mockReturnValue(true);
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, '任意訊息', 'req-id', res as never, new AbortController().signal);
+
+      const donePayloads = parseDonePayloads(res);
+      expect(donePayloads).toHaveLength(1);
+      expect(donePayloads[0]['action']).toBe('fallback');
+      expect(donePayloads[0]['intentLabel']).toBeNull();
+    });
+
+    it('should NOT affect error/timeout/interrupted events (they do not have intentLabel)', async () => {
+      const controller = new AbortController();
+      mockRetrievalService.retrieve.mockResolvedValue([
+        { score: 0.9, entry: { id: 1, content: '資訊' } },
+      ]);
+      async function* mockStream() {
+        controller.abort();
+        const err = new Error('aborted');
+        (err as NodeJS.ErrnoException).code = 'ABORT_ERR';
+        throw err;
+      }
+      mockLlmProvider.stream.mockReturnValue(mockStream());
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, '中斷', 'req-id', res as never, controller.signal);
+
+      const raw = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0] as string).join('');
+      // Should have 'interrupted' event, NOT 'done'
+      expect(raw).toContain('event: interrupted');
+      expect(raw).not.toContain('event: done');
     });
   });
 });

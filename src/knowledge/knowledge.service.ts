@@ -31,6 +31,14 @@ export class KnowledgeService {
   }
 
   /**
+   * Return all non-deleted knowledge entries regardless of status or visibility.
+   * Intended for admin use only — do NOT expose this via public-facing endpoints.
+   */
+  async findAll(): Promise<KnowledgeEntry[]> {
+    return this.knowledgeRepository.findAll();
+  }
+
+  /**
    * Create a new knowledge entry (default status = draft).
    */
   async create(
@@ -44,8 +52,16 @@ export class KnowledgeService {
    */
   async update(
     id: number,
-    data: Partial<Pick<KnowledgeEntry, 'title' | 'content' | 'intentLabel' | 'tags' | 'status' | 'visibility'>>,
+    data: Partial<Pick<KnowledgeEntry, 'title' | 'content' | 'intentLabel' | 'tags' | 'aliases' | 'language' | 'status' | 'visibility'>>,
   ): Promise<KnowledgeEntry | null> {
     return this.knowledgeRepository.update(id, data);
+  }
+
+  /**
+   * Soft-delete a knowledge entry.
+   * Returns true when successfully deleted; false when entry not found.
+   */
+  async softDelete(id: number): Promise<boolean> {
+    return this.knowledgeRepository.softDelete(id);
   }
 }

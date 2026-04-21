@@ -21,6 +21,8 @@ import { seedBlacklist } from './blacklist.seed';
 import { seedIntentTemplates } from './intent-templates.seed';
 import { seedGlossaryTerms } from './glossary-terms.seed';
 import { seedKnowledge } from './knowledge.seed';
+import { seedKnowledgePublicZh } from './knowledge-public-zh.seed';
+import { seedKnowledgePublicEn } from './knowledge-public-en.seed';
 import { seedWidgetConfig } from './widget-config.seed';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -95,6 +97,11 @@ async function main(): Promise<void> {
   } else {
     console.log('Skipping knowledge.seed.ts (NODE_ENV=production)');
   }
+
+  // Public knowledge entries (official website content) — run in all environments
+  console.log('Seeding public knowledge entries (all environments)...');
+  await seedKnowledgePublicZh(prisma);
+  await seedKnowledgePublicEn(prisma);
 
   console.log('Seed complete.');
 }

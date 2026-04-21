@@ -24,11 +24,11 @@ export class PromptBuilder {
   // ─── System Prompt Templates ──────────────────────────────────────────────
 
   private readonly SYSTEM_ZH = `你是震南鐵業的 AI 客服助理。你的職責是：
-1. 用繁體中文回答客戶關於產品規格、報價、用途、材質等問題
-2. 根據提供的知識庫內容提供準確的產品資訊
-3. 若問題超出知識庫範圍，請誠實告知並建議客戶聯繫業務人員
-4. 不得透露任何機密、定價策略或內部資訊
-5. 回覆應簡潔、專業、有禮貌`;
+  1. 用繁體中文回答客戶關於產品規格、報價、用途、材質等問題
+  2. 根據提供的知識庫內容提供準確的產品資訊
+  3. 若問題超出知識庫範圍，請誠實告知並建議客戶聯繫業務人員
+  4. 不得透露任何機密、定價策略或內部資訊
+  5. 回覆應簡潔、專業、有禮貌`;
 
   private readonly SYSTEM_EN = `You are an AI customer service assistant for Jenn-Nan Enterprise.
 Your responsibilities:
@@ -50,6 +50,16 @@ Your responsibilities:
     'Please ask the customer for clarifying details (e.g., specific model, use case, or specifications) ' +
     'before answering. Do not guess. ' +
     'If you cannot answer, honestly say so and direct the customer to a sales representative.';
+
+  // Cross-language fallback note — injected when RAG results are from a different language
+  private readonly CROSS_LANGUAGE_ZH =
+    '📌 注意：以下知識庫資訊來自跨語言備援，原始語言可能為英文。' +
+    '無論知識條目語言為何，最終回覆請使用繁體中文。';
+
+  private readonly CROSS_LANGUAGE_EN =
+    '📌 Note: The knowledge base entries below were retrieved via cross-language fallback ' +
+    'and may originally be in Chinese. ' +
+    'Regardless of the source language, please respond in English.';
 
   // Characters-per-token estimate (conservative for mixed CJK + English)
   private readonly CHARS_PER_TOKEN = 3;
@@ -73,15 +83,22 @@ Your responsibilities:
     }
     // Inject low-confidence instruction when RAG confidence is marginal
     if (context.confidenceLevel === 'low') {
-      const lowConfInstruction = context.language === 'en'
-        ? this.LOW_CONFIDENCE_EN
-        : this.LOW_CONFIDENCE_ZH;
+      const lowConfInstruction =
+        context.language === 'en' ? this.LOW_CONFIDENCE_EN : this.LOW_CONFIDENCE_ZH;
       fixedMessages.push({ role: 'system', content: lowConfInstruction });
+    }
+
+    // Inject cross-language fallback note so the LLM knows to keep responding
+    // in the user's language even when knowledge entries come from another language
+    if (context.isCrossLanguageFallback) {
+      const crossLangNote =
+        context.language === 'en' ? this.CROSS_LANGUAGE_EN : this.CROSS_LANGUAGE_ZH;
+      fixedMessages.push({ role: 'system', content: crossLangNote });
     }
 
     // Fixed token budget: system messages + current user message
     const fixedTokens = this.estimateTokens(
-      fixedMessages.map((m) => m.content).join('') + context.userMessage,
+      fixedMessages.map(m => m.content).join('') + context.userMessage,
     );
     const remainingBudget = Math.max(0, context.maxContextTokens - fixedTokens - 200); // 200-token buffer
 
@@ -94,7 +111,7 @@ Your responsibilities:
       { role: 'user', content: context.userMessage },
     ];
 
-    const estimatedTokens = this.estimateTokens(messages.map((m) => m.content).join(''));
+    const estimatedTokens = this.estimateTokens(messages.map(m => m.content).join(''));
 
     this.logger.debug(
       `PromptBuilder: ${messages.length} messages, ~${estimatedTokens} tokens ` +
@@ -113,13 +130,12 @@ Your responsibilities:
   private buildRagContext(entries: KnowledgeEntry[], language: string): string | null {
     if (!entries.length) return null;
 
-    const header = language === 'en'
-      ? '## Relevant product information from the knowledge base:\n\n'
-      : '## 以下為知識庫中的相關產品資訊：\n\n';
+    const header =
+      language === 'en'
+        ? '## Relevant product information from the knowledge base:\n\n'
+        : '## 以下為知識庫中的相關產品資訊：\n\n';
 
-    const items = entries
-      .map((e, idx) => `[${idx + 1}] **${e.title}**\n${e.content}`)
-      .join('\n\n');
+    const items = entries.map((e, idx) => `[${idx + 1}] **${e.title}**\n${e.content}`).join('\n\n');
 
     return header + items;
   }
@@ -128,13 +144,10 @@ Your responsibilities:
    * Convert conversation history to LlmMessage array, truncated to fit budget.
    * Drops the oldest turns first.
    */
-  private truncateHistory(
-    history: ConversationMessageLike[],
-    tokenBudget: number,
-  ): LlmMessage[] {
+  private truncateHistory(history: ConversationMessageLike[], tokenBudget: number): LlmMessage[] {
     const mapped: LlmMessage[] = history
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
     // Walk from newest to oldest, accumulating until budget is exhausted
     let accumulated = 0;

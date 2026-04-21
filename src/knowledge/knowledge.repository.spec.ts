@@ -11,6 +11,8 @@ function makeEntry(overrides: Partial<KnowledgeEntry> = {}): KnowledgeEntry {
     content: '選材應根據使用環境...',
     intentLabel: 'product-inquiry',
     tags: ['o-ring', 'material'],
+    aliases: [],
+    language: 'zh-TW',
     status: 'approved',
     visibility: 'public',
     version: 1,

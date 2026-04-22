@@ -48,6 +48,11 @@ export type KnowledgeEntryMinAggregateOutputType = {
   createdAt: Date | null
   updatedAt: Date | null
   deletedAt: Date | null
+  sourceKey: string | null
+  category: string | null
+  answerType: string | null
+  templateKey: string | null
+  crossLanguageGroupKey: string | null
 }
 
 export type KnowledgeEntryMaxAggregateOutputType = {
@@ -62,6 +67,11 @@ export type KnowledgeEntryMaxAggregateOutputType = {
   createdAt: Date | null
   updatedAt: Date | null
   deletedAt: Date | null
+  sourceKey: string | null
+  category: string | null
+  answerType: string | null
+  templateKey: string | null
+  crossLanguageGroupKey: string | null
 }
 
 export type KnowledgeEntryCountAggregateOutputType = {
@@ -78,6 +88,13 @@ export type KnowledgeEntryCountAggregateOutputType = {
   createdAt: number
   updatedAt: number
   deletedAt: number
+  sourceKey: number
+  category: number
+  answerType: number
+  templateKey: number
+  faqQuestions: number
+  crossLanguageGroupKey: number
+  structuredAttributes: number
   _all: number
 }
 
@@ -104,6 +121,11 @@ export type KnowledgeEntryMinAggregateInputType = {
   createdAt?: true
   updatedAt?: true
   deletedAt?: true
+  sourceKey?: true
+  category?: true
+  answerType?: true
+  templateKey?: true
+  crossLanguageGroupKey?: true
 }
 
 export type KnowledgeEntryMaxAggregateInputType = {
@@ -118,6 +140,11 @@ export type KnowledgeEntryMaxAggregateInputType = {
   createdAt?: true
   updatedAt?: true
   deletedAt?: true
+  sourceKey?: true
+  category?: true
+  answerType?: true
+  templateKey?: true
+  crossLanguageGroupKey?: true
 }
 
 export type KnowledgeEntryCountAggregateInputType = {
@@ -134,6 +161,13 @@ export type KnowledgeEntryCountAggregateInputType = {
   createdAt?: true
   updatedAt?: true
   deletedAt?: true
+  sourceKey?: true
+  category?: true
+  answerType?: true
+  templateKey?: true
+  faqQuestions?: true
+  crossLanguageGroupKey?: true
+  structuredAttributes?: true
   _all?: true
 }
 
@@ -237,6 +271,13 @@ export type KnowledgeEntryGroupByOutputType = {
   createdAt: Date
   updatedAt: Date
   deletedAt: Date | null
+  sourceKey: string | null
+  category: string | null
+  answerType: string
+  templateKey: string | null
+  faqQuestions: string[]
+  crossLanguageGroupKey: string | null
+  structuredAttributes: runtime.JsonValue | null
   _count: KnowledgeEntryCountAggregateOutputType | null
   _avg: KnowledgeEntryAvgAggregateOutputType | null
   _sum: KnowledgeEntrySumAggregateOutputType | null
@@ -276,6 +317,13 @@ export type KnowledgeEntryWhereInput = {
   createdAt?: Prisma.DateTimeFilter<"KnowledgeEntry"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"KnowledgeEntry"> | Date | string
   deletedAt?: Prisma.DateTimeNullableFilter<"KnowledgeEntry"> | Date | string | null
+  sourceKey?: Prisma.StringNullableFilter<"KnowledgeEntry"> | string | null
+  category?: Prisma.StringNullableFilter<"KnowledgeEntry"> | string | null
+  answerType?: Prisma.StringFilter<"KnowledgeEntry"> | string
+  templateKey?: Prisma.StringNullableFilter<"KnowledgeEntry"> | string | null
+  faqQuestions?: Prisma.StringNullableListFilter<"KnowledgeEntry">
+  crossLanguageGroupKey?: Prisma.StringNullableFilter<"KnowledgeEntry"> | string | null
+  structuredAttributes?: Prisma.JsonNullableFilter<"KnowledgeEntry">
   versions?: Prisma.KnowledgeVersionListRelationFilter
 }
 
@@ -293,11 +341,19 @@ export type KnowledgeEntryOrderByWithRelationInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   deletedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  sourceKey?: Prisma.SortOrderInput | Prisma.SortOrder
+  category?: Prisma.SortOrderInput | Prisma.SortOrder
+  answerType?: Prisma.SortOrder
+  templateKey?: Prisma.SortOrderInput | Prisma.SortOrder
+  faqQuestions?: Prisma.SortOrder
+  crossLanguageGroupKey?: Prisma.SortOrderInput | Prisma.SortOrder
+  structuredAttributes?: Prisma.SortOrderInput | Prisma.SortOrder
   versions?: Prisma.KnowledgeVersionOrderByRelationAggregateInput
 }
 
 export type KnowledgeEntryWhereUniqueInput = Prisma.AtLeast<{
   id?: number
+  sourceKey_language?: Prisma.KnowledgeEntrySourceKeyLanguageCompoundUniqueInput
   AND?: Prisma.KnowledgeEntryWhereInput | Prisma.KnowledgeEntryWhereInput[]
   OR?: Prisma.KnowledgeEntryWhereInput[]
   NOT?: Prisma.KnowledgeEntryWhereInput | Prisma.KnowledgeEntryWhereInput[]
@@ -313,8 +369,15 @@ export type KnowledgeEntryWhereUniqueInput = Prisma.AtLeast<{
   createdAt?: Prisma.DateTimeFilter<"KnowledgeEntry"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"KnowledgeEntry"> | Date | string
   deletedAt?: Prisma.DateTimeNullableFilter<"KnowledgeEntry"> | Date | string | null
+  sourceKey?: Prisma.StringNullableFilter<"KnowledgeEntry"> | string | null
+  category?: Prisma.StringNullableFilter<"KnowledgeEntry"> | string | null
+  answerType?: Prisma.StringFilter<"KnowledgeEntry"> | string
+  templateKey?: Prisma.StringNullableFilter<"KnowledgeEntry"> | string | null
+  faqQuestions?: Prisma.StringNullableListFilter<"KnowledgeEntry">
+  crossLanguageGroupKey?: Prisma.StringNullableFilter<"KnowledgeEntry"> | string | null
+  structuredAttributes?: Prisma.JsonNullableFilter<"KnowledgeEntry">
   versions?: Prisma.KnowledgeVersionListRelationFilter
-}, "id">
+}, "id" | "sourceKey_language">
 
 export type KnowledgeEntryOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
@@ -330,6 +393,13 @@ export type KnowledgeEntryOrderByWithAggregationInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   deletedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  sourceKey?: Prisma.SortOrderInput | Prisma.SortOrder
+  category?: Prisma.SortOrderInput | Prisma.SortOrder
+  answerType?: Prisma.SortOrder
+  templateKey?: Prisma.SortOrderInput | Prisma.SortOrder
+  faqQuestions?: Prisma.SortOrder
+  crossLanguageGroupKey?: Prisma.SortOrderInput | Prisma.SortOrder
+  structuredAttributes?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.KnowledgeEntryCountOrderByAggregateInput
   _avg?: Prisma.KnowledgeEntryAvgOrderByAggregateInput
   _max?: Prisma.KnowledgeEntryMaxOrderByAggregateInput
@@ -354,6 +424,13 @@ export type KnowledgeEntryScalarWhereWithAggregatesInput = {
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"KnowledgeEntry"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"KnowledgeEntry"> | Date | string
   deletedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"KnowledgeEntry"> | Date | string | null
+  sourceKey?: Prisma.StringNullableWithAggregatesFilter<"KnowledgeEntry"> | string | null
+  category?: Prisma.StringNullableWithAggregatesFilter<"KnowledgeEntry"> | string | null
+  answerType?: Prisma.StringWithAggregatesFilter<"KnowledgeEntry"> | string
+  templateKey?: Prisma.StringNullableWithAggregatesFilter<"KnowledgeEntry"> | string | null
+  faqQuestions?: Prisma.StringNullableListFilter<"KnowledgeEntry">
+  crossLanguageGroupKey?: Prisma.StringNullableWithAggregatesFilter<"KnowledgeEntry"> | string | null
+  structuredAttributes?: Prisma.JsonNullableWithAggregatesFilter<"KnowledgeEntry">
 }
 
 export type KnowledgeEntryCreateInput = {
@@ -369,6 +446,13 @@ export type KnowledgeEntryCreateInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   deletedAt?: Date | string | null
+  sourceKey?: string | null
+  category?: string | null
+  answerType?: string
+  templateKey?: string | null
+  faqQuestions?: Prisma.KnowledgeEntryCreatefaqQuestionsInput | string[]
+  crossLanguageGroupKey?: string | null
+  structuredAttributes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   versions?: Prisma.KnowledgeVersionCreateNestedManyWithoutKnowledgeEntryInput
 }
 
@@ -386,6 +470,13 @@ export type KnowledgeEntryUncheckedCreateInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   deletedAt?: Date | string | null
+  sourceKey?: string | null
+  category?: string | null
+  answerType?: string
+  templateKey?: string | null
+  faqQuestions?: Prisma.KnowledgeEntryCreatefaqQuestionsInput | string[]
+  crossLanguageGroupKey?: string | null
+  structuredAttributes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   versions?: Prisma.KnowledgeVersionUncheckedCreateNestedManyWithoutKnowledgeEntryInput
 }
 
@@ -402,6 +493,13 @@ export type KnowledgeEntryUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   deletedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sourceKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  answerType?: Prisma.StringFieldUpdateOperationsInput | string
+  templateKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  faqQuestions?: Prisma.KnowledgeEntryUpdatefaqQuestionsInput | string[]
+  crossLanguageGroupKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  structuredAttributes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   versions?: Prisma.KnowledgeVersionUpdateManyWithoutKnowledgeEntryNestedInput
 }
 
@@ -419,6 +517,13 @@ export type KnowledgeEntryUncheckedUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   deletedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sourceKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  answerType?: Prisma.StringFieldUpdateOperationsInput | string
+  templateKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  faqQuestions?: Prisma.KnowledgeEntryUpdatefaqQuestionsInput | string[]
+  crossLanguageGroupKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  structuredAttributes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   versions?: Prisma.KnowledgeVersionUncheckedUpdateManyWithoutKnowledgeEntryNestedInput
 }
 
@@ -436,6 +541,13 @@ export type KnowledgeEntryCreateManyInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   deletedAt?: Date | string | null
+  sourceKey?: string | null
+  category?: string | null
+  answerType?: string
+  templateKey?: string | null
+  faqQuestions?: Prisma.KnowledgeEntryCreatefaqQuestionsInput | string[]
+  crossLanguageGroupKey?: string | null
+  structuredAttributes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type KnowledgeEntryUpdateManyMutationInput = {
@@ -451,6 +563,13 @@ export type KnowledgeEntryUpdateManyMutationInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   deletedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sourceKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  answerType?: Prisma.StringFieldUpdateOperationsInput | string
+  templateKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  faqQuestions?: Prisma.KnowledgeEntryUpdatefaqQuestionsInput | string[]
+  crossLanguageGroupKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  structuredAttributes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type KnowledgeEntryUncheckedUpdateManyInput = {
@@ -467,6 +586,18 @@ export type KnowledgeEntryUncheckedUpdateManyInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   deletedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sourceKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  answerType?: Prisma.StringFieldUpdateOperationsInput | string
+  templateKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  faqQuestions?: Prisma.KnowledgeEntryUpdatefaqQuestionsInput | string[]
+  crossLanguageGroupKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  structuredAttributes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+}
+
+export type KnowledgeEntrySourceKeyLanguageCompoundUniqueInput = {
+  sourceKey: string
+  language: string
 }
 
 export type KnowledgeEntryCountOrderByAggregateInput = {
@@ -483,6 +614,13 @@ export type KnowledgeEntryCountOrderByAggregateInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   deletedAt?: Prisma.SortOrder
+  sourceKey?: Prisma.SortOrder
+  category?: Prisma.SortOrder
+  answerType?: Prisma.SortOrder
+  templateKey?: Prisma.SortOrder
+  faqQuestions?: Prisma.SortOrder
+  crossLanguageGroupKey?: Prisma.SortOrder
+  structuredAttributes?: Prisma.SortOrder
 }
 
 export type KnowledgeEntryAvgOrderByAggregateInput = {
@@ -502,6 +640,11 @@ export type KnowledgeEntryMaxOrderByAggregateInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   deletedAt?: Prisma.SortOrder
+  sourceKey?: Prisma.SortOrder
+  category?: Prisma.SortOrder
+  answerType?: Prisma.SortOrder
+  templateKey?: Prisma.SortOrder
+  crossLanguageGroupKey?: Prisma.SortOrder
 }
 
 export type KnowledgeEntryMinOrderByAggregateInput = {
@@ -516,6 +659,11 @@ export type KnowledgeEntryMinOrderByAggregateInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   deletedAt?: Prisma.SortOrder
+  sourceKey?: Prisma.SortOrder
+  category?: Prisma.SortOrder
+  answerType?: Prisma.SortOrder
+  templateKey?: Prisma.SortOrder
+  crossLanguageGroupKey?: Prisma.SortOrder
 }
 
 export type KnowledgeEntrySumOrderByAggregateInput = {
@@ -536,6 +684,10 @@ export type KnowledgeEntryCreatealiasesInput = {
   set: string[]
 }
 
+export type KnowledgeEntryCreatefaqQuestionsInput = {
+  set: string[]
+}
+
 export type KnowledgeEntryUpdatetagsInput = {
   set?: string[]
   push?: string | string[]
@@ -548,6 +700,11 @@ export type KnowledgeEntryUpdatealiasesInput = {
 
 export type NullableDateTimeFieldUpdateOperationsInput = {
   set?: Date | string | null
+}
+
+export type KnowledgeEntryUpdatefaqQuestionsInput = {
+  set?: string[]
+  push?: string | string[]
 }
 
 export type KnowledgeEntryCreateNestedOneWithoutVersionsInput = {
@@ -577,6 +734,13 @@ export type KnowledgeEntryCreateWithoutVersionsInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   deletedAt?: Date | string | null
+  sourceKey?: string | null
+  category?: string | null
+  answerType?: string
+  templateKey?: string | null
+  faqQuestions?: Prisma.KnowledgeEntryCreatefaqQuestionsInput | string[]
+  crossLanguageGroupKey?: string | null
+  structuredAttributes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type KnowledgeEntryUncheckedCreateWithoutVersionsInput = {
@@ -593,6 +757,13 @@ export type KnowledgeEntryUncheckedCreateWithoutVersionsInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   deletedAt?: Date | string | null
+  sourceKey?: string | null
+  category?: string | null
+  answerType?: string
+  templateKey?: string | null
+  faqQuestions?: Prisma.KnowledgeEntryCreatefaqQuestionsInput | string[]
+  crossLanguageGroupKey?: string | null
+  structuredAttributes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type KnowledgeEntryCreateOrConnectWithoutVersionsInput = {
@@ -624,6 +795,13 @@ export type KnowledgeEntryUpdateWithoutVersionsInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   deletedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sourceKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  answerType?: Prisma.StringFieldUpdateOperationsInput | string
+  templateKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  faqQuestions?: Prisma.KnowledgeEntryUpdatefaqQuestionsInput | string[]
+  crossLanguageGroupKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  structuredAttributes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type KnowledgeEntryUncheckedUpdateWithoutVersionsInput = {
@@ -640,6 +818,13 @@ export type KnowledgeEntryUncheckedUpdateWithoutVersionsInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   deletedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sourceKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  answerType?: Prisma.StringFieldUpdateOperationsInput | string
+  templateKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  faqQuestions?: Prisma.KnowledgeEntryUpdatefaqQuestionsInput | string[]
+  crossLanguageGroupKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  structuredAttributes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 
@@ -687,6 +872,13 @@ export type KnowledgeEntrySelect<ExtArgs extends runtime.Types.Extensions.Intern
   createdAt?: boolean
   updatedAt?: boolean
   deletedAt?: boolean
+  sourceKey?: boolean
+  category?: boolean
+  answerType?: boolean
+  templateKey?: boolean
+  faqQuestions?: boolean
+  crossLanguageGroupKey?: boolean
+  structuredAttributes?: boolean
   versions?: boolean | Prisma.KnowledgeEntry$versionsArgs<ExtArgs>
   _count?: boolean | Prisma.KnowledgeEntryCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["knowledgeEntry"]>
@@ -705,6 +897,13 @@ export type KnowledgeEntrySelectCreateManyAndReturn<ExtArgs extends runtime.Type
   createdAt?: boolean
   updatedAt?: boolean
   deletedAt?: boolean
+  sourceKey?: boolean
+  category?: boolean
+  answerType?: boolean
+  templateKey?: boolean
+  faqQuestions?: boolean
+  crossLanguageGroupKey?: boolean
+  structuredAttributes?: boolean
 }, ExtArgs["result"]["knowledgeEntry"]>
 
 export type KnowledgeEntrySelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -721,6 +920,13 @@ export type KnowledgeEntrySelectUpdateManyAndReturn<ExtArgs extends runtime.Type
   createdAt?: boolean
   updatedAt?: boolean
   deletedAt?: boolean
+  sourceKey?: boolean
+  category?: boolean
+  answerType?: boolean
+  templateKey?: boolean
+  faqQuestions?: boolean
+  crossLanguageGroupKey?: boolean
+  structuredAttributes?: boolean
 }, ExtArgs["result"]["knowledgeEntry"]>
 
 export type KnowledgeEntrySelectScalar = {
@@ -737,9 +943,16 @@ export type KnowledgeEntrySelectScalar = {
   createdAt?: boolean
   updatedAt?: boolean
   deletedAt?: boolean
+  sourceKey?: boolean
+  category?: boolean
+  answerType?: boolean
+  templateKey?: boolean
+  faqQuestions?: boolean
+  crossLanguageGroupKey?: boolean
+  structuredAttributes?: boolean
 }
 
-export type KnowledgeEntryOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "title" | "content" | "intentLabel" | "tags" | "aliases" | "language" | "status" | "visibility" | "version" | "createdAt" | "updatedAt" | "deletedAt", ExtArgs["result"]["knowledgeEntry"]>
+export type KnowledgeEntryOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "title" | "content" | "intentLabel" | "tags" | "aliases" | "language" | "status" | "visibility" | "version" | "createdAt" | "updatedAt" | "deletedAt" | "sourceKey" | "category" | "answerType" | "templateKey" | "faqQuestions" | "crossLanguageGroupKey" | "structuredAttributes", ExtArgs["result"]["knowledgeEntry"]>
 export type KnowledgeEntryInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   versions?: boolean | Prisma.KnowledgeEntry$versionsArgs<ExtArgs>
   _count?: boolean | Prisma.KnowledgeEntryCountOutputTypeDefaultArgs<ExtArgs>
@@ -779,6 +992,36 @@ export type $KnowledgeEntryPayload<ExtArgs extends runtime.Types.Extensions.Inte
     createdAt: Date
     updatedAt: Date
     deletedAt: Date | null
+    /**
+     * Stable slug identifier for cross-language grouping and seed upserts.
+     * NULL-safe: multiple rows with sourceKey=NULL do not trigger the unique constraint.
+     */
+    sourceKey: string | null
+    /**
+     * Product/topic category: product-spec | faq-general | pricing | contact | diagnosis
+     */
+    category: string | null
+    /**
+     * Determines which answer path the pipeline uses for this entry.
+     * template | rag+template | rag | llm — defaults to "rag" (001-compatible behaviour).
+     */
+    answerType: string
+    /**
+     * Points to a template key used by AnswerTemplateResolver (002 Phase C).
+     */
+    templateKey: string | null
+    /**
+     * Common FAQ question phrasings for this entry (used in faq retrieval scoring).
+     */
+    faqQuestions: string[]
+    /**
+     * Groups semantically equivalent entries across languages.
+     */
+    crossLanguageGroupKey: string | null
+    /**
+     * Arbitrary structured metadata (e.g. spec dimensions, pricing tiers).
+     */
+    structuredAttributes: runtime.JsonValue | null
   }, ExtArgs["result"]["knowledgeEntry"]>
   composites: {}
 }
@@ -1216,6 +1459,13 @@ export interface KnowledgeEntryFieldRefs {
   readonly createdAt: Prisma.FieldRef<"KnowledgeEntry", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"KnowledgeEntry", 'DateTime'>
   readonly deletedAt: Prisma.FieldRef<"KnowledgeEntry", 'DateTime'>
+  readonly sourceKey: Prisma.FieldRef<"KnowledgeEntry", 'String'>
+  readonly category: Prisma.FieldRef<"KnowledgeEntry", 'String'>
+  readonly answerType: Prisma.FieldRef<"KnowledgeEntry", 'String'>
+  readonly templateKey: Prisma.FieldRef<"KnowledgeEntry", 'String'>
+  readonly faqQuestions: Prisma.FieldRef<"KnowledgeEntry", 'String[]'>
+  readonly crossLanguageGroupKey: Prisma.FieldRef<"KnowledgeEntry", 'String'>
+  readonly structuredAttributes: Prisma.FieldRef<"KnowledgeEntry", 'Json'>
 }
     
 

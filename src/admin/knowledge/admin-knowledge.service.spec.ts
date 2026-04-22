@@ -32,6 +32,13 @@ describe('AdminKnowledgeService', () => {
     status: 'draft',
     visibility: 'private',
     version: 1,
+    sourceKey: null,
+    category: null,
+    answerType: 'rag',
+    templateKey: null,
+    faqQuestions: [],
+    crossLanguageGroupKey: null,
+    structuredAttributes: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     deletedAt: null,
@@ -45,6 +52,7 @@ describe('AdminKnowledgeService', () => {
       create: jest.fn(),
       update: jest.fn(),
       softDelete: jest.fn(),
+      findByCategory: jest.fn(),
     };
 
     const module = await Test.createTestingModule({
@@ -176,6 +184,68 @@ describe('AdminKnowledgeService', () => {
         }),
       );
     });
+
+    it('should pass sourceKey, category, and answerType from DTO', async () => {
+      const entry = makeEntry({ sourceKey: 'bolt-hex', category: 'product-spec', answerType: 'rag' });
+      knowledgeService.create.mockResolvedValueOnce(entry);
+
+      await service.create({
+        title: 'Hex Bolt',
+        content: 'Hex bolt description',
+        sourceKey: 'bolt-hex',
+        category: 'product-spec',
+        answerType: 'rag',
+      });
+
+      expect(knowledgeService.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sourceKey: 'bolt-hex',
+          category: 'product-spec',
+          answerType: 'rag',
+        }),
+      );
+    });
+
+    it('should default sourceKey to null when not provided', async () => {
+      const entry = makeEntry({ sourceKey: null });
+      knowledgeService.create.mockResolvedValueOnce(entry);
+
+      await service.create({ title: 'Wire', content: 'Wire overview' });
+
+      expect(knowledgeService.create).toHaveBeenCalledWith(
+        expect.objectContaining({ sourceKey: null }),
+      );
+    });
+
+    it('should default answerType to \'rag\' when not provided', async () => {
+      const entry = makeEntry({ answerType: 'rag' });
+      knowledgeService.create.mockResolvedValueOnce(entry);
+
+      await service.create({ title: 'Wire', content: 'Wire overview' });
+
+      expect(knowledgeService.create).toHaveBeenCalledWith(
+        expect.objectContaining({ answerType: 'rag' }),
+      );
+    });
+
+    it('should pass templateKey and faqQuestions from DTO', async () => {
+      const entry = makeEntry({ templateKey: 'tpl-001', faqQuestions: ['What bolts do you offer?'] });
+      knowledgeService.create.mockResolvedValueOnce(entry);
+
+      await service.create({
+        title: 'Hex Bolt',
+        content: 'Hex bolt description',
+        templateKey: 'tpl-001',
+        faqQuestions: ['What bolts do you offer?'],
+      });
+
+      expect(knowledgeService.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          templateKey: 'tpl-001',
+          faqQuestions: ['What bolts do you offer?'],
+        }),
+      );
+    });
   });
 
   // ─── update ───────────────────────────────────────────────────────────────
@@ -221,6 +291,45 @@ describe('AdminKnowledgeService', () => {
 
       await expect(service.update(99, { title: 'New' })).rejects.toThrow(NotFoundException);
     });
+
+    it('should pass sourceKey and category in patch', async () => {
+      const updated = makeEntry({ sourceKey: 'bolt-hex', category: 'product-spec' });
+      knowledgeService.update.mockResolvedValueOnce(updated);
+
+      await service.update(1, { sourceKey: 'bolt-hex', category: 'product-spec' });
+
+      expect(knowledgeService.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ sourceKey: 'bolt-hex', category: 'product-spec' }),
+      );
+    });
+
+    it('should pass answerType, templateKey, faqQuestions, crossLanguageGroupKey in patch', async () => {
+      const updated = makeEntry({
+        answerType: 'rag+template',
+        templateKey: 'tpl-002',
+        faqQuestions: ['Any bolt questions?'],
+        crossLanguageGroupKey: 'bolt-hex-group',
+      });
+      knowledgeService.update.mockResolvedValueOnce(updated);
+
+      await service.update(1, {
+        answerType: 'rag+template',
+        templateKey: 'tpl-002',
+        faqQuestions: ['Any bolt questions?'],
+        crossLanguageGroupKey: 'bolt-hex-group',
+      });
+
+      expect(knowledgeService.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          answerType: 'rag+template',
+          templateKey: 'tpl-002',
+          faqQuestions: ['Any bolt questions?'],
+          crossLanguageGroupKey: 'bolt-hex-group',
+        }),
+      );
+    });
   });
 
   // ─── remove ───────────────────────────────────────────────────────────────
@@ -240,4 +349,27 @@ describe('AdminKnowledgeService', () => {
       await expect(service.remove(99)).rejects.toThrow(NotFoundException);
     });
   });
-});
+  // ─── findByCategory ────────────────────────────────────────────────────────────────
+
+  describe('findByCategory()', () => {
+    it('should return entries for the given category', async () => {
+      const entries = [
+        makeEntry({ id: 1, category: 'product-spec' }),
+        makeEntry({ id: 2, category: 'product-spec' }),
+      ];
+      knowledgeService.findByCategory.mockResolvedValueOnce(entries);
+
+      const result = await service.findByCategory('product-spec');
+
+      expect(result).toEqual(entries);
+      expect(knowledgeService.findByCategory).toHaveBeenCalledWith('product-spec');
+    });
+
+    it('should return empty array when no entries match the category', async () => {
+      knowledgeService.findByCategory.mockResolvedValueOnce([]);
+
+      const result = await service.findByCategory('nonexistent');
+
+      expect(result).toEqual([]);
+    });
+  });});

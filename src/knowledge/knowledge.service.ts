@@ -42,7 +42,7 @@ export class KnowledgeService {
    * Create a new knowledge entry (default status = draft).
    */
   async create(
-    data: Omit<KnowledgeEntry, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'versions'>,
+    data: Omit<KnowledgeEntry, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'versions' | 'structuredAttributes'>,
   ): Promise<KnowledgeEntry> {
     return this.knowledgeRepository.create(data);
   }
@@ -52,7 +52,7 @@ export class KnowledgeService {
    */
   async update(
     id: number,
-    data: Partial<Pick<KnowledgeEntry, 'title' | 'content' | 'intentLabel' | 'tags' | 'aliases' | 'language' | 'status' | 'visibility'>>,
+    data: Partial<Pick<KnowledgeEntry, 'title' | 'content' | 'intentLabel' | 'tags' | 'aliases' | 'language' | 'status' | 'visibility' | 'sourceKey' | 'category' | 'answerType' | 'templateKey' | 'faqQuestions' | 'crossLanguageGroupKey'>>,
   ): Promise<KnowledgeEntry | null> {
     return this.knowledgeRepository.update(id, data);
   }
@@ -63,5 +63,12 @@ export class KnowledgeService {
    */
   async softDelete(id: number): Promise<boolean> {
     return this.knowledgeRepository.softDelete(id);
+  }
+
+  /**
+   * Find all non-deleted knowledge entries belonging to a given category.
+   */
+  async findByCategory(category: string): Promise<KnowledgeEntry[]> {
+    return this.knowledgeRepository.findByCategory(category);
   }
 }

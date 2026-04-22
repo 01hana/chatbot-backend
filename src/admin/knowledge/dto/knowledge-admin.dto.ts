@@ -40,6 +40,32 @@ export class CreateKnowledgeDto {
   @IsIn(SUPPORTED_LANGUAGES)
   @IsOptional()
   language?: string;
+
+  @IsOptional()
+  @IsString()
+  sourceKey?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['template', 'rag+template', 'rag', 'llm'])
+  answerType?: string;
+
+  @IsOptional()
+  @IsString()
+  templateKey?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  faqQuestions?: string[];
+
+  @IsOptional()
+  @IsString()
+  crossLanguageGroupKey?: string;
 }
 
 /** DTO for updating an existing knowledge entry. */
@@ -87,4 +113,30 @@ export class UpdateKnowledgeDto {
   @IsString()
   @IsOptional()
   visibility?: string;
+
+  @IsOptional()
+  @IsString()
+  sourceKey?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['template', 'rag+template', 'rag', 'llm'])
+  answerType?: string;
+
+  @IsOptional()
+  @IsString()
+  templateKey?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  faqQuestions?: string[];
+
+  @IsOptional()
+  @IsString()
+  crossLanguageGroupKey?: string;
 }

@@ -43,6 +43,8 @@ export type IntentTemplateMinAggregateOutputType = {
   templateZh: string | null
   templateEn: string | null
   priority: number | null
+  isActive: boolean | null
+  category: string | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -54,6 +56,8 @@ export type IntentTemplateMaxAggregateOutputType = {
   templateZh: string | null
   templateEn: string | null
   priority: number | null
+  isActive: boolean | null
+  category: string | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -66,6 +70,8 @@ export type IntentTemplateCountAggregateOutputType = {
   templateZh: number
   templateEn: number
   priority: number
+  isActive: number
+  category: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -89,6 +95,8 @@ export type IntentTemplateMinAggregateInputType = {
   templateZh?: true
   templateEn?: true
   priority?: true
+  isActive?: true
+  category?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -100,6 +108,8 @@ export type IntentTemplateMaxAggregateInputType = {
   templateZh?: true
   templateEn?: true
   priority?: true
+  isActive?: true
+  category?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -112,6 +122,8 @@ export type IntentTemplateCountAggregateInputType = {
   templateZh?: true
   templateEn?: true
   priority?: true
+  isActive?: true
+  category?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -211,6 +223,8 @@ export type IntentTemplateGroupByOutputType = {
   templateZh: string
   templateEn: string
   priority: number
+  isActive: boolean
+  category: string | null
   createdAt: Date
   updatedAt: Date
   _count: IntentTemplateCountAggregateOutputType | null
@@ -246,6 +260,8 @@ export type IntentTemplateWhereInput = {
   templateZh?: Prisma.StringFilter<"IntentTemplate"> | string
   templateEn?: Prisma.StringFilter<"IntentTemplate"> | string
   priority?: Prisma.IntFilter<"IntentTemplate"> | number
+  isActive?: Prisma.BoolFilter<"IntentTemplate"> | boolean
+  category?: Prisma.StringNullableFilter<"IntentTemplate"> | string | null
   createdAt?: Prisma.DateTimeFilter<"IntentTemplate"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"IntentTemplate"> | Date | string
 }
@@ -258,6 +274,8 @@ export type IntentTemplateOrderByWithRelationInput = {
   templateZh?: Prisma.SortOrder
   templateEn?: Prisma.SortOrder
   priority?: Prisma.SortOrder
+  isActive?: Prisma.SortOrder
+  category?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -273,6 +291,8 @@ export type IntentTemplateWhereUniqueInput = Prisma.AtLeast<{
   templateZh?: Prisma.StringFilter<"IntentTemplate"> | string
   templateEn?: Prisma.StringFilter<"IntentTemplate"> | string
   priority?: Prisma.IntFilter<"IntentTemplate"> | number
+  isActive?: Prisma.BoolFilter<"IntentTemplate"> | boolean
+  category?: Prisma.StringNullableFilter<"IntentTemplate"> | string | null
   createdAt?: Prisma.DateTimeFilter<"IntentTemplate"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"IntentTemplate"> | Date | string
 }, "id" | "intent">
@@ -285,6 +305,8 @@ export type IntentTemplateOrderByWithAggregationInput = {
   templateZh?: Prisma.SortOrder
   templateEn?: Prisma.SortOrder
   priority?: Prisma.SortOrder
+  isActive?: Prisma.SortOrder
+  category?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.IntentTemplateCountOrderByAggregateInput
@@ -305,6 +327,8 @@ export type IntentTemplateScalarWhereWithAggregatesInput = {
   templateZh?: Prisma.StringWithAggregatesFilter<"IntentTemplate"> | string
   templateEn?: Prisma.StringWithAggregatesFilter<"IntentTemplate"> | string
   priority?: Prisma.IntWithAggregatesFilter<"IntentTemplate"> | number
+  isActive?: Prisma.BoolWithAggregatesFilter<"IntentTemplate"> | boolean
+  category?: Prisma.StringNullableWithAggregatesFilter<"IntentTemplate"> | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"IntentTemplate"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"IntentTemplate"> | Date | string
 }
@@ -316,6 +340,8 @@ export type IntentTemplateCreateInput = {
   templateZh: string
   templateEn: string
   priority?: number
+  isActive?: boolean
+  category?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -328,6 +354,8 @@ export type IntentTemplateUncheckedCreateInput = {
   templateZh: string
   templateEn: string
   priority?: number
+  isActive?: boolean
+  category?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -339,6 +367,8 @@ export type IntentTemplateUpdateInput = {
   templateZh?: Prisma.StringFieldUpdateOperationsInput | string
   templateEn?: Prisma.StringFieldUpdateOperationsInput | string
   priority?: Prisma.IntFieldUpdateOperationsInput | number
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -351,6 +381,8 @@ export type IntentTemplateUncheckedUpdateInput = {
   templateZh?: Prisma.StringFieldUpdateOperationsInput | string
   templateEn?: Prisma.StringFieldUpdateOperationsInput | string
   priority?: Prisma.IntFieldUpdateOperationsInput | number
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -363,6 +395,8 @@ export type IntentTemplateCreateManyInput = {
   templateZh: string
   templateEn: string
   priority?: number
+  isActive?: boolean
+  category?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -374,6 +408,8 @@ export type IntentTemplateUpdateManyMutationInput = {
   templateZh?: Prisma.StringFieldUpdateOperationsInput | string
   templateEn?: Prisma.StringFieldUpdateOperationsInput | string
   priority?: Prisma.IntFieldUpdateOperationsInput | number
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -386,6 +422,8 @@ export type IntentTemplateUncheckedUpdateManyInput = {
   templateZh?: Prisma.StringFieldUpdateOperationsInput | string
   templateEn?: Prisma.StringFieldUpdateOperationsInput | string
   priority?: Prisma.IntFieldUpdateOperationsInput | number
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  category?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -406,6 +444,8 @@ export type IntentTemplateCountOrderByAggregateInput = {
   templateZh?: Prisma.SortOrder
   templateEn?: Prisma.SortOrder
   priority?: Prisma.SortOrder
+  isActive?: Prisma.SortOrder
+  category?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -422,6 +462,8 @@ export type IntentTemplateMaxOrderByAggregateInput = {
   templateZh?: Prisma.SortOrder
   templateEn?: Prisma.SortOrder
   priority?: Prisma.SortOrder
+  isActive?: Prisma.SortOrder
+  category?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -433,6 +475,8 @@ export type IntentTemplateMinOrderByAggregateInput = {
   templateZh?: Prisma.SortOrder
   templateEn?: Prisma.SortOrder
   priority?: Prisma.SortOrder
+  isActive?: Prisma.SortOrder
+  category?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -461,6 +505,8 @@ export type IntentTemplateSelect<ExtArgs extends runtime.Types.Extensions.Intern
   templateZh?: boolean
   templateEn?: boolean
   priority?: boolean
+  isActive?: boolean
+  category?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["intentTemplate"]>
@@ -473,6 +519,8 @@ export type IntentTemplateSelectCreateManyAndReturn<ExtArgs extends runtime.Type
   templateZh?: boolean
   templateEn?: boolean
   priority?: boolean
+  isActive?: boolean
+  category?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["intentTemplate"]>
@@ -485,6 +533,8 @@ export type IntentTemplateSelectUpdateManyAndReturn<ExtArgs extends runtime.Type
   templateZh?: boolean
   templateEn?: boolean
   priority?: boolean
+  isActive?: boolean
+  category?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["intentTemplate"]>
@@ -497,11 +547,13 @@ export type IntentTemplateSelectScalar = {
   templateZh?: boolean
   templateEn?: boolean
   priority?: boolean
+  isActive?: boolean
+  category?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type IntentTemplateOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "intent" | "label" | "keywords" | "templateZh" | "templateEn" | "priority" | "createdAt" | "updatedAt", ExtArgs["result"]["intentTemplate"]>
+export type IntentTemplateOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "intent" | "label" | "keywords" | "templateZh" | "templateEn" | "priority" | "isActive" | "category" | "createdAt" | "updatedAt", ExtArgs["result"]["intentTemplate"]>
 
 export type $IntentTemplatePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "IntentTemplate"
@@ -529,6 +581,14 @@ export type $IntentTemplatePayload<ExtArgs extends runtime.Types.Extensions.Inte
      */
     templateEn: string
     priority: number
+    /**
+     * Whether this template is active; inactive templates are excluded from intent detection.
+     */
+    isActive: boolean
+    /**
+     * Product/topic category for routing, e.g. "product-spec" | "faq-general" | "pricing".
+     */
+    category: string | null
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["intentTemplate"]>
@@ -961,6 +1021,8 @@ export interface IntentTemplateFieldRefs {
   readonly templateZh: Prisma.FieldRef<"IntentTemplate", 'String'>
   readonly templateEn: Prisma.FieldRef<"IntentTemplate", 'String'>
   readonly priority: Prisma.FieldRef<"IntentTemplate", 'Int'>
+  readonly isActive: Prisma.FieldRef<"IntentTemplate", 'Boolean'>
+  readonly category: Prisma.FieldRef<"IntentTemplate", 'String'>
   readonly createdAt: Prisma.FieldRef<"IntentTemplate", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"IntentTemplate", 'DateTime'>
 }

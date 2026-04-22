@@ -120,6 +120,8 @@ export const IntentTemplateScalarFieldEnum = {
   templateZh: 'templateZh',
   templateEn: 'templateEn',
   priority: 'priority',
+  isActive: 'isActive',
+  category: 'category',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -151,7 +153,14 @@ export const KnowledgeEntryScalarFieldEnum = {
   version: 'version',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
-  deletedAt: 'deletedAt'
+  deletedAt: 'deletedAt',
+  sourceKey: 'sourceKey',
+  category: 'category',
+  answerType: 'answerType',
+  templateKey: 'templateKey',
+  faqQuestions: 'faqQuestions',
+  crossLanguageGroupKey: 'crossLanguageGroupKey',
+  structuredAttributes: 'structuredAttributes'
 } as const
 
 export type KnowledgeEntryScalarFieldEnum = (typeof KnowledgeEntryScalarFieldEnum)[keyof typeof KnowledgeEntryScalarFieldEnum]

@@ -44,6 +44,12 @@ export class AdminKnowledgeService {
       status: 'draft',
       visibility: 'private',
       version: 1,
+      sourceKey: dto.sourceKey ?? null,
+      category: dto.category ?? null,
+      answerType: dto.answerType ?? 'rag',
+      templateKey: dto.templateKey ?? null,
+      faqQuestions: dto.faqQuestions ?? [],
+      crossLanguageGroupKey: dto.crossLanguageGroupKey ?? null,
     });
   }
 
@@ -62,6 +68,12 @@ export class AdminKnowledgeService {
     if (dto.language !== undefined) patch.language = dto.language;
     if (dto.status !== undefined) patch.status = dto.status;
     if (dto.visibility !== undefined) patch.visibility = dto.visibility;
+    if (dto.sourceKey !== undefined) patch.sourceKey = dto.sourceKey;
+    if (dto.category !== undefined) patch.category = dto.category;
+    if (dto.answerType !== undefined) patch.answerType = dto.answerType;
+    if (dto.templateKey !== undefined) patch.templateKey = dto.templateKey;
+    if (dto.faqQuestions !== undefined) patch.faqQuestions = dto.faqQuestions;
+    if (dto.crossLanguageGroupKey !== undefined) patch.crossLanguageGroupKey = dto.crossLanguageGroupKey;
 
     const entry = await this.knowledgeService.update(id, patch);
     if (!entry) {
@@ -79,5 +91,12 @@ export class AdminKnowledgeService {
     if (!deleted) {
       throw new NotFoundException(`Knowledge entry #${id} not found`);
     }
+  }
+
+  /**
+   * Find all knowledge entries belonging to a given category.
+   */
+  async findByCategory(category: string): Promise<KnowledgeEntry[]> {
+    return this.knowledgeService.findByCategory(category);
   }
 }

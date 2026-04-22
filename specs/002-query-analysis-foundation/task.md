@@ -134,10 +134,10 @@ structuredAttributes  Json?
 
 **驗收標準**：
 
-- [ ] `npx prisma migrate dev` 無錯誤
-- [ ] 既有資料：所有現有條目 `answerType='rag'`，其他欄位 null / default
-- [ ] `KnowledgeEntry` Prisma 型別包含所有新欄位
-- [ ] `npx jest` 全部 001 tests 仍通過（不因 schema 變動而 break）
+- [x] `npx prisma migrate dev` 無錯誤
+- [x] 既有資料：所有現有條目 `answerType='rag'`，其他欄位 null / default
+- [x] `KnowledgeEntry` Prisma 型別包含所有新欄位
+- [x] `npx jest` 全部 001 tests 仍通過（不因 schema 變動而 break）
 
 **依賴**：無  
 **相容性**：向後相容；既有 001 程式碼不需修改
@@ -164,9 +164,9 @@ category  String?
 
 **驗收標準**：
 
-- [ ] Migration 無錯誤
-- [ ] 既有 IntentTemplate 資料：`isActive=true`
-- [ ] 001 tests 仍全通過
+- [x] Migration 無錯誤
+- [x] 既有 IntentTemplate 資料：`isActive=true`
+- [x] 001 tests 仍全通過
 
 **依賴**：KS-001（同 migration 批次）  
 **相容性**：向後相容
@@ -197,10 +197,10 @@ await prisma.knowledgeEntry.upsert({
 
 **驗收標準**：
 
-- [ ] `npx prisma db seed` 可執行兩次（idempotent），無錯誤、無重複條目
-- [ ] 所有既有 knowledge entries 均有 `sourceKey`（不得為 null）
-- [ ] `category` 已依業務分類填入（product-spec / faq-general / pricing / contact）
-- [ ] `answerType` 全部為 `'rag'`（002 初期所有條目仍走 RAG 路徑）
+- [X] `npx prisma db seed` 可執行兩次（idempotent），無錯誤、無重複條目
+- [X] 所有既有 knowledge entries 均有 `sourceKey`（不得為 null）
+- [X] `category` 已依業務分類填入（product-spec / faq-general / pricing / contact）
+- [X] `answerType` 全部為 `'rag'`（002 初期所有條目仍走 RAG 路徑）
 
 **依賴**：KS-001  
 **相容性**：Seed 腳本變更不影響 test；e2e seed test 需通過
@@ -232,10 +232,10 @@ await prisma.knowledgeEntry.upsert({
 
 **驗收標準**：
 
-- [ ] `CreateKnowledgeDto` / `UpdateKnowledgeDto` 包含所有新欄位的 class-validator 裝飾器
-- [ ] `AdminKnowledgeService.create()` / `update()` 正確持久化新欄位
-- [ ] `AdminKnowledgeService` 新增 `findByCategory()` 方法
-- [ ] 新增 unit tests：建立 / 更新含 sourceKey+category+answerType 的條目
+- [X] `CreateKnowledgeDto` / `UpdateKnowledgeDto` 包含所有新欄位的 class-validator 裝飾器
+- [X] `AdminKnowledgeService.create()` / `update()` 正確持久化新欄位
+- [X] `AdminKnowledgeService` 新增 `findByCategory()` 方法
+- [X] 新增 unit tests：建立 / 更新含 sourceKey+category+answerType 的條目
 
 **依賴**：KS-001、KS-003  
 **相容性**：新欄位全為可選；現有 API 請求不受影響
@@ -268,10 +268,10 @@ await prisma.knowledgeEntry.upsert({
 
 **驗收標準**：
 
-- [ ] TypeScript 編譯無錯誤
-- [ ] `QueryAnalysisModule` 可被 `AppModule` / `ChatModule` import 而不報錯
-- [ ] `IQueryAnalyzer.analyze()` 方法簽章定義完整（`raw: string, language?: string`）
-- [ ] `AnalyzedQuery` type 含 spec.md FR-QA-001 定義的所有欄位
+- [x] TypeScript 編譯無錯誤
+- [x] `QueryAnalysisModule` 可被 `AppModule` / `ChatModule` import 而不報錯
+- [x] `IQueryAnalyzer.analyze()` 方法簽章定義完整（`raw: string, language?: string`）
+- [x] `AnalyzedQuery` type 含 spec.md FR-QA-001 定義的所有欄位
 
 **依賴**：無（可與 KS 同步開始）  
 **相容性**：不修改任何現有檔案
@@ -1033,11 +1033,11 @@ describe('Retrieval regression - FAQ zh-TW golden fixtures', () => {
 
 | 任務 ID | Delta Phase | 標記  | 標題                                             | 依賴                   | 狀態 |
 | ------- | ----------- | ----- | ------------------------------------------------ | ---------------------- | ---- |
-| KS-001  | A           | DATA  | KnowledgeEntry schema migration                  | —                      | □    |
-| KS-002  | A           | DATA  | IntentTemplate schema migration                  | KS-001                 | □    |
-| KS-003  | A           | DATA  | Seed 腳本 sourceKey upsert                       | KS-001                 | □    |
-| KS-004  | A           | ADMIN | Admin Knowledge DTO/Service 擴充                 | KS-001、KS-003         | □    |
-| QA-001  | B           | CORE  | QueryAnalysisModule skeleton + 介面              | —                      | □    |
+| KS-001  | A           | DATA  | KnowledgeEntry schema migration                  | —                      | ✓    |
+| KS-002  | A           | DATA  | IntentTemplate schema migration                  | KS-001                 | ✓    |
+| KS-003  | A           | DATA  | Seed 腳本 sourceKey upsert                       | KS-001                 | ✓    |
+| KS-004  | A           | ADMIN | Admin Knowledge DTO/Service 擴充                 | KS-001、KS-003         | ✓    |
+| QA-001  | B           | CORE  | QueryAnalysisModule skeleton + 介面              | —                      | ✓    |
 | QA-002  | B           | CORE  | RuleBasedQueryAnalyzer 預設實作                  | QA-001                 | □    |
 | QA-003  | B           | CORE  | DbQueryRuleProvider + query_rules table          | QA-001、QA-002         | □    |
 | QA-004  | B           | CORE  | GlossaryExpansionProvider + RankProfileProvider  | QA-001~003             | □    |

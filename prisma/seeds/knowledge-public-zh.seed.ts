@@ -2,24 +2,30 @@
  * knowledge-public-zh.seed.ts — 公開知識庫（中文）補料
  *
  * 來源：https://www.ray-fu.com/products-tw（官網公開資訊，2026-04）
- * 策略：upsert by title — 可安全重複執行，不會重複插入。
+ * 策略：以 `sourceKey + language` 做 idempotent upsert，可安全重複執行而不重複插入。
  * 環境：所有環境（含 production），因資料來源為官網公開資訊。
  *
  * ┌─────────────────────────────────────────────────────────────────────┐
- * │  Upsert 鍵策略說明（過渡方案）                                       │
+ * │  Upsert 鍵策略說明                                                  │
  * │                                                                     │
- * │  目前以 `title` 作為 upsert / merge 的識別鍵。                       │
- * │  此為當前可接受的過渡方案，適用於 demo / MVP 階段。                   │
+ * │  本 seed 現在已改為使用 `sourceKey + language` 作為穩定 upsert 鍵。 │
+ * │  因此可重複執行，且即使 title 調整，也不會因為改名而產生重複條目。  │
  * │                                                                     │
- * │  長期維護風險：                                                      │
- * │   - 若 title 被更新，舊條目不會被自動合併，可能產生重複。             │
- * │   - 翻譯條目間沒有穩定的跨語言關聯鍵。                               │
+ * │  過渡相容策略：                                                      │
+ * │   - 在正式 upsert 前，會先 backfill 舊資料：                         │
+ * │     若資料仍以 `title + language` 對應，且 `sourceKey` 為空，         │
+ * │     會先補上 `sourceKey`。                                           │
+ * │   - 這讓既有 MVP / demo 時期資料可平滑過渡到新策略。                 │
  * │                                                                     │
- * │  TODO: 正式化時應為每個知識條目加入穩定的 `sourceKey`（例如          │
- * │        'screw-overview-zh-TW'），以 sourceKey 作為 upsert 依據，     │
- * │        並支援跨語言條目的明確關聯（如 en <-> zh-TW 對照）。           │
- * │        migration 設計：新增 sourceKey String @unique? 欄位，          │
- * │        並更新本 seed 與 en seed 一起補上對應的 sourceKey。            │
+ * │  目前收益：                                                          │
+ * │   - title 改名時仍可維持穩定 identity                                │
+ * │   - seed 可重複執行且維持 idempotent                                 │
+ * │   - regression fixtures 可穩定用 `sourceKey` 指向知識條目            │
+ * │                                                                     │
+ * │  後續產品化 TODO：                                                   │
+ * │   - 導入 / 實際使用 `crossLanguageGroupKey` 做中英條目配對            │
+ * │   - 逐步補齊 `faqQuestions`、`templateKey`、                         │
+ * │     `structuredAttributes` 等欄位的正式治理                           │
  * └─────────────────────────────────────────────────────────────────────┘
  *
  * 欄位責任說明：
@@ -27,22 +33,14 @@
  *  - `aliases`   — FAQ 問法變體 / 自然語句別名，用於 FAQ-friendly 檢索。
  *                  不可把大量完整問句塞進 tags。
  *  - `tags`      — 產品關鍵字 / 類別標籤 / 規格識別碼，不應包含完整自然句。
- *
- * 覆蓋主題：
- *   - 線材（碳鋼、合金鋼、不鏽鋼）
- *   - 螺絲（鑽尾、乾牆、屋頂、木螺絲、機械、不鏽鋼等）
- *   - 螺栓（六角、法蘭、馬車、木螺栓）
- *   - 螺帽（六角、法蘭、尼龍、翼型等）
- *   - 華司（平、彈簧、鎖齒等）
- *   - 其他（釘子、鉚釘、管夾）
- *   - FAQ（聯絡方式、詢價、目錄下載）
- *   - 選型指南（支援 Phase 4 問診）
  */
 import { PrismaClient } from '../../src/generated/prisma/client';
 
 const SOURCE_TAG = 'source:website-public';
 
 interface KnowledgeEntryInput {
+  sourceKey: string;
+  category: string;
   title: string;
   content: string;
   intentLabel: string;
@@ -54,6 +52,8 @@ interface KnowledgeEntryInput {
 const ZH_ENTRIES: KnowledgeEntryInput[] = [
   // ── 公司概述 ────────────────────────────────────────────────────────────
   {
+    sourceKey: 'company-overview',
+    category: 'faq-general',
     title: '瑞滬企業與震南鐵線公司簡介',
     content:
       '瑞滬企業股份有限公司（RAY FU ENTERPRISE CO., LTD.）為台灣扣件與線材外銷貿易商，' +
@@ -66,6 +66,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
 
   // ── 線材系列 ────────────────────────────────────────────────────────────
   {
+    sourceKey: 'wire-overview',
+    category: 'product-spec',
     title: '線材產品總覽',
     content:
       '震南鐵線生產之線材線徑範圍為 1.78mm ~ 10mm，' +
@@ -73,9 +75,23 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
       '用途廣泛，包含產製扣件、彈簧線、排釘及各類五金零件等。' +
       '線材依材質可分為：碳鋼線材、合金鋼線材、不鏽鋼線材三大系列。',
     intentLabel: 'product-inquiry',
-    tags: ['線材', 'wire', '線徑', '1.78mm', '10mm', 'AISI', '10B21', '碳鋼', '合金鋼', '不鏽鋼', SOURCE_TAG],
+    tags: [
+      '線材',
+      'wire',
+      '線徑',
+      '1.78mm',
+      '10mm',
+      'AISI',
+      '10B21',
+      '碳鋼',
+      '合金鋼',
+      '不鏽鋼',
+      SOURCE_TAG,
+    ],
   },
   {
+    sourceKey: 'wire-carbon-steel',
+    category: 'product-spec',
     title: '碳鋼線材規格與用途',
     content:
       '碳鋼線材（Carbon Steel Wire）材質規格涵蓋低碳至高碳鋼：' +
@@ -84,9 +100,20 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
       '低碳鋼（AISI 1006–1018）延展性佳，適合冷鍛；' +
       '高碳鋼（AISI 1040–1060）強度較高，適合彈簧與高強度扣件。',
     intentLabel: 'product-inquiry',
-    tags: ['碳鋼線材', 'carbon steel wire', 'AISI 1006', 'AISI 1060', 'SWRCH', '彈簧', '扣件', SOURCE_TAG],
+    tags: [
+      '碳鋼線材',
+      'carbon steel wire',
+      'AISI 1006',
+      'AISI 1060',
+      'SWRCH',
+      '彈簧',
+      '扣件',
+      SOURCE_TAG,
+    ],
   },
   {
+    sourceKey: 'wire-alloy-steel',
+    category: 'product-spec',
     title: '合金鋼線材規格與用途',
     content:
       '合金鋼線材（Alloy Steel Wire）材質規格涵蓋鉻鋼及鉻鉬鋼系列：' +
@@ -95,9 +122,20 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
       '適合製造高強度扣件、汽車零件及精密機械零件。' +
       '比碳鋼更高的抗拉強度與韌性，常用於安全關鍵零件。',
     intentLabel: 'product-inquiry',
-    tags: ['合金鋼線材', 'alloy steel wire', 'AISI 5115', 'AISI 4120', '鉻鋼', '鉻鉬鋼', '高強度', SOURCE_TAG],
+    tags: [
+      '合金鋼線材',
+      'alloy steel wire',
+      'AISI 5115',
+      'AISI 4120',
+      '鉻鋼',
+      '鉻鉬鋼',
+      '高強度',
+      SOURCE_TAG,
+    ],
   },
   {
+    sourceKey: 'wire-stainless-steel',
+    category: 'product-spec',
     title: '不鏽鋼線材規格與用途',
     content:
       '不鏽鋼線材（Stainless Steel Wire）規格涵蓋 AISI/SAE 302 ~ 430 系列，' +
@@ -105,9 +143,21 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
       '耐腐蝕性優異，適合食品機械、醫療器材、戶外設施及化工設備等需要防銹的應用場景。' +
       '亦可供不鏽鋼螺絲、彈簧等精密扣件原料使用。',
     intentLabel: 'product-inquiry',
-    tags: ['不鏽鋼線材', 'stainless steel wire', 'SUS 302', 'SUS 430', 'AISI 302', '耐腐蝕', '食品', '醫療', SOURCE_TAG],
+    tags: [
+      '不鏽鋼線材',
+      'stainless steel wire',
+      'SUS 302',
+      'SUS 430',
+      'AISI 302',
+      '耐腐蝕',
+      '食品',
+      '醫療',
+      SOURCE_TAG,
+    ],
   },
   {
+    sourceKey: 'wire-material-selection',
+    category: 'selection-guide',
     title: '線材材質選擇建議',
     content:
       '選擇線材材質時，建議依以下四個維度評估：' +
@@ -116,11 +166,24 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
       '3. 尺寸（size）：線徑 1.78mm ~ 10mm 依下游扣件規格決定。' +
       '4. 環境（environment）：戶外、食品、化工場合應優先考慮不鏽鋼或特殊塗層。',
     intentLabel: 'product-diagnosis',
-    tags: ['線材選材', 'wire selection', '材質', '碳鋼', '合金鋼', '不鏽鋼', '用途', '環境', '問診', SOURCE_TAG],
+    tags: [
+      '線材選材',
+      'wire selection',
+      '材質',
+      '碳鋼',
+      '合金鋼',
+      '不鏽鋼',
+      '用途',
+      '環境',
+      '問診',
+      SOURCE_TAG,
+    ],
   },
 
   // ── 螺絲系列 ────────────────────────────────────────────────────────────
   {
+    sourceKey: 'screw-overview',
+    category: 'product-spec',
     title: '螺絲產品總覽',
     content:
       '螺絲產品規格範圍：M1.8 ~ M20，長度 2mm ~ 400mm。' +
@@ -139,6 +202,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
     ],
   },
   {
+    sourceKey: 'screw-self-drilling',
+    category: 'product-spec',
     title: '鑽尾螺絲（Self-Drilling Screw）',
     content:
       '鑽尾螺絲（Self-Drilling Screw）是自鑽自攻螺絲的通稱。' +
@@ -150,6 +215,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
     tags: ['鑽尾螺絲', 'self-drilling screw', '自鑽', '金屬板', '鋼板', SOURCE_TAG],
   },
   {
+    sourceKey: 'screw-drywall',
+    category: 'product-spec',
     title: '乾牆螺絲（Drywall Screw）',
     content:
       '乾牆螺絲（Drywall Screw）專為固定石膏板（乾牆）設計。' +
@@ -160,6 +227,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
     tags: ['乾牆螺絲', 'drywall screw', '石膏板', '建築', '裝修', SOURCE_TAG],
   },
   {
+    sourceKey: 'screw-roofing',
+    category: 'product-spec',
     title: '屋頂螺絲（Roofing Screw）',
     content:
       '屋頂螺絲（Roofing Screw）專為屋頂材料固定設計，' +
@@ -171,6 +240,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
     tags: ['屋頂螺絲', 'roofing screw', '防水', '屋頂', '戶外', SOURCE_TAG],
   },
   {
+    sourceKey: 'screw-wood',
+    category: 'product-spec',
     title: '木螺絲（Wood Screw）',
     content:
       '木螺絲（Wood Screw）專為木材緊固設計，具有粗牙設計以提高握持力。' +
@@ -181,6 +252,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
     tags: ['木螺絲', 'wood screw', '木材', '傢俱', '粗牙', SOURCE_TAG],
   },
   {
+    sourceKey: 'screw-concrete',
+    category: 'product-spec',
     title: '水泥螺絲（Concrete Screw）',
     content:
       '水泥螺絲（Concrete Screw）主要用於將物件固定在混凝土、砌磚或石材上。' +
@@ -191,6 +264,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
     tags: ['水泥螺絲', 'concrete screw', '混凝土', '砌磚', '固定', SOURCE_TAG],
   },
   {
+    sourceKey: 'screw-machine',
+    category: 'product-spec',
     title: '機械螺絲（Machine Screw）',
     content:
       '機械螺絲（Machine Screw）廣泛應用於機械設備及電子零件的緊固。' +
@@ -201,6 +276,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
     tags: ['機械螺絲', 'machine screw', '機械', '電子', '公制', '細牙', SOURCE_TAG],
   },
   {
+    sourceKey: 'screw-stainless',
+    category: 'product-spec',
     title: '不鏽鋼螺絲（Stainless Steel Screw）',
     content:
       '不鏽鋼螺絲（Stainless Steel Screw）泛指以不鏽鋼材質製造的各類螺絲。' +
@@ -208,9 +285,20 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
       '適用於海洋、食品、化工、醫療等高腐蝕性環境。' +
       '各類型螺絲（自攻、木螺絲、機械螺絲等）均有不鏽鋼版本可供選配。',
     intentLabel: 'product-inquiry',
-    tags: ['不鏽鋼螺絲', 'stainless steel screw', '304', '316', '耐腐蝕', '食品', '海洋', SOURCE_TAG],
+    tags: [
+      '不鏽鋼螺絲',
+      'stainless steel screw',
+      '304',
+      '316',
+      '耐腐蝕',
+      '食品',
+      '海洋',
+      SOURCE_TAG,
+    ],
   },
   {
+    sourceKey: 'screw-selection-guide',
+    category: 'selection-guide',
     title: '螺絲規格選型建議',
     content:
       '選擇螺絲時建議評估以下四個問診維度：' +
@@ -224,6 +312,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
 
   // ── 螺栓系列 ────────────────────────────────────────────────────────────
   {
+    sourceKey: 'bolt-overview',
+    category: 'product-spec',
     title: '螺栓產品總覽',
     content:
       '螺栓（Bolt）產品規格範圍：M2 ~ M20，強度等級 4.6 ~ 8.8 級，長度 12mm ~ 120mm。' +
@@ -234,6 +324,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
     tags: ['螺栓', 'bolt', 'M2', 'M20', '4.6級', '8.8級', '六角', '法蘭', '馬車', SOURCE_TAG],
   },
   {
+    sourceKey: 'bolt-hex',
+    category: 'product-spec',
     title: '六角螺栓（Hex Bolt）',
     content:
       '六角螺栓（Hex Bolt）是市場最普遍的螺栓類型，' +
@@ -244,6 +336,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
     tags: ['六角螺栓', 'hex bolt', '扳手', 'DIN', 'ISO', '建築', '機械', SOURCE_TAG],
   },
   {
+    sourceKey: 'bolt-flange',
+    category: 'product-spec',
     title: '法蘭螺栓（Flange Bolt）',
     content:
       '法蘭螺栓（Flange Bolt）在六角頭下方設有一體成型的法蘭（Flange）盤，' +
@@ -253,6 +347,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
     tags: ['法蘭螺栓', 'flange bolt', '汽車', '機車', '防鬆', '引擎', SOURCE_TAG],
   },
   {
+    sourceKey: 'bolt-carriage',
+    category: 'product-spec',
     title: '馬車螺栓（Carriage Bolt）',
     content:
       '馬車螺栓（Carriage Bolt）又稱 Coach Bolt，頭部為圓形，' +
@@ -262,6 +358,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
     tags: ['馬車螺栓', 'carriage bolt', 'coach bolt', '木結構', '農業', SOURCE_TAG],
   },
   {
+    sourceKey: 'bolt-lag',
+    category: 'product-spec',
     title: '木螺栓（Lag Bolt）',
     content:
       '木螺栓（Lag Bolt / Lag Screw）主要用於木材的重型緊固，' +
@@ -273,6 +371,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
 
   // ── 螺帽系列 ────────────────────────────────────────────────────────────
   {
+    sourceKey: 'nut-overview',
+    category: 'product-spec',
     title: '螺帽產品總覽',
     content:
       '螺帽（Nut）產品規格範圍：M2 ~ M20。' +
@@ -284,6 +384,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
     tags: ['螺帽', 'nut', '六角螺帽', '法蘭螺帽', '尼龍螺帽', '翼型螺帽', SOURCE_TAG],
   },
   {
+    sourceKey: 'nut-hex',
+    category: 'product-spec',
     title: '六角螺帽（Hex Nut）',
     content:
       '六角螺帽（Hex Nut）是市場上最普遍的螺帽類型，' +
@@ -294,6 +396,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
     tags: ['六角螺帽', 'hex nut', 'ISO', 'DIN', '機械', '建築', SOURCE_TAG],
   },
   {
+    sourceKey: 'nut-nylon',
+    category: 'product-spec',
     title: '尼龍防鬆螺帽（Nylon Nut / Nyloc Nut）',
     content:
       '尼龍防鬆螺帽（Nylon Nut 或 Nyloc Nut）在六角螺帽頂端嵌入一個尼龍環，' +
@@ -304,6 +408,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
     tags: ['尼龍螺帽', 'nylon nut', 'nyloc nut', '防鬆', '振動', '汽車', SOURCE_TAG],
   },
   {
+    sourceKey: 'nut-flange',
+    category: 'product-spec',
     title: '法蘭螺帽（Hex Flange Nut）',
     content:
       '法蘭螺帽（Hex Flange Nut）在六角螺帽底部設有一體式法蘭盤，' +
@@ -315,6 +421,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
 
   // ── 華司系列 ────────────────────────────────────────────────────────────
   {
+    sourceKey: 'washer-overview',
+    category: 'product-spec',
     title: '華司產品總覽',
     content:
       '華司（Washer）產品主要類別：' +
@@ -327,6 +435,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
     tags: ['華司', 'washer', '平華司', '彈簧華司', '鎖緊華司', SOURCE_TAG],
   },
   {
+    sourceKey: 'washer-flat',
+    category: 'product-spec',
     title: '平華司（Flat Washer）',
     content:
       '平華司（Flat Washer）是最基本的墊圈類型，' +
@@ -338,6 +448,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
     tags: ['平華司', 'flat washer', '墊圈', '分散力', '碳鋼', '不鏽鋼', SOURCE_TAG],
   },
   {
+    sourceKey: 'washer-spring-lock',
+    category: 'product-spec',
     title: '彈簧華司（Spring Lock Washer）',
     content:
       '彈簧華司（Spring Lock Washer）為開口彈性墊圈，' +
@@ -350,6 +462,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
 
   // ── 其他產品 ────────────────────────────────────────────────────────────
   {
+    sourceKey: 'other-nail',
+    category: 'product-spec',
     title: '其他五金產品：釘子（Nail）',
     content:
       '釘子（Nail）主要以碳鋼製成，為銷狀緊固件，廣泛用於木工作業。' +
@@ -359,6 +473,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
     tags: ['釘子', 'nail', '碳鋼', '木工', '螺旋釘', SOURCE_TAG],
   },
   {
+    sourceKey: 'other-rivet',
+    category: 'product-spec',
     title: '其他五金產品：鉚釘（Rivet）',
     content:
       '鉚釘（Rivet）是一種永久性緊固件，用於永久連接兩個或多個工件。' +
@@ -368,6 +484,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
     tags: ['鉚釘', 'rivet', '永久緊固', '金屬薄板', 'blind rivet', SOURCE_TAG],
   },
   {
+    sourceKey: 'other-hose-clamp',
+    category: 'product-spec',
     title: '其他五金產品：管夾（Hose Clamp）',
     content:
       '管夾（Hose Clamp）是專用於固定軟管與接頭連接的緊固件，' +
@@ -378,6 +496,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
 
   // ── FAQ ─────────────────────────────────────────────────────────────────
   {
+    sourceKey: 'contact-inquiry',
+    category: 'faq-general',
     title: '聯絡方式與詢價說明',
     content:
       '瑞滬企業股份有限公司（貿易辦公室）：' +
@@ -402,6 +522,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
     ],
   },
   {
+    sourceKey: 'catalog-download',
+    category: 'faq-general',
     title: '產品目錄下載說明',
     content:
       '瑞滬企業提供以下產品目錄供下載：' +
@@ -424,6 +546,8 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
     ],
   },
   {
+    sourceKey: 'product-range',
+    category: 'faq-general',
     title: '產品供應範圍與可供貨類別',
     content:
       '瑞滬企業 / 震南鐵線可供應之產品類別包括：' +
@@ -432,11 +556,24 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
       '以及特殊規格訂製品（Speciality）。' +
       '各類產品均可依客戶需求提供報價，如有特殊規格請來信說明。',
     intentLabel: 'general-faq',
-    tags: ['供應範圍', '可供貨', '線材', '螺絲', '螺栓', '螺帽', '華司', '釘子', '鉚釘', SOURCE_TAG],
+    tags: [
+      '供應範圍',
+      '可供貨',
+      '線材',
+      '螺絲',
+      '螺栓',
+      '螺帽',
+      '華司',
+      '釘子',
+      '鉚釘',
+      SOURCE_TAG,
+    ],
   },
 
   // ── 問診 / 選型指南（支援 Phase 4）────────────────────────────────────
   {
+    sourceKey: 'fastener-selection-guide',
+    category: 'selection-guide',
     title: '扣件規格選型建議指南',
     content:
       '選擇扣件前，建議釐清以下四個關鍵問題（問診四欄位）：\n' +
@@ -446,9 +583,22 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
       '4. 使用環境（Environment）：室內、戶外、潮濕、高鹽份、高溫、振動等。\n' +
       '依上述四維度可縮小選型範圍，再搭配具體類別（螺絲/螺栓/螺帽）選擇。',
     intentLabel: 'product-diagnosis',
-    tags: ['選型', 'selection', '問診', 'purpose', 'material', 'size', 'environment', '規格', '扣件', SOURCE_TAG],
+    tags: [
+      '選型',
+      'selection',
+      '問診',
+      'purpose',
+      'material',
+      'size',
+      'environment',
+      '規格',
+      '扣件',
+      SOURCE_TAG,
+    ],
   },
   {
+    sourceKey: 'fastener-material-by-env',
+    category: 'selection-guide',
     title: '不同環境的扣件材質建議',
     content:
       '依使用環境選擇扣件材質的公開建議：\n' +
@@ -459,9 +609,22 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
       '- 高溫場合（>200°C）：需特殊高溫合金，請詢問業務確認可供規格。\n' +
       '- 振動場合：搭配防鬆螺帽（尼龍螺帽）或彈簧華司使用。',
     intentLabel: 'product-diagnosis',
-    tags: ['環境', 'environment', '材質', '不鏽鋼', '碳鋼', '鍍鋅', '耐蝕', '振動', '問診', SOURCE_TAG],
+    tags: [
+      '環境',
+      'environment',
+      '材質',
+      '不鏽鋼',
+      '碳鋼',
+      '鍍鋅',
+      '耐蝕',
+      '振動',
+      '問診',
+      SOURCE_TAG,
+    ],
   },
   {
+    sourceKey: 'fastener-by-application',
+    category: 'selection-guide',
     title: '工業應用場景與適用扣件對照',
     content:
       '不同工業應用場景的適用產品建議（依官網公開資訊）：\n' +
@@ -473,66 +636,65 @@ const ZH_ENTRIES: KnowledgeEntryInput[] = [
       '- 電子設備：小型機械螺絲（M1.6~M4）、面板螺帽、籠形螺帽。\n' +
       '- 木結構：木螺絲、馬車螺栓、木螺栓（Lag Bolt）。',
     intentLabel: 'product-diagnosis',
-    tags: ['應用場景', 'application', '機械', '風力', '汽車', '建築', '電子', '木結構', '問診', SOURCE_TAG],
+    tags: [
+      '應用場景',
+      'application',
+      '機械',
+      '風力',
+      '汽車',
+      '建築',
+      '電子',
+      '木結構',
+      '問診',
+      SOURCE_TAG,
+    ],
   },
 ];
 
 /**
  * Seed public Chinese knowledge entries.
- * Idempotent — creates missing entries and backfills `language` on existing ones.
+ * Idempotent — upserts by sourceKey+language; backfills any legacy entries that lack a sourceKey.
  */
 export async function seedKnowledgePublicZh(prisma: PrismaClient): Promise<void> {
   console.log('  Seeding KnowledgeEntry (public-zh)...');
-  let created = 0;
-  let skipped = 0;
-  let backfilled = 0;
+  const language = 'zh-TW';
+  let upserted = 0;
 
   for (const entry of ZH_ENTRIES) {
-    const existing = await prisma.knowledgeEntry.findFirst({
-      where: { title: entry.title },
+    // Backfill: update any existing entry with the same title+language that lacks a sourceKey
+    await prisma.knowledgeEntry.updateMany({
+      where: { title: entry.title, language, sourceKey: null },
+      data: { sourceKey: entry.sourceKey, category: entry.category, answerType: 'rag' },
     });
 
-    if (!existing) {
-      await prisma.knowledgeEntry.create({
-        data: {
-          title: entry.title,
-          content: entry.content,
-          intentLabel: entry.intentLabel,
-          tags: entry.tags,
-          aliases: entry.aliases ?? [],
-          status: 'approved',
-          visibility: 'public',
-          version: 1,
-          language: 'zh-TW',
-        },
-      });
-      created++;
-    } else {
-      // Backfill: fix language and merge any new aliases
-      const missingAliases = (entry.aliases ?? []).filter(
-        a => !existing.aliases.includes(a),
-      );
-      const needsUpdate =
-        existing.language !== 'zh-TW' || missingAliases.length > 0;
-
-      if (needsUpdate) {
-        await prisma.knowledgeEntry.update({
-          where: { id: existing.id },
-          data: {
-            ...(existing.language !== 'zh-TW' ? { language: 'zh-TW' } : {}),
-            ...(missingAliases.length > 0
-              ? { aliases: [...existing.aliases, ...missingAliases] }
-              : {}),
-          },
-        });
-        backfilled++;
-      } else {
-        skipped++;
-      }
-    }
+    await prisma.knowledgeEntry.upsert({
+      where: { sourceKey_language: { sourceKey: entry.sourceKey, language } },
+      update: {
+        title: entry.title,
+        content: entry.content,
+        intentLabel: entry.intentLabel,
+        tags: entry.tags,
+        aliases: entry.aliases ?? [],
+        category: entry.category,
+        answerType: 'rag',
+      },
+      create: {
+        sourceKey: entry.sourceKey,
+        title: entry.title,
+        content: entry.content,
+        intentLabel: entry.intentLabel,
+        tags: entry.tags,
+        aliases: entry.aliases ?? [],
+        category: entry.category,
+        answerType: 'rag',
+        status: 'approved',
+        visibility: 'public',
+        version: 1,
+        language,
+      },
+    });
+    upserted++;
   }
 
-  console.log(
-    `  KnowledgeEntry (public-zh): ${created} created, ${backfilled} backfilled, ${skipped} already existed`,
-  );
+  console.log(`  KnowledgeEntry (public-zh): ${upserted} entries upserted`);
 }

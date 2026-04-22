@@ -79,7 +79,7 @@ export class KnowledgeRepository {
    * Create a new knowledge entry with default status = 'draft'.
    */
   async create(
-    data: Omit<KnowledgeEntry, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'versions'>,
+    data: Omit<KnowledgeEntry, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'versions' | 'structuredAttributes'>,
   ): Promise<KnowledgeEntry> {
     return this.prisma.knowledgeEntry.create({
       data: {
@@ -92,6 +92,12 @@ export class KnowledgeRepository {
         status: data.status ?? 'draft',
         visibility: data.visibility ?? 'private',
         version: data.version ?? 1,
+        sourceKey: data.sourceKey ?? null,
+        category: data.category ?? null,
+        answerType: data.answerType ?? 'rag',
+        templateKey: data.templateKey ?? null,
+        faqQuestions: data.faqQuestions ?? [],
+        crossLanguageGroupKey: data.crossLanguageGroupKey ?? null,
       },
     });
   }
@@ -102,7 +108,7 @@ export class KnowledgeRepository {
    */
   async update(
     id: number,
-    data: Partial<Pick<KnowledgeEntry, 'title' | 'content' | 'intentLabel' | 'tags' | 'aliases' | 'language' | 'status' | 'visibility'>>,
+    data: Partial<Pick<KnowledgeEntry, 'title' | 'content' | 'intentLabel' | 'tags' | 'aliases' | 'language' | 'status' | 'visibility' | 'sourceKey' | 'category' | 'answerType' | 'templateKey' | 'faqQuestions' | 'crossLanguageGroupKey'>>,
   ): Promise<KnowledgeEntry | null> {
     try {
       return await this.prisma.knowledgeEntry.update({
@@ -128,5 +134,15 @@ export class KnowledgeRepository {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Find all non-deleted knowledge entries belonging to a given category.
+   */
+  async findByCategory(category: string): Promise<KnowledgeEntry[]> {
+    return this.prisma.knowledgeEntry.findMany({
+      where: { category, deletedAt: null },
+      orderBy: { updatedAt: 'desc' },
+    });
   }
 }

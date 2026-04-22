@@ -55,6 +55,10 @@ model IntentTemplate {
   templateZh  String   /// follow-up question template (zh-TW)
   templateEn  String   /// follow-up question template (en)
   priority    Int      @default(0)
+  /// Whether this template is active; inactive templates are excluded from intent detection.
+  isActive    Boolean  @default(true)
+  /// Product/topic category for routing, e.g. "product-spec" | "faq-general" | "pricing".
+  category    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -93,8 +97,29 @@ model KnowledgeEntry {
   updatedAt   DateTime          @updatedAt
   deletedAt   DateTime?
 
+  // ── 002 KS-001: structured fields ─────────────────────────────────────────
+  /// Stable slug identifier for cross-language grouping and seed upserts.
+  /// NULL-safe: multiple rows with sourceKey=NULL do not trigger the unique constraint.
+  sourceKey             String?
+  /// Product/topic category: product-spec | faq-general | pricing | contact | diagnosis
+  category              String?
+  /// Determines which answer path the pipeline uses for this entry.
+  /// template | rag+template | rag | llm — defaults to "rag" (001-compatible behaviour).
+  answerType            String            @default("rag")
+  /// Points to a template key used by AnswerTemplateResolver (002 Phase C).
+  templateKey           String?
+  /// Common FAQ question phrasings for this entry (used in faq retrieval scoring).
+  faqQuestions          String[]          @default([])
+  /// Groups semantically equivalent entries across languages.
+  crossLanguageGroupKey String?
+  /// Arbitrary structured metadata (e.g. spec dimensions, pricing tiers).
+  structuredAttributes  Json?
+
   versions    KnowledgeVersion[]
 
+  /// Unique per (sourceKey, language) when sourceKey is not null.
+  /// PostgreSQL treats NULL as distinct, so rows with sourceKey=NULL are exempt.
+  @@unique([sourceKey, language])
   @@map("knowledge_entries")
 }
 

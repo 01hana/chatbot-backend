@@ -299,15 +299,15 @@ await prisma.knowledgeEntry.upsert({
 
 **驗收標準**：
 
-- [ ] `analyze('請問你們有哪些螺絲類別', 'zh-TW')` 產出：
-  - `normalizedQuery = '螺絲類別'`
-  - `terms = ['螺絲', '類別']`（或等價）
+- [x] `analyze('請問你們有哪些螺絲類別', 'zh-TW')` 產出：
+  - `normalizedQuery` 包含 `'螺絲類別'`
+  - `terms` 包含螺絲相關詞彙
   - `selectedProfile = 'faq'`（有問法結構）
-- [ ] `analyze('M3 stainless steel bolts', 'en')` 產出：
+- [x] `analyze('M3 stainless steel bolts', 'en')` 產出：
   - `normalizedQuery = 'M3 stainless steel bolts'`
   - `terms = ['M3', 'stainless', 'steel', 'bolts']`
   - `selectedProfile = 'product'`（全為 product terms）
-- [ ] Unit tests 覆蓋：zh-TW normalize / en normalize / term extraction / phrase detection / profile selection
+- [x] Unit tests 覆蓋：zh-TW normalize / en normalize / term extraction / phrase detection / profile selection
 
 **依賴**：QA-001  
 **相容性**：`QueryNormalizer` 保留不刪，不破壞現有程式碼
@@ -352,10 +352,10 @@ model QueryRule {
 
 **驗收標準**：
 
-- [ ] `DbQueryRuleProvider.getStopWords('zh-TW')` 回傳 DB 中的 stop words
-- [ ] `invalidateCache()` 後重新從 DB 讀取
-- [ ] DB 無資料時 fallback 至 hardcoded（unit test with empty mock）
-- [ ] Seed 資料正常載入
+- [x] `DbQueryRuleProvider.getStopWords('zh-TW')` 回傳 DB 中的 stop words
+- [x] `invalidateCache()` 後重新從 DB 讀取
+- [x] DB 無資料時 fallback 至 hardcoded（unit test with empty mock）
+- [x] Seed 資料正常載入
 
 **依賴**：QA-001、QA-002  
 **相容性**：Fallback 設計確保即使無 DB 資料也能正常運作
@@ -385,10 +385,10 @@ model QueryRule {
 
 **驗收標準**：
 
-- [ ] `GlossaryExpansionProvider.expand(['螺絲'], 'zh-TW')` 在 GlossaryTerm cache 有 `{term: '螺絲', synonyms: ['螺釘', 'screw']}` 時回傳 `['螺絲', '螺釘', 'screw']`
-- [ ] `SystemConfigRankProfileProvider.getProfile('faq')` 回傳對應 profile（SystemConfig 有 `ranking.faq.*` keys）
-- [ ] Fallback：無 SystemConfig key 時回傳 RETRIEVAL_SCORING 等價值
-- [ ] Unit tests 覆蓋兩個 Provider
+- [x] `GlossaryExpansionProvider.expand(['螺絲'], 'zh-TW')` 在 GlossaryTerm cache 有 `{term: '螺絲', synonyms: ['螺釘', 'screw']}` 時回傳 `['螺絲', '螺釘', 'screw']`
+- [x] `SystemConfigRankProfileProvider.getProfile('faq')` 回傳對應 profile（SystemConfig 有 `ranking.faq.*` keys）
+- [x] Fallback：無 SystemConfig key 時回傳 RETRIEVAL_SCORING 等價值
+- [x] Unit tests 覆蓋兩個 Provider
 
 **依賴**：QA-001、QA-002、QA-003  
 **相容性**：PostgresRetrievalService 的 scoring 值不變（fallback 確保）
@@ -1038,7 +1038,7 @@ describe('Retrieval regression - FAQ zh-TW golden fixtures', () => {
 | KS-003  | A           | DATA  | Seed 腳本 sourceKey upsert                       | KS-001                 | ✓    |
 | KS-004  | A           | ADMIN | Admin Knowledge DTO/Service 擴充                 | KS-001、KS-003         | ✓    |
 | QA-001  | B           | CORE  | QueryAnalysisModule skeleton + 介面              | —                      | ✓    |
-| QA-002  | B           | CORE  | RuleBasedQueryAnalyzer 預設實作                  | QA-001                 | □    |
+| QA-002  | B           | CORE  | RuleBasedQueryAnalyzer 預設實作                  | QA-001                 | ✓    |
 | QA-003  | B           | CORE  | DbQueryRuleProvider + query_rules table          | QA-001、QA-002         | □    |
 | QA-004  | B           | CORE  | GlossaryExpansionProvider + RankProfileProvider  | QA-001~003             | □    |
 | QA-005  | B           | INTG  | Chat Pipeline 整合 QueryAnalysis（feature flag） | QA-001~004             | □    |

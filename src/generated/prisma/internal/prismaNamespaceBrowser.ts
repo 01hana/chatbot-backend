@@ -60,7 +60,8 @@ export const ModelName = {
   KnowledgeVersion: 'KnowledgeVersion',
   Conversation: 'Conversation',
   ConversationMessage: 'ConversationMessage',
-  AuditLog: 'AuditLog'
+  AuditLog: 'AuditLog',
+  QueryRule: 'QueryRule'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -231,6 +232,19 @@ export const AuditLogScalarFieldEnum = {
 } as const
 
 export type AuditLogScalarFieldEnum = (typeof AuditLogScalarFieldEnum)[keyof typeof AuditLogScalarFieldEnum]
+
+
+export const QueryRuleScalarFieldEnum = {
+  id: 'id',
+  type: 'type',
+  language: 'language',
+  value: 'value',
+  isActive: 'isActive',
+  priority: 'priority',
+  createdAt: 'createdAt'
+} as const
+
+export type QueryRuleScalarFieldEnum = (typeof QueryRuleScalarFieldEnum)[keyof typeof QueryRuleScalarFieldEnum]
 
 
 export const SortOrder = {

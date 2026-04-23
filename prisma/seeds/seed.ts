@@ -24,6 +24,7 @@ import { seedKnowledge } from './knowledge.seed';
 import { seedKnowledgePublicZh } from './knowledge-public-zh.seed';
 import { seedKnowledgePublicEn } from './knowledge-public-en.seed';
 import { seedWidgetConfig } from './widget-config.seed';
+import { seedQueryRules } from './query-rules.seed';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
@@ -90,6 +91,7 @@ async function main(): Promise<void> {
   await seedBlacklist(prisma);
   await seedIntentTemplates(prisma);
   await seedGlossaryTerms(prisma);
+  await seedQueryRules(prisma);
 
   if (nodeEnv !== 'production') {
     console.log('Seeding knowledge entries (non-production)...');

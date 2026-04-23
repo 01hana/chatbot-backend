@@ -229,3 +229,29 @@ model AuditLog {
 
   @@map("audit_logs")
 }
+
+// ─── 002 QA-003: Query Analysis Rules ────────────────────────────────────────
+
+/// DB-managed query preprocessing rules: stop words, noise words,
+/// and question-shell patterns used by DbQueryRuleProvider.
+///
+/// type values:
+///   stop_word           — removed during normalisation (e.g. "請問", "the")
+///   noise_word          — removed after tokenisation (e.g. "一些", "some")
+///   question_shell_zh   — leading/trailing question-shell regex patterns (zh-TW)
+///   question_shell_en   — leading/trailing question-shell regex patterns (en)
+model QueryRule {
+  id        Int      @id @default(autoincrement())
+  /// stop_word | noise_word | question_shell_zh | question_shell_en
+  type      String
+  /// Language scope: zh-TW | en | all
+  language  String   @default("zh-TW")
+  /// The rule value: a plain word (stop/noise) or a regex pattern string (question_shell_*)
+  value     String
+  isActive  Boolean  @default(true)
+  /// Higher priority rules are evaluated first (for question_shell ordering)
+  priority  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@map("query_rules")
+}

@@ -264,11 +264,8 @@ describe('T2-016 SSE / sessionToken / Widget acceptance (mock)', () => {
       };
       mockWidgetConfigService.getConfig.mockReturnValueOnce(config);
 
-      const mockResponse = { setHeader: jest.fn(), json: jest.fn() } as unknown as Response;
-      widgetController.getConfig(mockResponse);
-
-      expect(mockResponse.json).toHaveBeenCalledWith(config);
-      const [result] = (mockResponse.json as jest.Mock).mock.calls[0] as [typeof config];
+      const result = widgetController.getConfig();
+      expect(result).toMatchObject(config);
       expect(result.status).toBe('online');
       expect(result.welcomeMessage).toMatchObject({ 'zh-TW': '歡迎', en: 'Welcome' });
       expect(result.quickReplies).toMatchObject({ 'zh-TW': ['查詢'] });
@@ -285,10 +282,7 @@ describe('T2-016 SSE / sessionToken / Widget acceptance (mock)', () => {
       };
       mockWidgetConfigService.getConfig.mockReturnValueOnce(config);
 
-      const mockResponse = { setHeader: jest.fn(), json: jest.fn() } as unknown as Response;
-      widgetController.getConfig(mockResponse);
-
-      const [result] = (mockResponse.json as jest.Mock).mock.calls[0] as [typeof config];
+      const result = widgetController.getConfig();
       expect(result.status).toBe('degraded');
     });
   });

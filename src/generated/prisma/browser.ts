@@ -73,3 +73,15 @@ export type ConversationMessage = Prisma.ConversationMessageModel
  * cascade-delete risks on an immutable audit table.
  */
 export type AuditLog = Prisma.AuditLogModel
+/**
+ * Model QueryRule
+ * DB-managed query preprocessing rules: stop words, noise words,
+ * and question-shell patterns used by DbQueryRuleProvider.
+ * 
+ * type values:
+ * stop_word           — removed during normalisation (e.g. "請問", "the")
+ * noise_word          — removed after tokenisation (e.g. "一些", "some")
+ * question_shell_zh   — leading/trailing question-shell regex patterns (zh-TW)
+ * question_shell_en   — leading/trailing question-shell regex patterns (en)
+ */
+export type QueryRule = Prisma.QueryRuleModel

@@ -393,7 +393,8 @@ export const ModelName = {
   KnowledgeVersion: 'KnowledgeVersion',
   Conversation: 'Conversation',
   ConversationMessage: 'ConversationMessage',
-  AuditLog: 'AuditLog'
+  AuditLog: 'AuditLog',
+  QueryRule: 'QueryRule'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -409,7 +410,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "systemConfig" | "safetyRule" | "blacklistEntry" | "intentTemplate" | "glossaryTerm" | "knowledgeEntry" | "knowledgeVersion" | "conversation" | "conversationMessage" | "auditLog"
+    modelProps: "systemConfig" | "safetyRule" | "blacklistEntry" | "intentTemplate" | "glossaryTerm" | "knowledgeEntry" | "knowledgeVersion" | "conversation" | "conversationMessage" | "auditLog" | "queryRule"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1153,6 +1154,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    QueryRule: {
+      payload: Prisma.$QueryRulePayload<ExtArgs>
+      fields: Prisma.QueryRuleFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.QueryRuleFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QueryRulePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.QueryRuleFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QueryRulePayload>
+        }
+        findFirst: {
+          args: Prisma.QueryRuleFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QueryRulePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.QueryRuleFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QueryRulePayload>
+        }
+        findMany: {
+          args: Prisma.QueryRuleFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QueryRulePayload>[]
+        }
+        create: {
+          args: Prisma.QueryRuleCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QueryRulePayload>
+        }
+        createMany: {
+          args: Prisma.QueryRuleCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.QueryRuleCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QueryRulePayload>[]
+        }
+        delete: {
+          args: Prisma.QueryRuleDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QueryRulePayload>
+        }
+        update: {
+          args: Prisma.QueryRuleUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QueryRulePayload>
+        }
+        deleteMany: {
+          args: Prisma.QueryRuleDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.QueryRuleUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.QueryRuleUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QueryRulePayload>[]
+        }
+        upsert: {
+          args: Prisma.QueryRuleUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QueryRulePayload>
+        }
+        aggregate: {
+          args: Prisma.QueryRuleAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateQueryRule>
+        }
+        groupBy: {
+          args: Prisma.QueryRuleGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.QueryRuleGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.QueryRuleCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.QueryRuleCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -1344,6 +1419,19 @@ export const AuditLogScalarFieldEnum = {
 } as const
 
 export type AuditLogScalarFieldEnum = (typeof AuditLogScalarFieldEnum)[keyof typeof AuditLogScalarFieldEnum]
+
+
+export const QueryRuleScalarFieldEnum = {
+  id: 'id',
+  type: 'type',
+  language: 'language',
+  value: 'value',
+  isActive: 'isActive',
+  priority: 'priority',
+  createdAt: 'createdAt'
+} as const
+
+export type QueryRuleScalarFieldEnum = (typeof QueryRuleScalarFieldEnum)[keyof typeof QueryRuleScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -1574,6 +1662,7 @@ export type GlobalOmitConfig = {
   conversation?: Prisma.ConversationOmit
   conversationMessage?: Prisma.ConversationMessageOmit
   auditLog?: Prisma.AuditLogOmit
+  queryRule?: Prisma.QueryRuleOmit
 }
 
 /* Types for Logging */

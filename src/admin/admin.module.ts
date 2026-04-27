@@ -7,6 +7,8 @@ import { AdminSafetyController } from './safety/safety-admin.controller.js';
 import { AdminSafetyService } from './safety/safety-admin.service.js';
 import { SafetyModule } from '../safety/safety.module.js';
 import { KnowledgeModule } from '../knowledge/knowledge.module';
+import { AdminIntentModule } from './intent/admin-intent.module';
+import { AdminGlossaryModule } from './glossary/admin-glossary.module';
 
 /**
  * AdminModule — aggregates all admin-facing route controllers.
@@ -14,9 +16,10 @@ import { KnowledgeModule } from '../knowledge/knowledge.module';
  * Phase 1 status: SystemConfig controller returns 501.
  * Phase 3 (T3-006): Safety admin CRUD is fully implemented.
  * Knowledge admin CRUD is fully implemented (create/update support language + aliases).
+ * 002 IG-002/IG-003: Intent and Glossary admin modules wired in.
  */
 @Module({
-  imports: [SafetyModule, KnowledgeModule],
+  imports: [SafetyModule, KnowledgeModule, AdminIntentModule, AdminGlossaryModule],
   controllers: [
     AdminKnowledgeController,
     AdminSystemConfigController,

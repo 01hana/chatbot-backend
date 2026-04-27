@@ -75,7 +75,7 @@ export class SystemConfigService implements OnModuleInit {
    * Get a boolean config value with a fallback default.
    * Falls back to `defaultValue` when the key is absent or unparseable.
    */
-  getBoolean(key: string, defaultValue: boolean): boolean {
+  getBoolean(key: string, defaultValue?: boolean): boolean | undefined {
     const raw = this.cache.get(key);
 
     if (raw === undefined) return defaultValue;

@@ -722,13 +722,13 @@ resolve(
 
 **驗收標準**：
 
-- [ ] `answerType='template'`：回傳 `{ strategy: 'template', resolvedContent: entry.content }`
-- [ ] `answerType='rag+template'`：回傳 `{ strategy: 'rag+template', resolvedContent: template填空後內容 }`
-- [ ] `answerType='rag'`：回傳 `{ strategy: 'rag' }`（走現有 LLM 路徑）
-- [ ] `answerType='llm'`：回傳 `{ strategy: 'llm' }`
-- [ ] ragResults 為空：回傳 `{ strategy: 'llm' }`（現有 fallback 路徑）
-- [ ] template 路徑 deterministic（相同輸入多次呼叫結果相同）
-- [ ] Unit tests：≥ 6 個測試案例（涵蓋四路徑 + 空 ragResults）
+- [x] `answerType='template'`：回傳 `{ strategy: 'template', resolvedContent: entry.content }`
+- [x] `answerType='rag+template'`：回傳 `{ strategy: 'rag+template', resolvedContent: template填空後內容 }`
+- [x] `answerType='rag'`：回傳 `{ strategy: 'rag' }`（走現有 LLM 路徑）
+- [x] `answerType='llm'`：回傳 `{ strategy: 'llm' }`
+- [x] ragResults 為空：回傳 `{ strategy: 'llm' }`（現有 fallback 路徑）
+- [x] template 路徑 deterministic（相同輸入多次呼叫結果相同）
+- [x] Unit tests：≥ 6 個測試案例（涵蓋四路徑 + 空 ragResults）
 
 **依賴**：KS-001、KS-004、QA-001  
 **相容性**：預設 `answerType='rag'`，001 所有現有條目走 rag 路徑，行為不變
@@ -774,10 +774,10 @@ if (['template', 'rag+template'].includes(templateResolution.strategy)) {
 
 **驗收標準**：
 
-- [ ] `answerType='template'` 條目命中時，LLM 不被呼叫（mock LLM provider 未被呼叫）
-- [ ] `answerType='rag'` 條目命中時，行為與 001 完全一致（001 pipeline tests 通過）
-- [ ] template 路徑的 SSE done event `action='answer'`（與現有 answer 路徑一致）
-- [ ] 新增 Pipeline unit tests：template 路徑 + rag+template 路徑
+- [x] `answerType='template'` 條目命中時，LLM 不被呼叫（mock LLM provider 未被呼叫）
+- [x] `answerType='rag'` 條目命中時，行為與 001 完全一致（001 pipeline tests 通過）
+- [x] template 路徑的 SSE done event `action='answer'`（與現有 answer 路徑一致）
+- [x] 新增 Pipeline unit tests：template 路徑 + rag+template 路徑
 
 **依賴**：TM-001  
 **相容性**：001 所有條目 `answerType='rag'`，所有現有 pipeline tests 不受影響
@@ -797,9 +797,9 @@ if (['template', 'rag+template'].includes(templateResolution.strategy)) {
 
 **驗收標準**：
 
-- [ ] 執行 `npx jest --testPathPatterns "chat-pipeline.service"` → 全部通過（含 001 舊 tests）
-- [ ] 新增 template 路徑 test case：mock `answerType='template'` 的 knowledge entry，驗證 LLM 未被呼叫
-- [ ] 新增 rag+template 路徑 test case
+- [x] 執行 `npx jest --testPathPatterns "chat-pipeline.service"` → 全部通過（含 001 舊 tests）
+- [x] 新增 template 路徑 test case：mock `answerType='template'` 的 knowledge entry，驗證 LLM 未被呼叫
+- [x] 新增 rag+template 路徑 test case
 
 **依賴**：TM-002  
 **相容性**：目標確保 001 tests 全通過
@@ -1049,9 +1049,9 @@ describe('Retrieval regression - FAQ zh-TW golden fixtures', () => {
 | IG-005  | B           | CORE  | IntentService 三層路由重構                       | QA-001、IG-002         | ✓    |
 | IG-006  | B           | CORE  | GlossaryExpansionProvider 整合 IntentService     | QA-004、IG-005         | ✓    |
 | IG-007  | B           | TEST  | Intent / Glossary admin unit tests               | IG-002、IG-003         | ✓    |
-| TM-001  | C           | CORE  | AnswerTemplateResolver 四路徑邏輯                | KS-001、QA-001         | □    |
-| TM-002  | C           | INTG  | Chat Pipeline 整合 TemplateResolver              | TM-001                 | □    |
-| TM-003  | C           | TEST  | Template 整合測試 + backward compat              | TM-002                 | □    |
+| TM-001  | C           | CORE  | AnswerTemplateResolver 四路徑邏輯                | KS-001、QA-001         | ✓    |
+| TM-002  | C           | INTG  | Chat Pipeline 整合 TemplateResolver              | TM-001                 | ✓    |
+| TM-003  | C           | TEST  | Template 整合測試 + backward compat              | TM-002                 | ✓    |
 | DG-001  | C           | CORE  | DiagnosisModule skeleton + 介面                  | —                      | □    |
 | DG-002  | C           | CORE  | DiagnosisService 實作 + ConversationService 整合 | DG-001                 | □    |
 | DG-003  | C           | TEST  | DiagnosisService unit tests                      | DG-002                 | □    |

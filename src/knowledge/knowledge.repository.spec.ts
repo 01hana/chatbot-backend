@@ -19,8 +19,15 @@ function makeEntry(overrides: Partial<KnowledgeEntry> = {}): KnowledgeEntry {
     createdAt: new Date(),
     updatedAt: new Date(),
     deletedAt: null,
+    sourceKey: null,
+    category: null,
+    answerType: 'rag',
+    templateKey: null,
+    faqQuestions: [],
+    crossLanguageGroupKey: null,
+    structuredAttributes: null,
     ...overrides,
-  };
+  } as KnowledgeEntry;
 }
 
 describe('KnowledgeRepository', () => {

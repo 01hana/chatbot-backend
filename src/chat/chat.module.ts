@@ -9,6 +9,7 @@ import { SafetyModule } from '../safety/safety.module';
 import { IntentModule } from '../intent/intent.module';
 import { HealthModule } from '../health/health.module';
 import { QueryAnalysisModule } from '../query-analysis/query-analysis.module';
+import { TemplateModule } from '../template/template.module';
 
 /**
  * ChatModule — wires together the complete chat pipeline and HTTP endpoints.
@@ -21,6 +22,7 @@ import { QueryAnalysisModule } from '../query-analysis/query-analysis.module';
  *  - IntentModule          → intent detection
  *  - HealthModule          → AiStatusService (degraded tracking)
  *  - QueryAnalysisModule   → QueryAnalysisService (QA-005; feature-flag-guarded)
+ *  - TemplateModule        → AnswerTemplateResolver (TM-002; template/rag+template paths)
  *
  * AuditModule is @Global, so AuditService is available without explicit import.
  * SystemConfigModule is @Global, so SystemConfigService is available too.
@@ -35,6 +37,7 @@ import { QueryAnalysisModule } from '../query-analysis/query-analysis.module';
     IntentModule,
     HealthModule,
     QueryAnalysisModule,
+    TemplateModule,
   ],
   controllers: [ChatController],
   providers: [ChatPipelineService, PromptBuilder],

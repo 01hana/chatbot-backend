@@ -5,6 +5,9 @@ import { SafetyService } from '../safety/safety.service';
 import { IntentService } from '../intent/intent.service';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { QueryAnalysisService } from "../query-analysis/query-analysis.service";
+import { AnswerTemplateResolver } from "../template/answer-template-resolver";
+import type { KnowledgeEntry } from '../generated/prisma/client';
+import type { RetrievalResult } from '../retrieval/types/retrieval.types';
 import { AuditService } from './audit.service';
 import { ConversationService } from '../conversation/conversation.service';
 import { AiStatusService } from '../health/ai-status.service';
@@ -100,11 +103,40 @@ describe('T2-013 AuditLog Integration (mock LLM)', () => {
     build: jest.fn().mockReturnValue({ messages: [{ role: 'user', content: 'hello' }], estimatedTokens: 5 }),
   };
   const mockLlmProvider = { stream: jest.fn() };
+
+  const makeKnowledgeEntry = (overrides: Partial<KnowledgeEntry> = {}): KnowledgeEntry =>
+    ({
+      id: 1,
+      title: '測試條目',
+      content: '產品說明',
+      intentLabel: null,
+      tags: [],
+      aliases: [],
+      language: 'zh-TW',
+      status: 'published',
+      visibility: 'public',
+      version: 1,
+      createdAt: new Date('2026-01-01'),
+      updatedAt: new Date('2026-01-01'),
+      deletedAt: null,
+      sourceKey: null,
+      category: null,
+      answerType: 'rag',
+      templateKey: null,
+      faqQuestions: [],
+      crossLanguageGroupKey: null,
+      structuredAttributes: null,
+      ...overrides,
+    }) as KnowledgeEntry;
+
+  const makeRetrievalResult = (entryOverrides: Partial<KnowledgeEntry> = {}): RetrievalResult => ({
+    entry: makeKnowledgeEntry(entryOverrides),
+    score: 0.9,
+  });
+
   // Default: one high-confidence hit so the LLM step is reached
   const mockRetrievalService = {
-    retrieve: jest.fn().mockResolvedValue([
-      { score: 0.9, entry: { id: 1, content: '產品說明' } },
-    ]),
+    retrieve: jest.fn().mockResolvedValue([makeRetrievalResult()]),
   };
 
   beforeEach(async () => {
@@ -126,9 +158,7 @@ describe('T2-013 AuditLog Integration (mock LLM)', () => {
     mockConversationService.getHistoryByToken.mockResolvedValue([]);
     mockAiStatusService.isDegraded.mockReturnValue(false);
     mockPromptBuilder.build.mockReturnValue({ messages: [{ role: 'user', content: 'hello' }], estimatedTokens: 5 });
-    mockRetrievalService.retrieve.mockResolvedValue([
-      { score: 0.9, entry: { id: 1, content: '產品說明' } },
-    ]);
+    mockRetrievalService.retrieve.mockResolvedValue([makeRetrievalResult()]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -137,6 +167,7 @@ describe('T2-013 AuditLog Integration (mock LLM)', () => {
         { provide: IntentService, useValue: mockIntentService },
         { provide: SystemConfigService, useValue: mockSystemConfigService },
         { provide: QueryAnalysisService, useValue: mockQueryAnalysisService },
+        { provide: AnswerTemplateResolver, useValue: { resolve: jest.fn().mockReturnValue({ strategy: 'rag', reason: 'rag:default' }) } },
 
         { provide: AuditService, useValue: mockAuditSvc },
         { provide: ConversationService, useValue: mockConversationService },

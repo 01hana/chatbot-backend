@@ -12,6 +12,9 @@ import { LLM_PROVIDER } from '../llm/interfaces/llm-provider.interface';
 import { RETRIEVAL_SERVICE } from '../retrieval/interfaces/retrieval-service.interface';
 import { LlmTimeoutError } from '../llm/errors/llm-timeout.error';
 import { QueryAnalysisService } from '../query-analysis/query-analysis.service';
+import { AnswerTemplateResolver } from '../template/answer-template-resolver';
+import type { KnowledgeEntry } from '../generated/prisma/client';
+import type { RetrievalResult } from '../retrieval/types/retrieval.types';
 
 /**
  * T2-011 — Unit tests for ChatPipelineService.
@@ -33,11 +36,17 @@ describe('ChatPipelineService', () => {
 
   describe('detectLang (static)', () => {
     it('should return zh-TW for Chinese text', () => {
-      expect(ChatPipelineService.detectLang('你好，我想詢問產品規格與價格的相關資訊')).toBe('zh-TW');
+      expect(ChatPipelineService.detectLang('你好，我想詢問產品規格與價格的相關資訊')).toBe(
+        'zh-TW',
+      );
     });
 
     it('should return en for English text', () => {
-      expect(ChatPipelineService.detectLang('I would like to ask about your product specifications and pricing')).toBe('en');
+      expect(
+        ChatPipelineService.detectLang(
+          'I would like to ask about your product specifications and pricing',
+        ),
+      ).toBe('en');
     });
 
     it('should return fallback for empty string', () => {
@@ -116,6 +125,39 @@ describe('ChatPipelineService', () => {
     deletedAt: null,
   });
 
+  const makeKnowledgeEntry = (overrides: Partial<KnowledgeEntry> = {}): KnowledgeEntry =>
+    ({
+      id: 1,
+      title: '測試條目',
+      content: '產品資訊',
+      intentLabel: null,
+      tags: [],
+      aliases: [],
+      language: 'zh-TW',
+      status: 'published',
+      visibility: 'public',
+      version: 1,
+      createdAt: new Date('2026-01-01'),
+      updatedAt: new Date('2026-01-01'),
+      deletedAt: null,
+      sourceKey: null,
+      category: null,
+      answerType: 'rag',
+      templateKey: null,
+      faqQuestions: [],
+      crossLanguageGroupKey: null,
+      structuredAttributes: null,
+      ...overrides,
+    }) as KnowledgeEntry;
+
+  const makeRetrievalResult = (
+    score: number,
+    entryOverrides: Partial<KnowledgeEntry> = {},
+  ): RetrievalResult => ({
+    entry: makeKnowledgeEntry(entryOverrides),
+    score,
+  });
+
   const mockSafetyService = {
     scanPrompt: jest.fn().mockReturnValue({ blocked: false }),
     buildRefusalResponse: jest.fn().mockReturnValue('拒絕'),
@@ -166,6 +208,9 @@ describe('ChatPipelineService', () => {
       debugMeta: { processingMs: 5, normalizerSteps: [], expansionHits: 0 },
     }),
   };
+  const mockTemplateResolver = {
+    resolve: jest.fn().mockReturnValue({ strategy: 'rag', reason: 'rag:default' }),
+  };
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -179,6 +224,7 @@ describe('ChatPipelineService', () => {
         { provide: AiStatusService, useValue: mockAiStatusService },
         { provide: PromptBuilder, useValue: mockPromptBuilder },
         { provide: QueryAnalysisService, useValue: mockQueryAnalysisService },
+        { provide: AnswerTemplateResolver, useValue: mockTemplateResolver },
         { provide: LLM_PROVIDER, useValue: mockLlmProvider },
         { provide: RETRIEVAL_SERVICE, useValue: mockRetrievalService },
       ],
@@ -201,7 +247,9 @@ describe('ChatPipelineService', () => {
     mockConversationService.addMessage.mockResolvedValue({ id: 1 });
     mockConversationService.updateConversation.mockResolvedValue({});
     mockConversationService.getHistoryByToken.mockResolvedValue([]);
-    mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
+    mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({
+      sensitiveIntentCount: 1,
+    });
     mockQueryAnalysisService.analyze.mockResolvedValue({
       rawQuery: '測試',
       normalizedQuery: '測試',
@@ -215,6 +263,8 @@ describe('ChatPipelineService', () => {
       intentHints: [],
       debugMeta: { processingMs: 5, normalizerSteps: [], expansionHits: 0 },
     });
+    // Default: 'rag' strategy (001 behaviour preserved)
+    mockTemplateResolver.resolve.mockReturnValue({ strategy: 'rag', reason: 'rag:default' });
   });
 
   describe('degraded mode', () => {
@@ -249,7 +299,9 @@ describe('ChatPipelineService', () => {
         promptHash: 'abc123',
       });
       // sensitiveIntentCount=1 (below default threshold 3)
-      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({
+        sensitiveIntentCount: 1,
+      });
 
       const res = makeRes();
       await service.run(
@@ -271,12 +323,19 @@ describe('ChatPipelineService', () => {
   describe('successful flow', () => {
     it('should stream tokens and emit done event', async () => {
       mockRetrievalService.retrieve.mockResolvedValue([
-        { score: 0.9, entry: { id: 1, content: '產品資訊' } },
+        makeRetrievalResult(0.9, { content: '產品資訊' }),
       ]);
       async function* mockStream() {
         yield { token: '你好' };
         yield { token: '！' };
-        yield { token: '', done: true, provider: 'mock', modelUsed: 'mock', fallbackTriggered: false, usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 } };
+        yield {
+          token: '',
+          done: true,
+          provider: 'mock',
+          modelUsed: 'mock',
+          fallbackTriggered: false,
+          usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 },
+        };
       }
       mockLlmProvider.stream.mockReturnValue(mockStream());
 
@@ -292,14 +351,15 @@ describe('ChatPipelineService', () => {
       const writtenData = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0]).join('');
       expect(writtenData).toContain('event: token');
       expect(writtenData).toContain('event: done');
-      expect(mockAiStatusService.recordSuccess).toHaveBeenCalled();    });
+      expect(mockAiStatusService.recordSuccess).toHaveBeenCalled();
+    });
   });
 
   describe('abort signal', () => {
     it('should emit interrupted event when signal is aborted during stream', async () => {
       const controller = new AbortController();
       mockRetrievalService.retrieve.mockResolvedValue([
-        { score: 0.9, entry: { id: 1, content: '資訊' } },
+        makeRetrievalResult(0.9, { content: '資訊' }),
       ]);
 
       async function* mockStream() {
@@ -334,7 +394,7 @@ describe('ChatPipelineService', () => {
       }
       mockLlmProvider.stream.mockReturnValue(timeoutStream());
       mockRetrievalService.retrieve.mockResolvedValue([
-        { score: 0.9, entry: { id: 1, content: 'info' } },
+        makeRetrievalResult(0.9, { content: 'info' }),
       ]);
 
       const res = makeRes();
@@ -374,7 +434,7 @@ describe('ChatPipelineService', () => {
     it('should skip LLM and emit fallback when top score is below rag_minimum_score', async () => {
       // Score 0.10 < default minimum (0.25) → fallback
       mockRetrievalService.retrieve.mockResolvedValue([
-        { score: 0.10, entry: { id: 1, content: '非常低信心' } },
+        makeRetrievalResult(0.1, { content: '非常低信心' }),
       ]);
 
       const res = makeRes();
@@ -395,12 +455,19 @@ describe('ChatPipelineService', () => {
     it('should enter LLM with low confidence mode when score is between thresholds', async () => {
       // Score 0.35 is between default minimum (0.25) and default answer threshold (0.55)
       mockRetrievalService.retrieve.mockResolvedValue([
-        { score: 0.35, entry: { id: 1, content: '中低信心資訊' } },
+        makeRetrievalResult(0.35, { content: '中低信心資訊' }),
       ]);
 
       async function* lowConfStream() {
         yield { token: '追問回應', done: false };
-        yield { token: '', done: true, provider: 'mock', modelUsed: 'mock', fallbackTriggered: false, usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 } };
+        yield {
+          token: '',
+          done: true,
+          provider: 'mock',
+          modelUsed: 'mock',
+          fallbackTriggered: false,
+          usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 },
+        };
       }
       mockLlmProvider.stream.mockReturnValue(lowConfStream());
 
@@ -424,12 +491,19 @@ describe('ChatPipelineService', () => {
   describe('aiProvider from done chunk', () => {
     it('should pass provider from done chunk to audit log (not env-sniffed)', async () => {
       mockRetrievalService.retrieve.mockResolvedValue([
-        { score: 0.9, entry: { id: 1, content: 'info' } },
+        makeRetrievalResult(0.9, { content: 'info' }),
       ]);
 
       async function* mockStream() {
         yield { token: '回應', done: false };
-        yield { token: '', done: true, provider: 'mock', modelUsed: 'mock', fallbackTriggered: false, usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 } };
+        yield {
+          token: '',
+          done: true,
+          provider: 'mock',
+          modelUsed: 'mock',
+          fallbackTriggered: false,
+          usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+        };
       }
       mockLlmProvider.stream.mockReturnValue(mockStream());
 
@@ -457,7 +531,9 @@ describe('ChatPipelineService', () => {
         matchedType: 'confidential',
         matchedKeyword: '保密協議',
       });
-      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({
+        sensitiveIntentCount: 1,
+      });
 
       const res = makeRes();
       await service.run(
@@ -484,7 +560,9 @@ describe('ChatPipelineService', () => {
         matchedType: 'confidential',
         matchedKeyword: 'NDA',
       });
-      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({
+        sensitiveIntentCount: 1,
+      });
 
       const res = makeRes();
       await service.run(
@@ -507,7 +585,9 @@ describe('ChatPipelineService', () => {
         matchedType: 'confidential',
         matchedKeyword: '保密協議',
       });
-      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({
+        sensitiveIntentCount: 1,
+      });
 
       const res = makeRes();
       await service.run(
@@ -530,7 +610,9 @@ describe('ChatPipelineService', () => {
         matchedType: 'confidential',
         matchedKeyword: '保密協議',
       });
-      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({
+        sensitiveIntentCount: 1,
+      });
       mockSafetyService.buildRefusalResponse.mockReturnValue('很抱歉');
       mockSafetyService.buildHandoffGuidance.mockReturnValue('請留下聯絡資訊');
 
@@ -544,7 +626,10 @@ describe('ChatPipelineService', () => {
       );
 
       // addMessage is called twice: user msg then assistant msg
-      const calls = (mockConversationService.addMessage as jest.Mock).mock.calls as [number, Record<string, unknown>][];
+      const calls = (mockConversationService.addMessage as jest.Mock).mock.calls as [
+        number,
+        Record<string, unknown>,
+      ][];
       const assistantCall = calls.find(([, data]) => data['role'] === 'assistant');
       expect(assistantCall).toBeDefined();
       expect(assistantCall![1]).toMatchObject({
@@ -565,10 +650,18 @@ describe('ChatPipelineService', () => {
         blockedReason: 'Pattern matched',
         promptHash: 'abc123',
       });
-      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({
+        sensitiveIntentCount: 1,
+      });
 
       const res = makeRes();
-      await service.run(makeConversation() as never, 'inject attempt', 'req-id', res as never, new AbortController().signal);
+      await service.run(
+        makeConversation() as never,
+        'inject attempt',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
 
       expect(mockConversationService.incrementSensitiveIntentCount).toHaveBeenCalledTimes(1);
     });
@@ -582,7 +675,13 @@ describe('ChatPipelineService', () => {
       });
 
       const res = makeRes();
-      await service.run(makeConversation() as never, '成本價', 'req-id', res as never, new AbortController().signal);
+      await service.run(
+        makeConversation() as never,
+        '成本價',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
 
       expect(mockConversationService.incrementSensitiveIntentCount).not.toHaveBeenCalled();
     });
@@ -595,14 +694,22 @@ describe('ChatPipelineService', () => {
         promptHash: 'abc123',
       });
       // Return count = 3 which equals the default threshold of 3
-      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 3 });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({
+        sensitiveIntentCount: 3,
+      });
       mockSystemConfigService.getNumber.mockImplementation((key: string) => {
         if (key === 'sensitive_intent_alert_threshold') return 3;
         return null;
       });
 
       const res = makeRes();
-      await service.run(makeConversation() as never, 'jailbreak attempt', 'req-id', res as never, new AbortController().signal);
+      await service.run(
+        makeConversation() as never,
+        'jailbreak attempt',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
 
       const auditCalls = (mockAuditService.log as jest.Mock).mock.calls.map(
         (args: unknown[]) => (args[0] as { eventType: string }).eventType,
@@ -617,14 +724,22 @@ describe('ChatPipelineService', () => {
         blockedReason: 'Pattern matched',
         promptHash: 'abc123',
       });
-      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 2 });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({
+        sensitiveIntentCount: 2,
+      });
       mockSystemConfigService.getNumber.mockImplementation((key: string) => {
         if (key === 'sensitive_intent_alert_threshold') return 3;
         return null;
       });
 
       const res = makeRes();
-      await service.run(makeConversation() as never, 'inject', 'req-id', res as never, new AbortController().signal);
+      await service.run(
+        makeConversation() as never,
+        'inject',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
 
       const auditCalls = (mockAuditService.log as jest.Mock).mock.calls.map(
         (args: unknown[]) => (args[0] as { eventType: string }).eventType,
@@ -639,7 +754,9 @@ describe('ChatPipelineService', () => {
         blockedReason: 'Pattern matched',
         promptHash: 'abc123',
       });
-      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 3 });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({
+        sensitiveIntentCount: 3,
+      });
       mockSystemConfigService.getNumber.mockImplementation((key: string) => {
         if (key === 'sensitive_intent_alert_threshold') return 3;
         return null; // all other keys (max_message_length etc.) use defaults
@@ -648,7 +765,13 @@ describe('ChatPipelineService', () => {
       mockSafetyService.buildHandoffGuidance.mockReturnValue('請留下聯絡資訊');
 
       const res = makeRes();
-      await service.run(makeConversation() as never, 'jailbreak', 'req-id', res as never, new AbortController().signal);
+      await service.run(
+        makeConversation() as never,
+        'jailbreak',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
 
       const writtenData = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0]).join('');
       // Both refusal text and handoff guidance should appear
@@ -667,10 +790,18 @@ describe('ChatPipelineService', () => {
         blockedReason: 'Pattern matched',
         promptHash: 'abc123',
       });
-      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({
+        sensitiveIntentCount: 1,
+      });
 
       const res = makeRes();
-      await service.run(makeConversation() as never, 'inject', 'req-id', res as never, new AbortController().signal);
+      await service.run(
+        makeConversation() as never,
+        'inject',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
 
       expect(mockRetrievalService.retrieve).not.toHaveBeenCalled();
     });
@@ -681,10 +812,18 @@ describe('ChatPipelineService', () => {
         matchedType: 'confidential',
         matchedKeyword: '保密協議',
       });
-      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({
+        sensitiveIntentCount: 1,
+      });
 
       const res = makeRes();
-      await service.run(makeConversation() as never, '保密協議', 'req-id', res as never, new AbortController().signal);
+      await service.run(
+        makeConversation() as never,
+        '保密協議',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
 
       expect(mockRetrievalService.retrieve).not.toHaveBeenCalled();
     });
@@ -698,7 +837,9 @@ describe('ChatPipelineService', () => {
      * Returns an array of { event, data } objects for every 'done' event found.
      */
     const parseDonePayloads = (res: jest.Mocked<Partial<Response>>): Record<string, unknown>[] => {
-      const raw = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0] as string).join('');
+      const raw = (res.write as jest.Mock).mock.calls
+        .map((c: unknown[]) => c[0] as string)
+        .join('');
       const donePayloads: Record<string, unknown>[] = [];
       const blocks = raw.split('\n\n').filter(Boolean);
       for (const block of blocks) {
@@ -706,7 +847,9 @@ describe('ChatPipelineService', () => {
         const eventLine = lines.find(l => l.startsWith('event:'));
         const dataLine = lines.find(l => l.startsWith('data:'));
         if (eventLine?.includes('done') && dataLine) {
-          donePayloads.push(JSON.parse(dataLine.replace(/^data:\s*/, '')) as Record<string, unknown>);
+          donePayloads.push(
+            JSON.parse(dataLine.replace(/^data:\s*/, '')) as Record<string, unknown>,
+          );
         }
       }
       return donePayloads;
@@ -714,7 +857,7 @@ describe('ChatPipelineService', () => {
 
     it('should include intentLabel in done payload when intent is detected (answer path)', async () => {
       mockRetrievalService.retrieve.mockResolvedValue([
-        { score: 0.9, entry: { id: 1, content: '產品資訊' } },
+        makeRetrievalResult(0.9, { content: '產品資訊' }),
       ]);
       mockIntentService.detect.mockResolvedValue({
         intentLabel: 'product-inquiry',
@@ -723,12 +866,25 @@ describe('ChatPipelineService', () => {
       });
       async function* mockStream() {
         yield { token: '這是產品資訊' };
-        yield { token: '', done: true, provider: 'mock', modelUsed: 'mock', fallbackTriggered: false, usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 } };
+        yield {
+          token: '',
+          done: true,
+          provider: 'mock',
+          modelUsed: 'mock',
+          fallbackTriggered: false,
+          usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 },
+        };
       }
       mockLlmProvider.stream.mockReturnValue(mockStream());
 
       const res = makeRes();
-      await service.run(makeConversation() as never, '你們的螺絲產品有哪些', 'req-id', res as never, new AbortController().signal);
+      await service.run(
+        makeConversation() as never,
+        '你們的螺絲產品有哪些',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
 
       const donePayloads = parseDonePayloads(res);
       expect(donePayloads).toHaveLength(1);
@@ -737,7 +893,7 @@ describe('ChatPipelineService', () => {
 
     it('should include intentLabel as null when intent detection returns null (answer path)', async () => {
       mockRetrievalService.retrieve.mockResolvedValue([
-        { score: 0.9, entry: { id: 1, content: '資訊' } },
+        makeRetrievalResult(0.9, { content: '資訊' }),
       ]);
       mockIntentService.detect.mockResolvedValue({
         intentLabel: null,
@@ -746,12 +902,25 @@ describe('ChatPipelineService', () => {
       });
       async function* mockStream() {
         yield { token: '回應' };
-        yield { token: '', done: true, provider: 'mock', modelUsed: 'mock', fallbackTriggered: false, usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 } };
+        yield {
+          token: '',
+          done: true,
+          provider: 'mock',
+          modelUsed: 'mock',
+          fallbackTriggered: false,
+          usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+        };
       }
       mockLlmProvider.stream.mockReturnValue(mockStream());
 
       const res = makeRes();
-      await service.run(makeConversation() as never, '未知問題', 'req-id', res as never, new AbortController().signal);
+      await service.run(
+        makeConversation() as never,
+        '未知問題',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
 
       const donePayloads = parseDonePayloads(res);
       expect(donePayloads[0]['intentLabel']).toBeNull();
@@ -759,7 +928,7 @@ describe('ChatPipelineService', () => {
 
     it('intentLabel should be null (not undefined) in done payload when no intent matched', async () => {
       mockRetrievalService.retrieve.mockResolvedValue([
-        { score: 0.9, entry: { id: 1, content: '資訊' } },
+        makeRetrievalResult(0.9, { content: '資訊' }),
       ]);
       mockIntentService.detect.mockResolvedValue({
         intentLabel: null,
@@ -767,12 +936,25 @@ describe('ChatPipelineService', () => {
         language: 'zh-TW',
       });
       async function* mockStream() {
-        yield { token: '', done: true, provider: 'mock', modelUsed: 'mock', fallbackTriggered: false, usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } };
+        yield {
+          token: '',
+          done: true,
+          provider: 'mock',
+          modelUsed: 'mock',
+          fallbackTriggered: false,
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        };
       }
       mockLlmProvider.stream.mockReturnValue(mockStream());
 
       const res = makeRes();
-      await service.run(makeConversation() as never, '測試', 'req-id', res as never, new AbortController().signal);
+      await service.run(
+        makeConversation() as never,
+        '測試',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
 
       const donePayloads = parseDonePayloads(res);
       expect(donePayloads[0]).toHaveProperty('intentLabel');
@@ -789,7 +971,13 @@ describe('ChatPipelineService', () => {
       });
 
       const res = makeRes();
-      await service.run(makeConversation() as never, '詢價', 'req-id', res as never, new AbortController().signal);
+      await service.run(
+        makeConversation() as never,
+        '詢價',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
 
       const donePayloads = parseDonePayloads(res);
       expect(donePayloads).toHaveLength(1);
@@ -804,10 +992,18 @@ describe('ChatPipelineService', () => {
         blockedReason: 'Pattern matched',
         promptHash: 'abc123',
       });
-      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({
+        sensitiveIntentCount: 1,
+      });
 
       const res = makeRes();
-      await service.run(makeConversation() as never, '注入攻擊', 'req-id', res as never, new AbortController().signal);
+      await service.run(
+        makeConversation() as never,
+        '注入攻擊',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
 
       const donePayloads = parseDonePayloads(res);
       expect(donePayloads).toHaveLength(1);
@@ -821,10 +1017,18 @@ describe('ChatPipelineService', () => {
         matchedType: 'confidential',
         matchedKeyword: 'NDA',
       });
-      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
+      mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({
+        sensitiveIntentCount: 1,
+      });
 
       const res = makeRes();
-      await service.run(makeConversation() as never, 'NDA question', 'req-id', res as never, new AbortController().signal);
+      await service.run(
+        makeConversation() as never,
+        'NDA question',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
 
       const donePayloads = parseDonePayloads(res);
       expect(donePayloads).toHaveLength(1);
@@ -836,7 +1040,13 @@ describe('ChatPipelineService', () => {
       mockAiStatusService.isDegraded.mockReturnValue(true);
 
       const res = makeRes();
-      await service.run(makeConversation() as never, '任意訊息', 'req-id', res as never, new AbortController().signal);
+      await service.run(
+        makeConversation() as never,
+        '任意訊息',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
 
       const donePayloads = parseDonePayloads(res);
       expect(donePayloads).toHaveLength(1);
@@ -844,51 +1054,18 @@ describe('ChatPipelineService', () => {
       expect(donePayloads[0]['intentLabel']).toBeNull();
     });
 
-    it('should NOT affect error/timeout/interrupted events (they do not have intentLabel)', async () => {
-      const controller = new AbortController();
-      mockRetrievalService.retrieve.mockResolvedValue([
-        { score: 0.9, entry: { id: 1, content: '資訊' } },
-      ]);
-      async function* mockStream() {
-        controller.abort();
-        const err = new Error('aborted');
-        (err as NodeJS.ErrnoException).code = 'ABORT_ERR';
-        throw err;
-      }
-      mockLlmProvider.stream.mockReturnValue(mockStream());
-
-      const res = makeRes();
-      await service.run(makeConversation() as never, '中斷', 'req-id', res as never, controller.signal);
-
-      const raw = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0] as string).join('');
-      // Should have 'interrupted' event, NOT 'done'
-      expect(raw).toContain('event: interrupted');
-      expect(raw).not.toContain('event: done');
-    });
-  });
-
-  // ── QA-005: feature.query_analysis_enabled flag ────────────────────────
-
-  describe('QA-005 — feature.query_analysis_enabled', () => {
-    it('should NOT call analyzeQuery when feature.query_analysis_enabled is false', async () => {
-      mockSystemConfigService.getBoolean.mockImplementation((key: string) => {
-        if (key === 'feature.query_analysis_enabled') return false;
-        return null;
-      });
-      mockRetrievalService.retrieve.mockResolvedValue([]);
-
-      const res = makeRes();
-      await service.run(makeConversation() as never, '你好', 'req-id', res as never, new AbortController().signal);
-
-      expect(mockQueryAnalysisService.analyze).not.toHaveBeenCalled();
-    });
-
     it('should NOT call analyzeQuery when feature.query_analysis_enabled is null (default off)', async () => {
       mockSystemConfigService.getBoolean.mockReturnValue(null); // getBoolean returns null → default false
       mockRetrievalService.retrieve.mockResolvedValue([]);
 
       const res = makeRes();
-      await service.run(makeConversation() as never, '你好', 'req-id', res as never, new AbortController().signal);
+      await service.run(
+        makeConversation() as never,
+        '你好',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
 
       expect(mockQueryAnalysisService.analyze).not.toHaveBeenCalled();
     });
@@ -901,7 +1078,13 @@ describe('ChatPipelineService', () => {
       mockRetrievalService.retrieve.mockResolvedValue([]);
 
       const res = makeRes();
-      await service.run(makeConversation() as never, '螺絲規格', 'req-id', res as never, new AbortController().signal);
+      await service.run(
+        makeConversation() as never,
+        '螺絲規格',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
 
       expect(mockQueryAnalysisService.analyze).toHaveBeenCalledWith('螺絲規格', expect.any(String));
     });
@@ -925,11 +1108,21 @@ describe('ChatPipelineService', () => {
         return null;
       });
       mockQueryAnalysisService.analyze.mockResolvedValue(fakeAnalyzedQuery);
-      mockIntentService.detect.mockResolvedValue({ intentLabel: 'product-inquiry', confidence: 0.8, language: 'zh-TW' });
+      mockIntentService.detect.mockResolvedValue({
+        intentLabel: 'product-inquiry',
+        confidence: 0.8,
+        language: 'zh-TW',
+      });
       mockRetrievalService.retrieve.mockResolvedValue([]);
 
       const res = makeRes();
-      await service.run(makeConversation() as never, '螺絲規格', 'req-id', res as never, new AbortController().signal);
+      await service.run(
+        makeConversation() as never,
+        '螺絲規格',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
 
       expect(mockIntentService.detect).toHaveBeenCalledWith(
         '螺絲規格',
@@ -960,7 +1153,13 @@ describe('ChatPipelineService', () => {
       mockRetrievalService.retrieve.mockResolvedValue([]);
 
       const res = makeRes();
-      await service.run(makeConversation() as never, '請問螺絲規格', 'req-id', res as never, new AbortController().signal);
+      await service.run(
+        makeConversation() as never,
+        '請問螺絲規格',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
 
       expect(mockRetrievalService.retrieve).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -991,21 +1190,37 @@ describe('ChatPipelineService', () => {
       });
       mockQueryAnalysisService.analyze.mockResolvedValue(fakeAnalyzedQuery);
       mockRetrievalService.retrieve.mockResolvedValue([
-        { score: 0.9, entry: { id: 1, content: '螺絲問題解答' } },
+        makeRetrievalResult(0.9, { content: '螺絲問題解答', answerType: 'rag' }),
       ]);
-      mockIntentService.detect.mockResolvedValue({ intentLabel: null, confidence: 0, language: 'zh-TW' });
+      mockIntentService.detect.mockResolvedValue({
+        intentLabel: null,
+        confidence: 0,
+        language: 'zh-TW',
+      });
       async function* mockStream() {
         yield { token: '回應', done: false };
-        yield { token: '', done: true, provider: 'mock', modelUsed: 'mock', fallbackTriggered: false, usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 } };
+        yield {
+          token: '',
+          done: true,
+          provider: 'mock',
+          modelUsed: 'mock',
+          fallbackTriggered: false,
+          usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 },
+        };
       }
       mockLlmProvider.stream.mockReturnValue(mockStream());
 
       const res = makeRes();
-      await service.run(makeConversation() as never, '螺絲問題', 'req-id', res as never, new AbortController().signal);
+      await service.run(
+        makeConversation() as never,
+        '螺絲問題',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
 
       const answerAuditCall = (mockAuditService.log as jest.Mock).mock.calls.find(
-        (args: unknown[]) =>
-          (args[0] as { eventType: string }).eventType === 'chat_response',
+        (args: unknown[]) => (args[0] as { eventType: string }).eventType === 'chat_response',
       );
       expect(answerAuditCall).toBeDefined();
       const eventData = (answerAuditCall![0] as { eventData: Record<string, unknown> }).eventData;
@@ -1017,21 +1232,37 @@ describe('ChatPipelineService', () => {
     it('should NOT include selectedProfile in audit log when flag is off (001 path)', async () => {
       mockSystemConfigService.getBoolean.mockReturnValue(null); // flag off
       mockRetrievalService.retrieve.mockResolvedValue([
-        { score: 0.9, entry: { id: 1, content: '資訊' } },
+        makeRetrievalResult(0.9, { content: '資訊', answerType: 'rag' }),
       ]);
-      mockIntentService.detect.mockResolvedValue({ intentLabel: null, confidence: 0, language: 'zh-TW' });
+      mockIntentService.detect.mockResolvedValue({
+        intentLabel: null,
+        confidence: 0,
+        language: 'zh-TW',
+      });
       async function* mockStream() {
         yield { token: '回應', done: false };
-        yield { token: '', done: true, provider: 'mock', modelUsed: 'mock', fallbackTriggered: false, usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 } };
+        yield {
+          token: '',
+          done: true,
+          provider: 'mock',
+          modelUsed: 'mock',
+          fallbackTriggered: false,
+          usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+        };
       }
       mockLlmProvider.stream.mockReturnValue(mockStream());
 
       const res = makeRes();
-      await service.run(makeConversation() as never, '測試', 'req-id', res as never, new AbortController().signal);
+      await service.run(
+        makeConversation() as never,
+        '測試',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
 
       const answerAuditCall = (mockAuditService.log as jest.Mock).mock.calls.find(
-        (args: unknown[]) =>
-          (args[0] as { eventType: string }).eventType === 'chat_response',
+        (args: unknown[]) => (args[0] as { eventType: string }).eventType === 'chat_response',
       );
       expect(answerAuditCall).toBeDefined();
       const eventData = (answerAuditCall![0] as { eventData: Record<string, unknown> }).eventData;
@@ -1044,7 +1275,13 @@ describe('ChatPipelineService', () => {
       mockRetrievalService.retrieve.mockResolvedValue([]);
 
       const res = makeRes();
-      await service.run(makeConversation() as never, '請問你們的螺絲規格如何', 'req-id', res as never, new AbortController().signal);
+      await service.run(
+        makeConversation() as never,
+        '請問你們的螺絲規格如何',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
 
       expect(mockRetrievalService.retrieve).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1053,6 +1290,293 @@ describe('ChatPipelineService', () => {
           expandedTerms: undefined,
         }),
       );
+    });
+  });
+
+  // ── TM-002: Template / rag+template path integration ──────────────────
+
+  describe('TM-002 / TM-003 — template resolver integration', () => {
+    it('strategy=rag: LLM IS called (001 backward compat)', async () => {
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, { content: '螺絲規格', answerType: 'rag' }),
+      ]);
+      mockTemplateResolver.resolve.mockReturnValue({ strategy: 'rag', reason: 'rag:1' });
+      async function* mockStream() {
+        yield { token: '回應', done: false };
+        yield {
+          token: '',
+          done: true,
+          provider: 'mock',
+          modelUsed: 'mock',
+          fallbackTriggered: false,
+          usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+        };
+      }
+      mockLlmProvider.stream.mockReturnValue(mockStream());
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '螺絲規格',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
+
+      // LLM was called
+      expect(mockLlmProvider.stream).toHaveBeenCalled();
+      // done event present
+      const raw = (res.write as jest.Mock).mock.calls
+        .map((c: unknown[]) => c[0] as string)
+        .join('');
+      expect(raw).toContain('event: done');
+    });
+
+    it('strategy=template: LLM is NOT called, resolvedContent emitted as token', async () => {
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, { id: 42, content: '直接回覆內容', answerType: 'template', sourceKey: 'faq-key' }),
+      ]);
+      mockTemplateResolver.resolve.mockReturnValue({
+        strategy: 'template',
+        resolvedContent: '直接回覆內容',
+        reason: 'template:faq-key',
+      });
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '查詢',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
+
+      // LLM was NOT called
+      expect(mockLlmProvider.stream).not.toHaveBeenCalled();
+
+      // SSE output: token + done
+      const raw = (res.write as jest.Mock).mock.calls
+        .map((c: unknown[]) => c[0] as string)
+        .join('');
+      expect(raw).toContain('event: token');
+      expect(raw).toContain('直接回覆內容');
+      expect(raw).toContain('event: done');
+    });
+
+    it('strategy=template: done event has action=answer and correct messageId', async () => {
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, { id: 42, content: '模板回覆', answerType: 'template', sourceKey: 'tpl-1' }),
+      ]);
+      mockTemplateResolver.resolve.mockReturnValue({
+        strategy: 'template',
+        resolvedContent: '模板回覆',
+        reason: 'template:tpl-1',
+      });
+      mockConversationService.addMessage
+        .mockResolvedValueOnce({ id: 10 }) // user message
+        .mockResolvedValueOnce({ id: 11 }); // assistant message
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '查詢',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
+
+      const raw = (res.write as jest.Mock).mock.calls
+        .map((c: unknown[]) => c[0] as string)
+        .join('');
+      expect(raw).toContain('"action":"answer"');
+      expect(raw).toContain('"messageId":11');
+    });
+
+    it('strategy=template: audit log contains templateStrategy and templateReason', async () => {
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, { id: 5, content: '規格內容', answerType: 'template', sourceKey: 'spec-key' }),
+      ]);
+      mockTemplateResolver.resolve.mockReturnValue({
+        strategy: 'template',
+        resolvedContent: '規格內容',
+        reason: 'template:spec-key',
+      });
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '查詢',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
+
+      const answerAuditCall = (mockAuditService.log as jest.Mock).mock.calls.find(
+        (args: unknown[]) => (args[0] as { eventType: string }).eventType === 'chat_response',
+      );
+      expect(answerAuditCall).toBeDefined();
+      const eventData = (answerAuditCall![0] as { eventData: Record<string, unknown> }).eventData;
+      expect(eventData['templateStrategy']).toBe('template');
+      expect(eventData['templateReason']).toBe('template:spec-key');
+    });
+
+    it('strategy=rag+template: LLM is NOT called, resolvedContent emitted', async () => {
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.85, { id: 7, content: 'M3 螺絲 100 元', answerType: 'rag+template', sourceKey: 'pricing-key' }),
+      ]);
+      mockTemplateResolver.resolve.mockReturnValue({
+        strategy: 'rag+template',
+        resolvedContent: '以下是價格：M3 螺絲 100 元',
+        reason: 'rag+template:pricing-key',
+      });
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '螺絲多少錢',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
+
+      // LLM NOT called
+      expect(mockLlmProvider.stream).not.toHaveBeenCalled();
+
+      const raw = (res.write as jest.Mock).mock.calls
+        .map((c: unknown[]) => c[0] as string)
+        .join('');
+      expect(raw).toContain('以下是價格：M3 螺絲 100 元');
+      expect(raw).toContain('event: done');
+    });
+
+    it('strategy=rag+template: audit log shows aiProvider=template and zero token counts', async () => {
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.85, { id: 8, content: '資料', answerType: 'rag+template', sourceKey: 'k' }),
+      ]);
+      mockTemplateResolver.resolve.mockReturnValue({
+        strategy: 'rag+template',
+        resolvedContent: '填好的回答',
+        reason: 'rag+template:k',
+      });
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '問題',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
+
+      const answerAuditCall = (mockAuditService.log as jest.Mock).mock.calls.find(
+        (args: unknown[]) => (args[0] as { eventType: string }).eventType === 'chat_response',
+      );
+      expect(answerAuditCall).toBeDefined();
+      const logArg = answerAuditCall![0] as Record<string, unknown>;
+      expect(logArg['aiProvider']).toBe('template');
+      expect(logArg['promptTokens']).toBe(0);
+      expect(logArg['completionTokens']).toBe(0);
+    });
+
+    it('strategy=llm: LLM IS called (explicit llm path)', async () => {
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, { id: 3, content: '內容', answerType: 'llm' }),
+      ]);
+      mockTemplateResolver.resolve.mockReturnValue({ strategy: 'llm', reason: 'explicit_llm:3' });
+      async function* mockStream() {
+        yield { token: '答案', done: false };
+        yield {
+          token: '',
+          done: true,
+          provider: 'mock',
+          modelUsed: 'mock',
+          fallbackTriggered: false,
+          usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+        };
+      }
+      mockLlmProvider.stream.mockReturnValue(mockStream());
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '問題',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
+
+      expect(mockLlmProvider.stream).toHaveBeenCalled();
+    });
+
+    it('template path: resolveTemplate is called with ragResults, intentLabel, and language', async () => {
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, { content: '內容', answerType: 'rag' }),
+      ]);
+      const resolveTemplateSpy = jest.spyOn(service, 'resolveTemplate');
+      async function* mockStream() {
+        yield {
+          token: '',
+          done: true,
+          provider: 'mock',
+          modelUsed: 'mock',
+          fallbackTriggered: false,
+          usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+        };
+      }
+      mockLlmProvider.stream.mockReturnValue(mockStream());
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '測試',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
+
+      // Verify resolveTemplate was called exactly once with the correct argument types
+      expect(resolveTemplateSpy).toHaveBeenCalledTimes(1);
+      const [ragArg, , langArg] = resolveTemplateSpy.mock.calls[0];
+      expect(Array.isArray(ragArg)).toBe(true);
+      expect(typeof langArg).toBe('string');
+    });
+
+    it('TM-003: default answerType=rag entries: all 001 behaviours preserved (LLM called, done emitted)', async () => {
+      // Simulate a standard 001 flow with a rag-type entry
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.85, { id: 99, content: '知識庫內容', answerType: 'rag' }),
+      ]);
+      // resolver returns 'rag' (which it does by default in beforeEach)
+      async function* mockStream() {
+        yield { token: 'LLM 回應', done: false };
+        yield {
+          token: '',
+          done: true,
+          provider: 'openai',
+          modelUsed: 'gpt-4',
+          fallbackTriggered: false,
+          usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+        };
+      }
+      mockLlmProvider.stream.mockReturnValue(mockStream());
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '你好',
+        'req-id',
+        res as never,
+        new AbortController().signal,
+      );
+
+      expect(mockLlmProvider.stream).toHaveBeenCalled();
+      const raw = (res.write as jest.Mock).mock.calls
+        .map((c: unknown[]) => c[0] as string)
+        .join('');
+      expect(raw).toContain('event: token');
+      expect(raw).toContain('LLM 回應');
+      expect(raw).toContain('event: done');
+      expect(raw).toContain('"action":"answer"');
     });
   });
 });

@@ -26,6 +26,8 @@ import {
 import { RetrievalResult } from '../retrieval/types/retrieval.types';
 import { QueryAnalysisService } from '../query-analysis/query-analysis.service';
 import type { AnalyzedQuery } from '../query-analysis/types/analyzed-query.type';
+import { AnswerTemplateResolver } from '../template/answer-template-resolver';
+import type { TemplateResolution } from '../template/types/template-resolution.type';
 
 /** Internal state threaded through the pipeline steps. */
 interface PipelineContext {
@@ -48,6 +50,11 @@ interface PipelineContext {
    * When absent, the pipeline uses the 001 behaviour (QueryNormalizer path).
    */
   analyzedQuery?: AnalyzedQuery;
+  /**
+   * Template resolution result, set in Step 9 (TM-002).
+   * When strategy is 'template' or 'rag+template', the pipeline skips the LLM.
+   */
+  templateResolution?: TemplateResolution;
 }
 
 /**
@@ -66,9 +73,12 @@ interface PipelineContext {
  *  5. detectIntent         — IntentService.detect() [passes analyzedQuery when available]
  *  6. retrieveKnowledge    — RetrievalService.retrieve() [passes rankingProfile/expandedTerms when available]
  *  7. evaluateConfidence   — dual threshold: minimum score vs answer threshold
- *  8. buildPrompt          — PromptBuilder.build() with confidenceLevel
- *  9. callLlmStream        — ILlmProvider.stream()
- * 10. writeAndReturn       — persist messages + write AuditLog
+ *  8. buildPrompt          — PromptBuilder.build() with confidenceLevel (skipped for template/rag+template)
+ *  9. resolveTemplate      — AnswerTemplateResolver.resolve() [TM-002]
+ *                            → template/rag+template: write resolvedContent, done, return (no LLM)
+ *                            → rag/llm: continue to LLM stream
+ * 10. callLlmStream        — ILlmProvider.stream()
+ * 11. writeAndReturn       — persist messages + write AuditLog
  */
 @Injectable()
 export class ChatPipelineService {
@@ -85,6 +95,7 @@ export class ChatPipelineService {
     private readonly aiStatusService: AiStatusService,
     private readonly promptBuilder: PromptBuilder,
     private readonly queryAnalysisService: QueryAnalysisService,
+    private readonly templateResolver: AnswerTemplateResolver,
     @Inject(LLM_PROVIDER) llmProvider: unknown,
     @Inject(RETRIEVAL_SERVICE) retrievalService: unknown,
   ) {
@@ -343,7 +354,86 @@ export class ChatPipelineService {
       const maxContextTokens = this.systemConfigService.getNumber('llm_max_context_tokens') ?? 8000;
       const { messages } = this.buildPrompt(userMessage, ctx, maxContextTokens);
 
-      // ── Step 9: Stream LLM response ──────────────────────────────────────
+      // ── Step 9: Template resolution (TM-002) ─────────────────────────────
+      // Inspect the top RAG entry's answerType and decide whether we can skip
+      // the LLM entirely.  For 'rag' and 'llm' strategies this is a no-op and
+      // we fall through to the normal LLM streaming block below.
+      ctx.templateResolution = this.resolveTemplate(ctx.ragResults, ctx.intentLabel, ctx.language);
+
+      if (
+        ctx.templateResolution.strategy === 'template' ||
+        ctx.templateResolution.strategy === 'rag+template'
+      ) {
+        // Persist user message
+        const userMsg = await this.conversationService.addMessage(conversation.id, {
+          role: 'user',
+          content: userMessage,
+        });
+
+        const templateContent = ctx.templateResolution.resolvedContent!;
+
+        // Persist assistant message (deterministic, no LLM)
+        const assistantMsg = await this.conversationService.addMessage(conversation.id, {
+          role: 'assistant',
+          content: templateContent,
+        });
+
+        const sourceRefs = ctx.ragResults.map(r => r.entry.id);
+
+        await this.auditService.log({
+          requestId,
+          sessionId: conversation.sessionId,
+          eventType: 'chat_response',
+          eventData: {
+            action: 'answer',
+            intentLabel: ctx.intentLabel,
+            fallbackTriggered: false,
+            confidenceLevel: ctx.confidenceLevel,
+            templateStrategy: ctx.templateResolution.strategy,
+            templateReason: ctx.templateResolution.reason,
+            // QA-005 debug fields (when enabled)
+            ...(ctx.analyzedQuery && {
+              selectedProfile: ctx.analyzedQuery.selectedProfile,
+              extractedTerms: ctx.analyzedQuery.terms,
+              matchedQueryRules: ctx.analyzedQuery.matchedRules,
+              queryAnalysisMs: ctx.analyzedQuery.debugMeta.processingMs,
+            }),
+          },
+          knowledgeRefs: sourceRefs.map(String),
+          ragConfidence: ctx.ragConfidence,
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          durationMs: Date.now() - startMs,
+          aiModel: 'none',
+          aiProvider: 'template',
+          configSnapshot: {
+            rag_minimum_score: this.systemConfigService.getNumber('rag_minimum_score') ?? 0.25,
+            rag_answer_threshold:
+              this.systemConfigService.getNumber('rag_answer_threshold') ??
+              this.systemConfigService.getNumber('rag_confidence_threshold') ??
+              0.55,
+            llm_max_context_tokens: maxContextTokens,
+          },
+        });
+
+        // Write SSE token then done — LLM is NOT called
+        res.write(formatSseEvent('token', { token: templateContent } satisfies SseTokenPayload));
+        this.writeSseAndEnd(res, 'done', {
+          messageId: assistantMsg.id,
+          action: 'answer' satisfies ChatAction,
+          intentLabel: ctx.intentLabel,
+          sourceReferences: sourceRefs,
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        } satisfies SseDonePayload);
+
+        void userMsg;
+        return;
+      }
+
+      // strategy === 'rag' or 'llm' → fall through to LLM streaming
+
+      // ── Step 10: Stream LLM response ─────────────────────────────────────
       const userMsg = await this.conversationService.addMessage(conversation.id, {
         role: 'user',
         content: userMessage,
@@ -599,6 +689,20 @@ export class ChatPipelineService {
       rankingProfile: analyzedQuery?.selectedProfile,
       expandedTerms: analyzedQuery?.expandedTerms,
     });
+  }
+
+  /**
+   * Step 9: Determine the answer strategy for this turn (TM-002).
+   *
+   * Delegates to AnswerTemplateResolver.  Extracted as a separate method so
+   * it can be individually spied on in tests.
+   */
+  resolveTemplate(
+    ragResults: RetrievalResult[],
+    intentLabel: string | null,
+    language: string,
+  ): TemplateResolution {
+    return this.templateResolver.resolve(ragResults, intentLabel, language);
   }
 
   buildPrompt(userMessage: string, ctx: PipelineContext, maxContextTokens: number) {

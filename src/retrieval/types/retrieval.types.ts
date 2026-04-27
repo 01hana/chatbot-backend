@@ -18,6 +18,18 @@ export interface RetrievalQuery {
   language?: string;
   /** Maximum number of results to return (default 5). */
   limit?: number;
+  /**
+   * Ranking profile key to use for scoring weights (e.g. 'default' | 'faq' | 'product' | 'diagnosis').
+   * Populated by ChatPipelineService when QueryAnalysis is enabled (QA-005).
+   * The retrieval service may use this to select a scoring profile from SystemConfig.
+   */
+  rankingProfile?: string;
+  /**
+   * Expanded term list from GlossaryExpansionProvider (synonyms + original terms).
+   * Populated by ChatPipelineService when QueryAnalysis is enabled (QA-005).
+   * Can be used for app-layer reranking instead of re-extracting via QueryNormalizer.
+   */
+  expandedTerms?: string[];
 }
 
 /**

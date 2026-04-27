@@ -4,6 +4,7 @@ import { ChatPipelineService } from '../chat/chat-pipeline.service';
 import { SafetyService } from '../safety/safety.service';
 import { IntentService } from '../intent/intent.service';
 import { SystemConfigService } from '../system-config/system-config.service';
+import { QueryAnalysisService } from "../query-analysis/query-analysis.service";
 import { AuditService } from './audit.service';
 import { ConversationService } from '../conversation/conversation.service';
 import { AiStatusService } from '../health/ai-status.service';
@@ -112,6 +113,10 @@ describe('T2-013 AuditLog Integration (mock LLM)', () => {
     // Restore defaults cleared by jest.clearAllMocks()
     mockSafetyService.scanPrompt.mockResolvedValue({ blocked: false });
     mockSafetyService.checkConfidentiality.mockResolvedValue({ triggered: false });
+    const mockQueryAnalysisService = {
+      analyze: jest.fn(),
+    };
+
     mockIntentService.detect.mockResolvedValue({ label: 'product', score: 0.9, sensitive: false });
     mockSystemConfigService.get.mockReturnValue(null);
     mockSystemConfigService.getNumber.mockReturnValue(null);
@@ -131,6 +136,8 @@ describe('T2-013 AuditLog Integration (mock LLM)', () => {
         { provide: SafetyService, useValue: mockSafetyService },
         { provide: IntentService, useValue: mockIntentService },
         { provide: SystemConfigService, useValue: mockSystemConfigService },
+        { provide: QueryAnalysisService, useValue: mockQueryAnalysisService },
+
         { provide: AuditService, useValue: mockAuditSvc },
         { provide: ConversationService, useValue: mockConversationService },
         { provide: AiStatusService, useValue: mockAiStatusService },

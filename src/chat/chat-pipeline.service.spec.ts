@@ -11,6 +11,7 @@ import { PromptBuilder } from './prompt-builder';
 import { LLM_PROVIDER } from '../llm/interfaces/llm-provider.interface';
 import { RETRIEVAL_SERVICE } from '../retrieval/interfaces/retrieval-service.interface';
 import { LlmTimeoutError } from '../llm/errors/llm-timeout.error';
+import { QueryAnalysisService } from '../query-analysis/query-analysis.service';
 
 /**
  * T2-011 — Unit tests for ChatPipelineService.
@@ -150,6 +151,21 @@ describe('ChatPipelineService', () => {
   const mockRetrievalService = {
     retrieve: jest.fn().mockResolvedValue([]),
   };
+  const mockQueryAnalysisService = {
+    analyze: jest.fn().mockResolvedValue({
+      rawQuery: '測試',
+      normalizedQuery: '測試',
+      language: 'zh-TW',
+      tokens: ['測試'],
+      terms: ['測試'],
+      phrases: [],
+      expandedTerms: ['測試'],
+      matchedRules: [],
+      selectedProfile: 'default',
+      intentHints: [],
+      debugMeta: { processingMs: 5, normalizerSteps: [], expansionHits: 0 },
+    }),
+  };
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -162,6 +178,7 @@ describe('ChatPipelineService', () => {
         { provide: ConversationService, useValue: mockConversationService },
         { provide: AiStatusService, useValue: mockAiStatusService },
         { provide: PromptBuilder, useValue: mockPromptBuilder },
+        { provide: QueryAnalysisService, useValue: mockQueryAnalysisService },
         { provide: LLM_PROVIDER, useValue: mockLlmProvider },
         { provide: RETRIEVAL_SERVICE, useValue: mockRetrievalService },
       ],
@@ -177,6 +194,7 @@ describe('ChatPipelineService', () => {
     mockSafetyService.buildHandoffGuidance.mockReturnValue('請留下聯絡資訊');
     mockIntentService.detect.mockResolvedValue({ label: 'general', score: 0.1, sensitive: false });
     mockSystemConfigService.get.mockReturnValue(null);
+    mockSystemConfigService.getBoolean.mockReturnValue(null); // feature flag OFF by default
     mockAiStatusService.isDegraded.mockReturnValue(false);
     mockRetrievalService.retrieve.mockResolvedValue([]);
     mockPromptBuilder.build.mockReturnValue({ messages: [], estimatedTokens: 0 });
@@ -184,6 +202,19 @@ describe('ChatPipelineService', () => {
     mockConversationService.updateConversation.mockResolvedValue({});
     mockConversationService.getHistoryByToken.mockResolvedValue([]);
     mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({ sensitiveIntentCount: 1 });
+    mockQueryAnalysisService.analyze.mockResolvedValue({
+      rawQuery: '測試',
+      normalizedQuery: '測試',
+      language: 'zh-TW',
+      tokens: ['測試'],
+      terms: ['測試'],
+      phrases: [],
+      expandedTerms: ['測試'],
+      matchedRules: [],
+      selectedProfile: 'default',
+      intentHints: [],
+      debugMeta: { processingMs: 5, normalizerSteps: [], expansionHits: 0 },
+    });
   });
 
   describe('degraded mode', () => {
@@ -833,6 +864,195 @@ describe('ChatPipelineService', () => {
       // Should have 'interrupted' event, NOT 'done'
       expect(raw).toContain('event: interrupted');
       expect(raw).not.toContain('event: done');
+    });
+  });
+
+  // ── QA-005: feature.query_analysis_enabled flag ────────────────────────
+
+  describe('QA-005 — feature.query_analysis_enabled', () => {
+    it('should NOT call analyzeQuery when feature.query_analysis_enabled is false', async () => {
+      mockSystemConfigService.getBoolean.mockImplementation((key: string) => {
+        if (key === 'feature.query_analysis_enabled') return false;
+        return null;
+      });
+      mockRetrievalService.retrieve.mockResolvedValue([]);
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, '你好', 'req-id', res as never, new AbortController().signal);
+
+      expect(mockQueryAnalysisService.analyze).not.toHaveBeenCalled();
+    });
+
+    it('should NOT call analyzeQuery when feature.query_analysis_enabled is null (default off)', async () => {
+      mockSystemConfigService.getBoolean.mockReturnValue(null); // getBoolean returns null → default false
+      mockRetrievalService.retrieve.mockResolvedValue([]);
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, '你好', 'req-id', res as never, new AbortController().signal);
+
+      expect(mockQueryAnalysisService.analyze).not.toHaveBeenCalled();
+    });
+
+    it('should call analyzeQuery when feature.query_analysis_enabled is true', async () => {
+      mockSystemConfigService.getBoolean.mockImplementation((key: string) => {
+        if (key === 'feature.query_analysis_enabled') return true;
+        return null;
+      });
+      mockRetrievalService.retrieve.mockResolvedValue([]);
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, '螺絲規格', 'req-id', res as never, new AbortController().signal);
+
+      expect(mockQueryAnalysisService.analyze).toHaveBeenCalledWith('螺絲規格', expect.any(String));
+    });
+
+    it('should pass analyzedQuery to IntentService.detect when flag is on', async () => {
+      const fakeAnalyzedQuery = {
+        rawQuery: '螺絲規格',
+        normalizedQuery: '螺絲規格',
+        language: 'zh-TW',
+        tokens: ['螺絲', '規格'],
+        terms: ['螺絲', '規格'],
+        phrases: [],
+        expandedTerms: ['螺絲', '規格', 'screw', 'spec'],
+        matchedRules: ['stop_word_zh'],
+        selectedProfile: 'product',
+        intentHints: [{ label: 'product-inquiry', score: 0.8 }],
+        debugMeta: { processingMs: 8, normalizerSteps: ['question_shell'], expansionHits: 2 },
+      };
+      mockSystemConfigService.getBoolean.mockImplementation((key: string) => {
+        if (key === 'feature.query_analysis_enabled') return true;
+        return null;
+      });
+      mockQueryAnalysisService.analyze.mockResolvedValue(fakeAnalyzedQuery);
+      mockIntentService.detect.mockResolvedValue({ intentLabel: 'product-inquiry', confidence: 0.8, language: 'zh-TW' });
+      mockRetrievalService.retrieve.mockResolvedValue([]);
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, '螺絲規格', 'req-id', res as never, new AbortController().signal);
+
+      expect(mockIntentService.detect).toHaveBeenCalledWith(
+        '螺絲規格',
+        expect.any(String),
+        fakeAnalyzedQuery,
+      );
+    });
+
+    it('should pass normalizedQuery and rankingProfile to retrieval when flag is on', async () => {
+      const fakeAnalyzedQuery = {
+        rawQuery: '請問螺絲規格',
+        normalizedQuery: '螺絲規格',
+        language: 'zh-TW',
+        tokens: ['螺絲', '規格'],
+        terms: ['螺絲', '規格'],
+        phrases: [],
+        expandedTerms: ['螺絲', '規格'],
+        matchedRules: [],
+        selectedProfile: 'faq',
+        intentHints: [],
+        debugMeta: { processingMs: 4, normalizerSteps: [], expansionHits: 0 },
+      };
+      mockSystemConfigService.getBoolean.mockImplementation((key: string) => {
+        if (key === 'feature.query_analysis_enabled') return true;
+        return null;
+      });
+      mockQueryAnalysisService.analyze.mockResolvedValue(fakeAnalyzedQuery);
+      mockRetrievalService.retrieve.mockResolvedValue([]);
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, '請問螺絲規格', 'req-id', res as never, new AbortController().signal);
+
+      expect(mockRetrievalService.retrieve).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: '螺絲規格', // normalizedQuery, not raw
+          rankingProfile: 'faq',
+          expandedTerms: ['螺絲', '規格'],
+        }),
+      );
+    });
+
+    it('should include selectedProfile and extractedTerms in audit log when flag is on', async () => {
+      const fakeAnalyzedQuery = {
+        rawQuery: '螺絲問題',
+        normalizedQuery: '螺絲問題',
+        language: 'zh-TW',
+        tokens: ['螺絲', '問題'],
+        terms: ['螺絲', '問題'],
+        phrases: [],
+        expandedTerms: ['螺絲', '問題'],
+        matchedRules: ['stop_word_zh'],
+        selectedProfile: 'diagnosis',
+        intentHints: [],
+        debugMeta: { processingMs: 6, normalizerSteps: [], expansionHits: 0 },
+      };
+      mockSystemConfigService.getBoolean.mockImplementation((key: string) => {
+        if (key === 'feature.query_analysis_enabled') return true;
+        return null;
+      });
+      mockQueryAnalysisService.analyze.mockResolvedValue(fakeAnalyzedQuery);
+      mockRetrievalService.retrieve.mockResolvedValue([
+        { score: 0.9, entry: { id: 1, content: '螺絲問題解答' } },
+      ]);
+      mockIntentService.detect.mockResolvedValue({ intentLabel: null, confidence: 0, language: 'zh-TW' });
+      async function* mockStream() {
+        yield { token: '回應', done: false };
+        yield { token: '', done: true, provider: 'mock', modelUsed: 'mock', fallbackTriggered: false, usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 } };
+      }
+      mockLlmProvider.stream.mockReturnValue(mockStream());
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, '螺絲問題', 'req-id', res as never, new AbortController().signal);
+
+      const answerAuditCall = (mockAuditService.log as jest.Mock).mock.calls.find(
+        (args: unknown[]) =>
+          (args[0] as { eventType: string }).eventType === 'chat_response',
+      );
+      expect(answerAuditCall).toBeDefined();
+      const eventData = (answerAuditCall![0] as { eventData: Record<string, unknown> }).eventData;
+      expect(eventData['selectedProfile']).toBe('diagnosis');
+      expect(eventData['extractedTerms']).toEqual(['螺絲', '問題']);
+      expect(eventData['matchedQueryRules']).toEqual(['stop_word_zh']);
+    });
+
+    it('should NOT include selectedProfile in audit log when flag is off (001 path)', async () => {
+      mockSystemConfigService.getBoolean.mockReturnValue(null); // flag off
+      mockRetrievalService.retrieve.mockResolvedValue([
+        { score: 0.9, entry: { id: 1, content: '資訊' } },
+      ]);
+      mockIntentService.detect.mockResolvedValue({ intentLabel: null, confidence: 0, language: 'zh-TW' });
+      async function* mockStream() {
+        yield { token: '回應', done: false };
+        yield { token: '', done: true, provider: 'mock', modelUsed: 'mock', fallbackTriggered: false, usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 } };
+      }
+      mockLlmProvider.stream.mockReturnValue(mockStream());
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, '測試', 'req-id', res as never, new AbortController().signal);
+
+      const answerAuditCall = (mockAuditService.log as jest.Mock).mock.calls.find(
+        (args: unknown[]) =>
+          (args[0] as { eventType: string }).eventType === 'chat_response',
+      );
+      expect(answerAuditCall).toBeDefined();
+      const eventData = (answerAuditCall![0] as { eventData: Record<string, unknown> }).eventData;
+      expect(eventData['selectedProfile']).toBeUndefined();
+      expect(eventData['extractedTerms']).toBeUndefined();
+    });
+
+    it('should pass raw userMessage (not normalizedQuery) to retrieval when flag is off', async () => {
+      mockSystemConfigService.getBoolean.mockReturnValue(null); // flag off
+      mockRetrievalService.retrieve.mockResolvedValue([]);
+
+      const res = makeRes();
+      await service.run(makeConversation() as never, '請問你們的螺絲規格如何', 'req-id', res as never, new AbortController().signal);
+
+      expect(mockRetrievalService.retrieve).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: '請問你們的螺絲規格如何', // raw, not normalized
+          rankingProfile: undefined,
+          expandedTerms: undefined,
+        }),
+      );
     });
   });
 });

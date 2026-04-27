@@ -417,10 +417,10 @@ model QueryRule {
 
 **驗收標準**：
 
-- [ ] `feature.query_analysis_enabled=false`：全部 001 pipeline tests 通過，行為不變
-- [ ] `feature.query_analysis_enabled=true`：AnalyzedQuery 被產出且存入 context
-- [ ] AuditLog 包含 `selectedProfile` / `extractedTerms` / `matchedQueryRules`（feature flag = true 時）
-- [ ] unit test：mock QueryAnalysisService，驗證 feature flag 切換行為
+- [X] `feature.query_analysis_enabled=false`：全部 001 pipeline tests 通過，行為不變
+- [X] `feature.query_analysis_enabled=true`：AnalyzedQuery 被產出且存入 context
+- [X] AuditLog 包含 `selectedProfile` / `extractedTerms` / `matchedQueryRules`（feature flag = true 時）
+- [X] unit test：mock QueryAnalysisService，驗證 feature flag 切換行為
 
 **依賴**：QA-001、QA-002、QA-003、QA-004  
 **相容性**：feature flag = false 確保 001 行為完整保留
@@ -581,9 +581,9 @@ feature.profile_selection_mode = rule-based
 
 **驗收標準**：
 
-- [ ] `prisma db seed` 成功植入這些 keys
-- [ ] `SystemConfigService.getNumber('ranking.default.title_boost')` 回傳 1.2
-- [ ] `SystemConfigService.getBoolean('feature.query_analysis_enabled')` 回傳 false
+- [x] `prisma db seed` 成功植入這些 keys
+- [x] `SystemConfigService.getNumber('ranking.default.title_boost')` 回傳 1.2
+- [x] `SystemConfigService.getBoolean('feature.query_analysis_enabled')` 回傳 false
 
 **依賴**：IG-001  
 **相容性**：僅新增 seed keys，不修改現有 SystemConfig 邏輯
@@ -625,11 +625,11 @@ Layer 3：若 ragResults 帶有 category（此 layer 在 pipeline 層處理，de
 
 **驗收標準**：
 
-- [ ] `detect(input, language)`（不傳 analyzedQuery）行為與 001 完全一致（unit test with existing 001 test cases）
-- [ ] `detect(input, language, analyzedQuery)` 使用 expandedTerms 進行匹配（unit test）
-- [ ] Layer 1 高信心 hint 直接採用（unit test）
-- [ ] `isActive=false` 的 template 被跳過（unit test）
-- [ ] 新增 intent fixture 測試：至少 5 種 intent（product-inquiry / pricing-inquiry / contact-inquiry / general-faq / product-diagnosis）準確率 ≥ 85%
+- [x] `detect(input, language)`（不傳 analyzedQuery）行為與 001 完全一致（unit test with existing 001 test cases）
+- [x] `detect(input, language, analyzedQuery)` 使用 expandedTerms 進行匹配（unit test）
+- [x] Layer 1 高信心 hint 直接採用（unit test）
+- [x] `isActive=false` 的 template 被跳過（unit test）
+- [x] 新增 intent fixture 測試：至少 5 種 intent（product-inquiry / pricing-inquiry / contact-inquiry / general-faq / product-diagnosis）準確率 ≥ 85%
 
 **依賴**：QA-001、IG-002  
 **相容性**：detect(input, language) 兩參數版本向後相容
@@ -650,8 +650,8 @@ Layer 3：若 ragResults 帶有 category（此 layer 在 pipeline 層處理，de
 
 **驗收標準**：
 
-- [ ] `IntentService.expandWithGlossary()` 重構後行為與重構前完全一致（unit test）
-- [ ] `GlossaryExpansionProvider` 可被 `QueryAnalysisModule` 和 `IntentModule` 共用
+- [x] `IntentService.expandWithGlossary()` 重構後行為與重構前完全一致（unit test）
+- [x] `GlossaryExpansionProvider` 可被 `QueryAnalysisModule` 和 `IntentModule` 共用
 
 **依賴**：QA-004、IG-005  
 **相容性**：行為不變，只重構依賴注入路徑
@@ -1041,13 +1041,13 @@ describe('Retrieval regression - FAQ zh-TW golden fixtures', () => {
 | QA-002  | B           | CORE  | RuleBasedQueryAnalyzer 預設實作                  | QA-001                 | ✓    |
 | QA-003  | B           | CORE  | DbQueryRuleProvider + query_rules table          | QA-001、QA-002         | □    |
 | QA-004  | B           | CORE  | GlossaryExpansionProvider + RankProfileProvider  | QA-001~003             | □    |
-| QA-005  | B           | INTG  | Chat Pipeline 整合 QueryAnalysis（feature flag） | QA-001~004             | □    |
+| QA-005  | B           | INTG  | Chat Pipeline 整合 QueryAnalysis（feature flag） | QA-001~004             | ✓    |
 | IG-001  | B           | ADMIN | AdminSystemConfig 落地 CRUD + invalidate         | KS-001                 | ✓    |
 | IG-002  | B           | ADMIN | admin/intent API + cache invalidation            | KS-002、IG-001         | ✓    |
 | IG-003  | B           | ADMIN | admin/glossary API + cache invalidation          | IG-001                 | ✓    |
-| IG-004  | B           | OPS   | Ranking Profile SystemConfig seed                | IG-001                 | □    |
-| IG-005  | B           | CORE  | IntentService 三層路由重構                       | QA-001、IG-002         | □    |
-| IG-006  | B           | CORE  | GlossaryExpansionProvider 整合 IntentService     | QA-004、IG-005         | □    |
+| IG-004  | B           | OPS   | Ranking Profile SystemConfig seed                | IG-001                 | ✓    |
+| IG-005  | B           | CORE  | IntentService 三層路由重構                       | QA-001、IG-002         | ✓    |
+| IG-006  | B           | CORE  | GlossaryExpansionProvider 整合 IntentService     | QA-004、IG-005         | ✓    |
 | IG-007  | B           | TEST  | Intent / Glossary admin unit tests               | IG-002、IG-003         | ✓    |
 | TM-001  | C           | CORE  | AnswerTemplateResolver 四路徑邏輯                | KS-001、QA-001         | □    |
 | TM-002  | C           | INTG  | Chat Pipeline 整合 TemplateResolver              | TM-001                 | □    |

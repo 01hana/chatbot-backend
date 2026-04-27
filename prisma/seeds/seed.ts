@@ -64,6 +64,44 @@ const SYSTEM_CONFIG_DEFAULTS = [
 
   // Webhook
   { key: 'webhook_timeout_ms', value: '5000', description: 'Webhook HTTP call timeout in milliseconds' },
+
+  // ── 002 IG-004: Ranking profiles ────────────────────────────────────────
+  // Key naming MUST match SystemConfigRankProfileProvider: ranking.{profile}.{field}
+  // These are default values only; upsert never overwrites admin-changed values.
+
+  // Default ranking profile — baseline, mirrors RETRIEVAL_SCORING constants
+  { key: 'ranking.default.trgm_title_boost',   value: '1.2',  description: 'Trigram title boost for default profile (mirrors RETRIEVAL_SCORING.TRGM_TITLE_BOOST)' },
+  { key: 'ranking.default.trgm_alias_bonus',   value: '0.10', description: 'Trigram alias ILIKE bonus for default profile' },
+  { key: 'ranking.default.trgm_tag_bonus',     value: '0.05', description: 'Trigram tag ILIKE bonus for default profile' },
+  { key: 'ranking.default.trgm_min_threshold', value: '0.10', description: 'Minimum trgm similarity threshold for default profile' },
+  { key: 'ranking.default.ilike_title_score',  value: '0.90', description: 'ILIKE title flat score for default profile' },
+  { key: 'ranking.default.ilike_alias_score',  value: '0.85', description: 'ILIKE alias flat score for default profile' },
+  { key: 'ranking.default.ilike_tag_score',    value: '0.70', description: 'ILIKE tag flat score for default profile' },
+  { key: 'ranking.default.ilike_content_score', value: '0.50', description: 'ILIKE content flat score for default profile' },
+
+  // FAQ ranking profile — boosted alias/ILIKE for FAQ phrasing variants
+  { key: 'ranking.faq.trgm_title_boost',   value: '1.0',  description: 'Trigram title boost for FAQ profile' },
+  { key: 'ranking.faq.trgm_alias_bonus',   value: '0.20', description: 'Trigram alias ILIKE bonus for FAQ profile (elevated for FAQ variants)' },
+  { key: 'ranking.faq.trgm_tag_bonus',     value: '0.03', description: 'Trigram tag ILIKE bonus for FAQ profile (reduced; tags less relevant for FAQ)' },
+  { key: 'ranking.faq.trgm_min_threshold', value: '0.08', description: 'Minimum trgm similarity threshold for FAQ profile (slightly lower to catch paraphrase)' },
+  { key: 'ranking.faq.ilike_title_score',  value: '0.90', description: 'ILIKE title flat score for FAQ profile' },
+  { key: 'ranking.faq.ilike_alias_score',  value: '0.90', description: 'ILIKE alias flat score for FAQ profile (elevated; aliases hold FAQ question variants)' },
+  { key: 'ranking.faq.ilike_tag_score',    value: '0.60', description: 'ILIKE tag flat score for FAQ profile' },
+  { key: 'ranking.faq.ilike_content_score', value: '0.50', description: 'ILIKE content flat score for FAQ profile' },
+
+  // Diagnosis ranking profile — boosted tag/problem-keyword matching
+  { key: 'ranking.diagnosis.trgm_title_boost',   value: '1.0',  description: 'Trigram title boost for diagnosis profile' },
+  { key: 'ranking.diagnosis.trgm_alias_bonus',   value: '0.05', description: 'Trigram alias ILIKE bonus for diagnosis profile (reduced; aliases less key for diagnosis)' },
+  { key: 'ranking.diagnosis.trgm_tag_bonus',     value: '0.15', description: 'Trigram tag ILIKE bonus for diagnosis profile (elevated; tags carry problem-category signals)' },
+  { key: 'ranking.diagnosis.trgm_min_threshold', value: '0.10', description: 'Minimum trgm similarity threshold for diagnosis profile' },
+  { key: 'ranking.diagnosis.ilike_title_score',  value: '0.90', description: 'ILIKE title flat score for diagnosis profile' },
+  { key: 'ranking.diagnosis.ilike_alias_score',  value: '0.75', description: 'ILIKE alias flat score for diagnosis profile' },
+  { key: 'ranking.diagnosis.ilike_tag_score',    value: '0.80', description: 'ILIKE tag flat score for diagnosis profile (elevated for problem-keyword tags)' },
+  { key: 'ranking.diagnosis.ilike_content_score', value: '0.50', description: 'ILIKE content flat score for diagnosis profile' },
+
+  // ── 002 IG-004: Feature flags ────────────────────────────────────────────
+  { key: 'feature.query_analysis_enabled', value: 'false', description: 'Enable 002 query analysis pipeline (true | false); default false to preserve 001 behaviour' },
+  { key: 'feature.profile_selection_mode', value: 'rule-based', description: 'Ranking profile selection mode: rule-based | ml' },
 ] as const;
 
 async function seedSystemConfig(): Promise<void> {

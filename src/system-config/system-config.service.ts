@@ -70,4 +70,18 @@ export class SystemConfigService implements OnModuleInit {
   getNumberOrDefault(key: string, defaultValue: number): number {
     return this.getNumber(key) ?? defaultValue;
   }
+
+  /**
+   * Get a boolean config value with a fallback default.
+   * Falls back to `defaultValue` when the key is absent or unparseable.
+   */
+  getBoolean(key: string, defaultValue: boolean): boolean {
+    const raw = this.cache.get(key);
+
+    if (raw === undefined) return defaultValue;
+    if (raw.toLowerCase() === 'true') return true;
+    if (raw.toLowerCase() === 'false') return false;
+
+    return defaultValue;
+  }
 }

@@ -5,18 +5,22 @@ import {
   IntentDetectResult,
   ConversationMessageLike,
 } from './types/intent-detect-result.type';
+import type { AnalyzedQuery } from '../query-analysis/types/analyzed-query.type';
 
 /**
  * IntentService — loads intent templates and glossary on startup; exposes
  * `detect()` and `isHighIntent()` consumed by the chat pipeline.
  *
- * Phase 1 status:
- *  - `loadCache()` and `invalidateCache()` are fully functional.
- *  - `detect()` is a Phase 1 skeleton — performs case-insensitive keyword
- *    matching against `IntentTemplate.keywords[]. Returns the highest-priority
- *    match or null. Full ML-based classification is out of scope.
- *  - `isHighIntent()` is a Phase 1 skeleton — returns false always.
- *    Phase 4 (T4-005) will implement the real rule-based scoring.
+ * 002 status (IG-005 / IG-006):
+ *  - `detect()` upgraded to a three-layer routing architecture.
+ *    Layer 1: high-confidence intent hints from AnalyzedQuery (score > 0.7).
+ *    Layer 2: keyword matching — uses analyzedQuery.expandedTerms when the
+ *             query analysis pipeline is active (IG-006), falls back to the
+ *             internal glossary-expansion helper for backward-compat.
+ *    Layer 3: no match → { intentLabel: null, confidence: 0 }.
+ *  - `isActive=false` templates are skipped in all matching paths.
+ *  - `detect(input, language)` (two-argument form) remains fully backward-
+ *    compatible with all 001 pipeline tests.
  */
 @Injectable()
 export class IntentService implements OnModuleInit {
@@ -82,26 +86,57 @@ export class IntentService implements OnModuleInit {
   // ─── Intent Detection ─────────────────────────────────────────────────────
 
   /**
-   * Detect the intent of the user input using rule-based keyword matching.
+   * Detect the intent of the user input using a three-layer routing strategy.
    *
-   * **Phase 1 skeleton** — uses `IntentTemplate.keywords` for keyword matching
-   * only (case-insensitive, exact token). Templates are evaluated in
-   * priority-descending order; the first match wins.
+   * **Layer 1 — AnalyzedQuery intent hints** (002, IG-005):
+   *   When `analyzedQuery` is provided and contains a hint with score > 0.7,
+   *   that hint is returned immediately without keyword matching.
    *
-   * Phase 2 (T2-007) will wire this into the Chat Pipeline.
-   * Phase 4 (T4-005) will add high-intent scoring.
+   * **Layer 2 — Keyword matching** (Phase 1 + 002 upgrade):
+   *   When `analyzedQuery` is provided, uses `analyzedQuery.expandedTerms`
+   *   (already expanded by GlossaryExpansionProvider, IG-006) joined as a
+   *   search string.  When `analyzedQuery` is omitted (backward-compat path),
+   *   falls back to the internal `expandWithGlossary()` helper that reads
+   *   directly from the in-memory glossary cache.
+   *   Active templates (isActive=true) are evaluated in priority-descending
+   *   order; the first keyword match wins.
    *
-   * @param input - Raw user message.
-   * @param language - Detected language code (e.g. "zh-TW", "en").
+   * **Layer 3 — No match**:
+   *   Returns `{ intentLabel: null, confidence: 0 }`.
+   *
+   * @param input         - Raw user message.
+   * @param language      - Detected language code (e.g. "zh-TW", "en").
+   * @param analyzedQuery - Optional 002 query analysis output; enables Layer 1
+   *                        routing and richer Layer 2 term expansion. When
+   *                        omitted the method behaves exactly as in 001.
    * @returns IntentDetectResult with matched intent label and confidence.
    */
-  detect(input: string, language: string): IntentDetectResult {
-    const lowerInput = input.toLowerCase();
+  detect(input: string, language: string, analyzedQuery?: AnalyzedQuery): IntentDetectResult {
+    // ── Layer 1: high-confidence intent hint from query analysis ─────────────
+    if (analyzedQuery && analyzedQuery.intentHints.length > 0) {
+      const topHint = analyzedQuery.intentHints[0]; // caller must sort by score desc
+      if (topHint.score > 0.7) {
+        return { intentLabel: topHint.label, confidence: topHint.score, language };
+      }
+    }
 
-    // Expand input with known synonyms from glossary (appended as a single text blob)
-    const expandedText = this.expandWithGlossary(lowerInput);
+    // ── Layer 2: keyword matching against active templates ────────────────────
+    //
+    // IG-006: when analyzedQuery.expandedTerms are available (produced by
+    // GlossaryExpansionProvider), those pre-expanded terms are the canonical
+    // expansion source — we no longer need to run the internal glossary lookup.
+    // Backward-compat fallback: call expandWithGlossary() which reads from the
+    // same in-memory glossary cache using equivalent matching logic.
+    const lowerInput = input.toLowerCase();
+    const expandedText: string =
+      analyzedQuery && analyzedQuery.expandedTerms.length > 0
+        ? lowerInput + ' ' + analyzedQuery.expandedTerms.join(' ').toLowerCase()
+        : this.expandWithGlossary(lowerInput);
 
     for (const template of this.templates) {
+      // Skip templates that have been administratively disabled (IG-002).
+      if (!template.isActive) continue;
+
       const matched = template.keywords.some((kw) =>
         expandedText.includes(kw.toLowerCase()),
       );
@@ -115,6 +150,7 @@ export class IntentService implements OnModuleInit {
       }
     }
 
+    // ── Layer 3: no match ─────────────────────────────────────────────────────
     return { intentLabel: null, confidence: 0, language };
   }
 
@@ -137,8 +173,16 @@ export class IntentService implements OnModuleInit {
   // ─── Private Helpers ──────────────────────────────────────────────────────
 
   /**
-   * Expand input by appending any synonym aliases found in the glossary.
-   * Returns a single concatenated lowercase string for substring matching.
+   * Backward-compat glossary expansion for the two-argument `detect()` call.
+   *
+   * Appends all synonym forms of any matching glossary entry to the input
+   * string, producing a single concatenated lowercase string for substring
+   * keyword matching.
+   *
+   * When `detect()` is called with an `analyzedQuery`, this method is NOT
+   * invoked — the pre-expanded `analyzedQuery.expandedTerms` (produced by
+   * GlossaryExpansionProvider) are used instead, ensuring a single shared
+   * expansion implementation path in production (IG-006).
    */
   private expandWithGlossary(lowerInput: string): string {
     let expanded = lowerInput;

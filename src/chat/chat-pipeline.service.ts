@@ -24,6 +24,8 @@ import {
   formatSseEvent,
 } from './types/sse-event.type';
 import { RetrievalResult } from '../retrieval/types/retrieval.types';
+import { QueryAnalysisService } from '../query-analysis/query-analysis.service';
+import type { AnalyzedQuery } from '../query-analysis/types/analyzed-query.type';
 
 /** Internal state threaded through the pipeline steps. */
 interface PipelineContext {
@@ -40,6 +42,12 @@ interface PipelineContext {
   confidenceLevel: 'high' | 'low' | 'none';
   /** True when RAG results came from cross-language fallback (no same-language hits). */
   isCrossLanguageFallback: boolean;
+  /**
+   * Structured query analysis output from QueryAnalysisService (QA-005).
+   * Populated only when `feature.query_analysis_enabled` is true.
+   * When absent, the pipeline uses the 001 behaviour (QueryNormalizer path).
+   */
+  analyzedQuery?: AnalyzedQuery;
 }
 
 /**
@@ -52,10 +60,11 @@ interface PipelineContext {
  * Pipeline steps:
  *  1. validateInput        — DTO-level length check
  *  2. detectLanguage       — franc / simple heuristic
+ * 2.5 analyzeQuery         — QueryAnalysisService.analyze() [feature flag: feature.query_analysis_enabled]
  *  3. runPromptGuard       — SafetyService.scanPrompt()
  *  4. checkConfidentiality — SafetyService.checkConfidentiality()
- *  5. detectIntent         — IntentService.detect()
- *  6. retrieveKnowledge    — RetrievalService.retrieve()
+ *  5. detectIntent         — IntentService.detect() [passes analyzedQuery when available]
+ *  6. retrieveKnowledge    — RetrievalService.retrieve() [passes rankingProfile/expandedTerms when available]
  *  7. evaluateConfidence   — dual threshold: minimum score vs answer threshold
  *  8. buildPrompt          — PromptBuilder.build() with confidenceLevel
  *  9. callLlmStream        — ILlmProvider.stream()
@@ -75,6 +84,7 @@ export class ChatPipelineService {
     private readonly conversationService: ConversationService,
     private readonly aiStatusService: AiStatusService,
     private readonly promptBuilder: PromptBuilder,
+    private readonly queryAnalysisService: QueryAnalysisService,
     @Inject(LLM_PROVIDER) llmProvider: unknown,
     @Inject(RETRIEVAL_SERVICE) retrievalService: unknown,
   ) {
@@ -130,6 +140,13 @@ export class ChatPipelineService {
 
       // ── Step 2: Language detection ──────────────────────────────────────
       ctx.language = this.detectLanguage(userMessage, conversation.language);
+
+      // ── Step 2.5: Query analysis (feature flag) ─────────────────────────
+      const queryAnalysisEnabled =
+        this.systemConfigService.getBoolean('feature.query_analysis_enabled') ?? false;
+      if (queryAnalysisEnabled) {
+        ctx.analyzedQuery = await this.analyzeQuery(userMessage, ctx.language);
+      }
 
       // ── Step 3: PromptGuard ─────────────────────────────────────────────
       const guardResult = await this.runPromptGuard(userMessage);
@@ -263,11 +280,11 @@ export class ChatPipelineService {
 
       // ── Step 5: Intent detection ─────────────────────────────────────────
       ctx.history = await this.conversationService.getHistoryByToken(conversation.session_token);
-      const intentResult = await this.detectIntent(userMessage, ctx.language);
+      const intentResult = await this.detectIntent(userMessage, ctx.language, ctx.analyzedQuery);
       ctx.intentLabel = intentResult.intentLabel;
 
       // ── Step 6: RAG retrieval ─────────────────────────────────────────────
-      ctx.ragResults = await this.retrieveKnowledge(userMessage, ctx.intentLabel, ctx.language);
+      ctx.ragResults = await this.retrieveKnowledge(userMessage, ctx.intentLabel, ctx.language, ctx.analyzedQuery);
       ctx.ragConfidence = ctx.ragResults[0]?.score ?? 0;
       ctx.isCrossLanguageFallback = ctx.ragResults.length > 0 && ctx.ragResults[0].isCrossLanguageFallback === true;
 
@@ -436,7 +453,19 @@ export class ChatPipelineService {
         requestId,
         sessionId: conversation.sessionId,
         eventType: 'chat_response',
-        eventData: { action: 'answer', intentLabel: ctx.intentLabel, fallbackTriggered, confidenceLevel: ctx.confidenceLevel },
+        eventData: {
+          action: 'answer',
+          intentLabel: ctx.intentLabel,
+          fallbackTriggered,
+          confidenceLevel: ctx.confidenceLevel,
+          // QA-005: include query analysis debug metadata when feature flag is on
+          ...(ctx.analyzedQuery && {
+            selectedProfile: ctx.analyzedQuery.selectedProfile,
+            extractedTerms: ctx.analyzedQuery.terms,
+            matchedQueryRules: ctx.analyzedQuery.matchedRules,
+            queryAnalysisMs: ctx.analyzedQuery.debugMeta.processingMs,
+          }),
+        },
         knowledgeRefs: sourceRefs.map(String),
         ragConfidence: ctx.ragConfidence,
         promptTokens: usage.promptTokens,
@@ -542,16 +571,33 @@ export class ChatPipelineService {
     return this.safetyService.checkConfidentiality(input);
   }
 
-  async detectIntent(input: string, language: string) {
-    return this.intentService.detect(input, language);
+  async detectIntent(input: string, language: string, analyzedQuery?: AnalyzedQuery) {
+    return this.intentService.detect(input, language, analyzedQuery);
   }
 
-  async retrieveKnowledge(query: string, intentLabel: string | null, language: string): Promise<RetrievalResult[]> {
+  /**
+   * Step 2.5: analyse the raw user query and return a structured AnalyzedQuery.
+   * Called only when `feature.query_analysis_enabled` is true (QA-005).
+   */
+  async analyzeQuery(input: string, language: string): Promise<AnalyzedQuery> {
+    return this.queryAnalysisService.analyze(input, language);
+  }
+
+  async retrieveKnowledge(
+    query: string,
+    intentLabel: string | null,
+    language: string,
+    analyzedQuery?: AnalyzedQuery,
+  ): Promise<RetrievalResult[]> {
     return this.retrievalService.retrieve({
-      query,
+      // When analyzedQuery is available, use the normalised query to avoid double-normalisation
+      query: analyzedQuery?.normalizedQuery ?? query,
       intentLabel: intentLabel ?? undefined,
       language,
       limit: 5,
+      // QA-005: pass analysis metadata so retrieval can optionally use them
+      rankingProfile: analyzedQuery?.selectedProfile,
+      expandedTerms: analyzedQuery?.expandedTerms,
     });
   }
 

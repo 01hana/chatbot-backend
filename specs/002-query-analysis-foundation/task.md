@@ -833,9 +833,9 @@ if (['template', 'rag+template'].includes(templateResolution.strategy)) {
 
 **驗收標準**：
 
-- [ ] TypeScript 編譯無錯誤
-- [ ] `DiagnosisModule` 可被 `AppModule` import 而不報錯
-- [ ] `DiagnosisContext` / `DiagnosisQuestion` 類型完整（含 flowId / currentStep / pendingQuestions / collectedAnswers / isComplete）
+- [x] TypeScript 編譯無錯誤
+- [x] `DiagnosisModule` 可被 `AppModule` import 而不報錯
+- [x] `DiagnosisContext` / `DiagnosisQuestion` 類型完整（含 flowId / currentStep / pendingQuestions / collectedAnswers / isComplete）
 
 **依賴**：無  
 **相容性**：不修改任何現有檔案
@@ -863,11 +863,11 @@ updateDiagnosisContext(conversationId: number, context: DiagnosisContext): Promi
 
 **驗收標準**：
 
-- [ ] `initFlow()` 初始化 DiagnosisContext 並寫入 DB（透過 ConversationService）
-- [ ] `getNextQuestion()` 回傳 `pendingQuestions[0]`（若 isComplete 回傳 null）
-- [ ] `recordAnswer()` 更新 `collectedAnswers` 並推進 `currentStep`
-- [ ] `isComplete()` 當 `pendingQuestions` 全部回答後回傳 true
-- [ ] Unit tests：5 個狀態機轉換測試（init / getNext / record / complete / getAnswers）
+- [x] `initFlow()` 初始化 DiagnosisContext 並寫入 DB（透過 ConversationService）
+- [x] `getNextQuestion()` 回傳 `pendingQuestions[0]`（若 isComplete 回傳 null）
+- [x] `recordAnswer()` 更新 `collectedAnswers` 並推進 `currentStep`
+- [x] `isComplete()` 當 `pendingQuestions` 全部回答後回傳 true
+- [x] Unit tests：5 個狀態機轉換測試（init / getNext / record / complete / getAnswers）
 
 **依賴**：DG-001  
 **相容性**：ConversationService 新增方法不影響現有方法
@@ -897,8 +897,8 @@ updateDiagnosisContext(conversationId: number, context: DiagnosisContext): Promi
 
 **驗收標準**：
 
-- [ ] `npx jest --testPathPatterns "diagnosis.service"` ≥ 8 個測試通過
-- [ ] DiagnosisService mock injection 正常（ConversationService mock）
+- [x] `npx jest --testPathPatterns "diagnosis.service"` ≥ 8 個測試通過
+- [x] DiagnosisService mock injection 正常（ConversationService mock）
 
 **依賴**：DG-002  
 **相容性**：純測試
@@ -1052,9 +1052,9 @@ describe('Retrieval regression - FAQ zh-TW golden fixtures', () => {
 | TM-001  | C           | CORE  | AnswerTemplateResolver 四路徑邏輯                | KS-001、QA-001         | ✓    |
 | TM-002  | C           | INTG  | Chat Pipeline 整合 TemplateResolver              | TM-001                 | ✓    |
 | TM-003  | C           | TEST  | Template 整合測試 + backward compat              | TM-002                 | ✓    |
-| DG-001  | C           | CORE  | DiagnosisModule skeleton + 介面                  | —                      | □    |
-| DG-002  | C           | CORE  | DiagnosisService 實作 + ConversationService 整合 | DG-001                 | □    |
-| DG-003  | C           | TEST  | DiagnosisService unit tests                      | DG-002                 | □    |
+| DG-001  | C           | CORE  | DiagnosisModule skeleton + 介面                  | —                      | ✓    |
+| DG-002  | C           | CORE  | DiagnosisService 實作 + ConversationService 整合 | DG-001                 | ✓    |
+| DG-003  | C           | TEST  | DiagnosisService unit tests                      | DG-002                 | ✓    |
 | RG-001  | D           | TEST  | Golden FAQ fixtures zh-TW（20 筆）               | KS-003                 | □    |
 | RG-002  | D           | TEST  | Golden FAQ fixtures en + intent fixtures         | RG-001、IG-005         | □    |
 | RG-003  | D           | TEST  | Regression suite CI 整合                         | RG-001、RG-002、QA-005 | □    |

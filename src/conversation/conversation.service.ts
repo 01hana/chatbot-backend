@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Conversation, ConversationMessage } from '../generated/prisma/client';
 import { ConversationRepository } from './conversation.repository';
 import { CreateSessionResult } from './types/conversation.types';
+import type { DiagnosisContext } from '../diagnosis/types/diagnosis-context.type';
 
 /**
  * ConversationService — application-layer façade over ConversationRepository.
@@ -88,5 +89,26 @@ export class ConversationService {
     >,
   ): Promise<Conversation> {
     return this.conversationRepository.updateConversation(sessionId, data);
+  }
+
+  // ─── Diagnosis Context ────────────────────────────────────────────────────
+
+  /**
+   * Read the diagnosis state-machine snapshot for a conversation (by PK).
+   * Returns `null` when the conversation does not exist or diagnosis has not
+   * been initialised yet.
+   */
+  async getDiagnosisContext(conversationId: number): Promise<DiagnosisContext | null> {
+    return this.conversationRepository.getDiagnosisContext(conversationId);
+  }
+
+  /**
+   * Persist an updated diagnosis state-machine snapshot.
+   */
+  async updateDiagnosisContext(
+    conversationId: number,
+    context: DiagnosisContext,
+  ): Promise<void> {
+    return this.conversationRepository.updateDiagnosisContext(conversationId, context);
   }
 }

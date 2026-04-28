@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { Conversation, ConversationMessage } from '../generated/prisma/client';
+import type { DiagnosisContext } from '../diagnosis/types/diagnosis-context.type';
 
 /**
  * ConversationRepository — data-access layer for conversations and
@@ -121,6 +122,34 @@ export class ConversationRepository {
     return this.prisma.conversation.update({
       where: { sessionId },
       data: data as Prisma.ConversationUpdateInput,
+    });
+  }
+
+  // ─── Diagnosis Context ────────────────────────────────────────────────────
+
+  /**
+   * Read the `diagnosisContext` JSONB field for a conversation (by PK).
+   * Returns `null` when the conversation does not exist or the field is unset.
+   */
+  async getDiagnosisContext(conversationId: number): Promise<DiagnosisContext | null> {
+    const row = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { diagnosisContext: true },
+    });
+    if (!row) return null;
+    return (row.diagnosisContext as DiagnosisContext | null) ?? null;
+  }
+
+  /**
+   * Overwrite the `diagnosisContext` JSONB field for a conversation (by PK).
+   */
+  async updateDiagnosisContext(
+    conversationId: number,
+    context: DiagnosisContext,
+  ): Promise<void> {
+    await this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: { diagnosisContext: context as unknown as Prisma.InputJsonValue },
     });
   }
 }

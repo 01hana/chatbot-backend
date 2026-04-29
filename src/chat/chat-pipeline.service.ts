@@ -276,7 +276,9 @@ export class ChatPipelineService {
           durationMs: Date.now() - startMs,
         });
 
-        res.write(formatSseEvent('token', { token: confidentialRefusal } satisfies SseTokenPayload));
+        res.write(
+          formatSseEvent('token', { token: confidentialRefusal } satisfies SseTokenPayload),
+        );
         this.writeSseAndEnd(res, 'done', {
           messageId: assistantMsg.id,
           action: 'intercepted' satisfies ChatAction,
@@ -295,9 +297,15 @@ export class ChatPipelineService {
       ctx.intentLabel = intentResult.intentLabel;
 
       // ── Step 6: RAG retrieval ─────────────────────────────────────────────
-      ctx.ragResults = await this.retrieveKnowledge(userMessage, ctx.intentLabel, ctx.language, ctx.analyzedQuery);
+      ctx.ragResults = await this.retrieveKnowledge(
+        userMessage,
+        ctx.intentLabel,
+        ctx.language,
+        ctx.analyzedQuery,
+      );
       ctx.ragConfidence = ctx.ragResults[0]?.score ?? 0;
-      ctx.isCrossLanguageFallback = ctx.ragResults.length > 0 && ctx.ragResults[0].isCrossLanguageFallback === true;
+      ctx.isCrossLanguageFallback =
+        ctx.ragResults.length > 0 && ctx.ragResults[0].isCrossLanguageFallback === true;
 
       // ── Step 7: Confidence evaluation ────────────────────────────────────
       // Two thresholds:
@@ -316,21 +324,54 @@ export class ChatPipelineService {
 
       if (!hasHits || topScore < minimumScore) {
         // No hits or below minimum score → user needs to leave contact info or talk to sales
-        const fallback = ctx.language === 'en'
-          ? 'I couldn\'t find relevant information in our knowledge base. Please leave your contact details and our team will follow up.'
-          : '抱歉，我在知識庫中找不到相關資訊。請留下您的聯絡資料，我們的業務人員將儘速與您聯繫。';
+        const fallback =
+          ctx.language === 'en'
+            ? "I couldn't find relevant information in our knowledge base. Please leave your contact details and our team will follow up."
+            : '抱歉，我在知識庫中找不到相關資訊。請留下您的聯絡資料，我們的業務人員將儘速與您聯繫。';
 
-        const userMsg = await this.conversationService.addMessage(conversation.id, { role: 'user', content: userMessage });
-        const assistantMsg = await this.conversationService.addMessage(conversation.id, { role: 'assistant', content: fallback });
+        const userMsg = await this.conversationService.addMessage(conversation.id, {
+          role: 'user',
+          content: userMessage,
+        });
+        const assistantMsg = await this.conversationService.addMessage(conversation.id, {
+          role: 'assistant',
+          content: fallback,
+        });
+
+        // await this.auditService.log({
+        //   requestId,
+        //   sessionId: conversation.sessionId,
+        //   eventType: 'chat_response',
+        //   eventData: { action: 'fallback', skipReason: 'no_rag_hits' },
+        //   ragConfidence: topScore,
+        //   durationMs: Date.now() - startMs,
+        //   configSnapshot: { rag_minimum_score: minimumScore, rag_answer_threshold: answerThreshold },
+        // });
 
         await this.auditService.log({
           requestId,
           sessionId: conversation.sessionId,
           eventType: 'chat_response',
-          eventData: { action: 'fallback', skipReason: 'no_rag_hits' },
+          eventData: {
+            action: 'fallback',
+            skipReason: hasHits ? 'low_rag_confidence' : 'no_rag_hits',
+            intentLabel: ctx.intentLabel,
+            confidenceLevel: ctx.confidenceLevel,
+            ...(ctx.analyzedQuery && {
+              selectedProfile: ctx.analyzedQuery.selectedProfile,
+              normalizedQuery: ctx.analyzedQuery.normalizedQuery,
+              extractedTerms: ctx.analyzedQuery.terms,
+              expandedTerms: ctx.analyzedQuery.expandedTerms,
+              matchedQueryRules: ctx.analyzedQuery.matchedRules,
+              queryAnalysisMs: ctx.analyzedQuery.debugMeta.processingMs,
+            }),
+          },
           ragConfidence: topScore,
           durationMs: Date.now() - startMs,
-          configSnapshot: { rag_minimum_score: minimumScore, rag_answer_threshold: answerThreshold },
+          configSnapshot: {
+            rag_minimum_score: minimumScore,
+            rag_answer_threshold: answerThreshold,
+          },
         });
 
         res.write(formatSseEvent('token', { token: fallback } satisfies SseTokenPayload));
@@ -744,8 +785,7 @@ export class ChatPipelineService {
     const updated = await this.conversationService.incrementSensitiveIntentCount(
       conversation.sessionId,
     );
-    const threshold =
-      this.systemConfigService.getNumber('sensitive_intent_alert_threshold') ?? 3;
+    const threshold = this.systemConfigService.getNumber('sensitive_intent_alert_threshold') ?? 3;
 
     if (updated.sensitiveIntentCount >= threshold) {
       await this.auditService.log({

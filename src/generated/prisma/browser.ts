@@ -85,3 +85,25 @@ export type AuditLog = Prisma.AuditLogModel
  * question_shell_en   — leading/trailing question-shell regex patterns (en)
  */
 export type QueryRule = Prisma.QueryRuleModel
+/**
+ * Model KnowledgeDocument
+ * 003 V2 document-level knowledge container.
+ * Additive: co-exists with KnowledgeEntry; no FK back to knowledge_entries.
+ */
+export type KnowledgeDocument = Prisma.KnowledgeDocumentModel
+/**
+ * Model KnowledgeChunk
+ * 003 V2 chunk — visibility is inherited from parent KnowledgeDocument.
+ * KnowledgeAvailabilityChecker filters via document.visibility / document.deletedAt.
+ */
+export type KnowledgeChunk = Prisma.KnowledgeChunkModel
+/**
+ * Model KnowledgeEntity
+ * 003 V2 named entity extracted from knowledge documents.
+ */
+export type KnowledgeEntity = Prisma.KnowledgeEntityModel
+/**
+ * Model KnowledgeRelation
+ * 003 V2 directed relation between two KnowledgeEntity nodes.
+ */
+export type KnowledgeRelation = Prisma.KnowledgeRelationModel

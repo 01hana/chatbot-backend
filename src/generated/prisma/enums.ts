@@ -9,7 +9,32 @@
 * 🟢 You can import this file directly.
 */
 
+export const KnowledgeDocType = {
+  faq: 'faq',
+  product_spec: 'product_spec',
+  catalog: 'catalog',
+  company_info: 'company_info',
+  general: 'general'
+} as const
+
+export type KnowledgeDocType = (typeof KnowledgeDocType)[keyof typeof KnowledgeDocType]
 
 
-// This file is empty because there are no enums in the schema.
-export {}
+export const KnowledgeEntityType = {
+  product: 'product',
+  spec: 'spec',
+  category: 'category',
+  company: 'company'
+} as const
+
+export type KnowledgeEntityType = (typeof KnowledgeEntityType)[keyof typeof KnowledgeEntityType]
+
+
+export const KnowledgeRelationType = {
+  is_variant_of: 'is_variant_of',
+  belongs_to_category: 'belongs_to_category',
+  compatible_with: 'compatible_with',
+  see_also: 'see_also'
+} as const
+
+export type KnowledgeRelationType = (typeof KnowledgeRelationType)[keyof typeof KnowledgeRelationType]

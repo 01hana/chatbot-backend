@@ -255,3 +255,98 @@ model QueryRule {
 
   @@map("query_rules")
 }
+
+// ─── 003 Phase 0: Knowledge Graph (additive — do NOT modify knowledge_entries) ──
+
+/// 003 V2 document-level knowledge container.
+/// Additive: co-exists with KnowledgeEntry; no FK back to knowledge_entries.
+model KnowledgeDocument {
+  id          String               @id @default(cuid())
+  sourceKey   String               
+  title       String
+  docType     KnowledgeDocType
+  language    String               @default("zh-TW")
+  status      String               @default("draft")  /// draft | approved | archived
+  visibility  String               @default("private") /// public | private
+  metadata    Json?
+  deletedAt   DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  chunks      KnowledgeChunk[]
+
+  @@unique([sourceKey, language])
+  @@map("knowledge_documents")
+}
+
+enum KnowledgeDocType {
+  faq
+  product_spec
+  catalog
+  company_info
+  general
+}
+
+/// 003 V2 chunk — visibility is inherited from parent KnowledgeDocument.
+/// KnowledgeAvailabilityChecker filters via document.visibility / document.deletedAt.
+model KnowledgeChunk {
+  id               String            @id @default(cuid())
+  documentId       String
+  document         KnowledgeDocument @relation(fields: [documentId], references: [id])
+  content          String
+  chunkIndex       Int
+  tokenCount       Int               @default(0)
+  language         String            @default("zh-TW")
+  metadata         Json?
+  embeddingId      String?           /// nullable in V1; used by VectorRetriever in 004+
+  sourceReference  String?           /// e.g. "KnowledgeEntry:entry_id_123"
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([documentId])
+  @@index([language])
+  @@map("knowledge_chunks")
+}
+
+/// 003 V2 named entity extracted from knowledge documents.
+model KnowledgeEntity {
+  id            String               @id @default(cuid())
+  name          String
+  entityType    KnowledgeEntityType
+  canonicalKey  String               @unique
+  createdAt     DateTime             @default(now())
+
+  fromRelations KnowledgeRelation[]  @relation("FromEntity")
+  toRelations   KnowledgeRelation[]  @relation("ToEntity")
+
+  @@map("knowledge_entities")
+}
+
+enum KnowledgeEntityType {
+  product
+  spec
+  category
+  company
+}
+
+/// 003 V2 directed relation between two KnowledgeEntity nodes.
+model KnowledgeRelation {
+  id           String                @id @default(cuid())
+  fromEntityId String
+  fromEntity   KnowledgeEntity       @relation("FromEntity", fields: [fromEntityId], references: [id])
+  toEntityId   String
+  toEntity     KnowledgeEntity       @relation("ToEntity", fields: [toEntityId], references: [id])
+  relationType KnowledgeRelationType
+  createdAt    DateTime              @default(now())
+
+  @@index([fromEntityId])
+  @@index([toEntityId])
+  @@map("knowledge_relations")
+}
+
+enum KnowledgeRelationType {
+  is_variant_of
+  belongs_to_category
+  compatible_with
+  see_also
+}

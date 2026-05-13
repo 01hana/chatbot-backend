@@ -25,6 +25,7 @@ import { seedKnowledgePublicZh } from './knowledge-public-zh.seed';
 import { seedKnowledgePublicEn } from './knowledge-public-en.seed';
 import { seedWidgetConfig } from './widget-config.seed';
 import { seedQueryRules } from './query-rules.seed';
+import { seed003FeatureFlags } from './003-feature-flags.seed';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
@@ -124,6 +125,7 @@ async function main(): Promise<void> {
   console.log(`Running seeds (NODE_ENV=${nodeEnv})...`);
 
   await seedSystemConfig();
+  await seed003FeatureFlags(prisma); // 003 feature flags (all default false)
   await seedWidgetConfig(prisma);
   await seedSafetyRules(prisma);
   await seedBlacklist(prisma);

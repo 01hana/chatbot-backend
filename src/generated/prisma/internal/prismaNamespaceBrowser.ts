@@ -61,7 +61,11 @@ export const ModelName = {
   Conversation: 'Conversation',
   ConversationMessage: 'ConversationMessage',
   AuditLog: 'AuditLog',
-  QueryRule: 'QueryRule'
+  QueryRule: 'QueryRule',
+  KnowledgeDocument: 'KnowledgeDocument',
+  KnowledgeChunk: 'KnowledgeChunk',
+  KnowledgeEntity: 'KnowledgeEntity',
+  KnowledgeRelation: 'KnowledgeRelation'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -245,6 +249,62 @@ export const QueryRuleScalarFieldEnum = {
 } as const
 
 export type QueryRuleScalarFieldEnum = (typeof QueryRuleScalarFieldEnum)[keyof typeof QueryRuleScalarFieldEnum]
+
+
+export const KnowledgeDocumentScalarFieldEnum = {
+  id: 'id',
+  sourceKey: 'sourceKey',
+  title: 'title',
+  docType: 'docType',
+  language: 'language',
+  status: 'status',
+  visibility: 'visibility',
+  metadata: 'metadata',
+  deletedAt: 'deletedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type KnowledgeDocumentScalarFieldEnum = (typeof KnowledgeDocumentScalarFieldEnum)[keyof typeof KnowledgeDocumentScalarFieldEnum]
+
+
+export const KnowledgeChunkScalarFieldEnum = {
+  id: 'id',
+  documentId: 'documentId',
+  content: 'content',
+  chunkIndex: 'chunkIndex',
+  tokenCount: 'tokenCount',
+  language: 'language',
+  metadata: 'metadata',
+  embeddingId: 'embeddingId',
+  sourceReference: 'sourceReference',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type KnowledgeChunkScalarFieldEnum = (typeof KnowledgeChunkScalarFieldEnum)[keyof typeof KnowledgeChunkScalarFieldEnum]
+
+
+export const KnowledgeEntityScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  entityType: 'entityType',
+  canonicalKey: 'canonicalKey',
+  createdAt: 'createdAt'
+} as const
+
+export type KnowledgeEntityScalarFieldEnum = (typeof KnowledgeEntityScalarFieldEnum)[keyof typeof KnowledgeEntityScalarFieldEnum]
+
+
+export const KnowledgeRelationScalarFieldEnum = {
+  id: 'id',
+  fromEntityId: 'fromEntityId',
+  toEntityId: 'toEntityId',
+  relationType: 'relationType',
+  createdAt: 'createdAt'
+} as const
+
+export type KnowledgeRelationScalarFieldEnum = (typeof KnowledgeRelationScalarFieldEnum)[keyof typeof KnowledgeRelationScalarFieldEnum]
 
 
 export const SortOrder = {

@@ -37,26 +37,26 @@
 
 ### Prisma Schema（加法性）
 
-- [ ] T001 在 `prisma/schema.prisma` 新增 `KnowledgeDocument` model（含 `visibility String @default("private")`、`metadata Json?`、`deletedAt DateTime?`），不修改既有 `KnowledgeEntry`
-- [ ] T002 在 `prisma/schema.prisma` 新增 `KnowledgeChunk` model（含 `metadata Json?`、`embeddingId String?`），`visibility` 繼承自父 `KnowledgeDocument`（無獨立欄位）
-- [ ] T003 [P] 在 `prisma/schema.prisma` 新增 `KnowledgeEntity` model 與 `KnowledgeEntityType` enum
-- [ ] T004 [P] 在 `prisma/schema.prisma` 新增 `KnowledgeRelation` model 與 `KnowledgeRelationType` enum
-- [ ] T005 執行 `npx prisma migrate dev --name add_phase3_knowledge_graph`，確認 migration SQL 只含 `CREATE TABLE`，不含任何 `ALTER TABLE knowledge_entries` 或 `DROP`
+- [X] T001 在 `prisma/schema.prisma` 新增 `KnowledgeDocument` model（含 `visibility String @default("private")`、`metadata Json?`、`deletedAt DateTime?`），不修改既有 `KnowledgeEntry`
+- [X] T002 在 `prisma/schema.prisma` 新增 `KnowledgeChunk` model（含 `metadata Json?`、`embeddingId String?`），`visibility` 繼承自父 `KnowledgeDocument`（無獨立欄位）
+- [X] T003 [P] 在 `prisma/schema.prisma` 新增 `KnowledgeEntity` model 與 `KnowledgeEntityType` enum
+- [X] T004 [P] 在 `prisma/schema.prisma` 新增 `KnowledgeRelation` model 與 `KnowledgeRelationType` enum
+- [X] T005 執行 `npx prisma migrate dev --name add_phase3_knowledge_graph`，確認 migration SQL 只含 `CREATE TABLE`，不含任何 `ALTER TABLE knowledge_entries` 或 `DROP`
 
 ### Feature Flags Seed
 
-- [ ] T006 建立 `prisma/seeds/003-feature-flags.seed.ts`，以 upsert 方式插入 5 個 feature flags，預設值全為 `false`（`feature.query_understanding_v2_enabled`、`feature.zh_tokenizer=rule-based`、`feature.hybrid_retrieval_enabled`、`feature.no_answer_gate_enabled`、`feature.traceable_answer_enabled`）
+- [X] T006 建立 `prisma/seeds/003-feature-flags.seed.ts`，以 upsert 方式插入 5 個 feature flags，預設值全為 `false`（`feature.query_understanding_v2_enabled`、`feature.zh_tokenizer=rule-based`、`feature.hybrid_retrieval_enabled`、`feature.no_answer_gate_enabled`、`feature.traceable_answer_enabled`）
 
 ### Module Scaffolding
 
-- [ ] T007 [P] 建立 `src/query-understanding/query-understanding.module.ts` 空殼（`@Module({})`，僅宣告，尚未 wire 任何 provider）
-- [ ] T008 [P] 建立 `src/hybrid-retrieval/hybrid-retrieval.module.ts` 空殼
-- [ ] T009 [P] 建立 `src/query-understanding/types/` 目錄結構，新增空的 barrel export `index.ts`
-- [ ] T010 [P] 建立 `src/hybrid-retrieval/types/` 目錄結構，新增空的 barrel export `index.ts`
+- [X] T007 [P] 建立 `src/query-understanding/query-understanding.module.ts` 空殼（`@Module({})`，僅宣告，尚未 wire 任何 provider）
+- [X] T008 [P] 建立 `src/hybrid-retrieval/hybrid-retrieval.module.ts` 空殼
+- [X] T009 [P] 建立 `src/query-understanding/types/` 目錄結構，新增空的 barrel export `index.ts`
+- [X] T010 [P] 建立 `src/hybrid-retrieval/types/` 目錄結構，新增空的 barrel export `index.ts`
 
 ### Baseline Verification
 
-- [ ] T011 確認所有 feature flags 為 `false` 時，`npm test` 現有 baseline test suite 全數通過（SC-007）；若有失敗，修復至通過後才繼續 Phase 1
+- [X] T011 確認所有 feature flags 為 `false` 時，`npm test` 現有 baseline test suite 全數通過（SC-007）；若有失敗，修復至通過後才繼續 Phase 1
 
 ---
 

@@ -68,47 +68,47 @@
 
 ### 核心型別（可並行）
 
-- [ ] T012 [P] [US1] 建立 `src/query-understanding/types/token-type.enum.ts`（`TokenType`：Product / Spec / Material / Dimension / Action / Business / Contact / Noise / Unknown）
-- [ ] T013 [P] [US1] 建立 `src/query-understanding/types/query-type.enum.ts`（`QueryType`：ProductLookup / ProductComparison / QuoteRequest / Contact / CatalogDownload / BusinessHours / GeneralFaq / Unsupported / Unknown）
-- [ ] T014 [P] [US1] 建立 `src/query-understanding/types/query-token.type.ts`（`QueryToken`：`text`、`normalizedText`、`tokenType`、`weight`、`source`：6 種）
-- [ ] T015 [P] [US1] 建立 `src/query-understanding/types/retrieval-plan.type.ts`（`RetrievalPlan`：`searchTerms`、`strategies`、`maxResults`、`language`）
-- [ ] T016 [P] [US1] 建立 `src/query-understanding/types/query-understanding-result.type.ts`（`QueryUnderstandingResult` 完整欄位：含 `tokenizer`、`tokens`、`keyPhrases`、`queryType`、`supportability`、`retrievalPlan`、`debugMeta`）
-- [ ] T017 [P] [US1] 建立 `src/query-understanding/tokenizers/tokenizer.interface.ts`（`ITokenizer`：`tokenize(text, language): Promise<QueryToken[]>`）
+- [X] T012 [P] [US1] 建立 `src/query-understanding/types/token-type.enum.ts`（`TokenType`：Product / Spec / Material / Dimension / Action / Business / Contact / Noise / Unknown）
+- [X] T013 [P] [US1] 建立 `src/query-understanding/types/query-type.enum.ts`（`QueryType`：ProductLookup / ProductComparison / QuoteRequest / Contact / CatalogDownload / BusinessHours / GeneralFaq / Unsupported / Unknown）
+- [X] T014 [P] [US1] 建立 `src/query-understanding/types/query-token.type.ts`（`QueryToken`：`text`、`normalizedText`、`tokenType`、`weight`、`source`：6 種）
+- [X] T015 [P] [US1] 建立 `src/query-understanding/types/retrieval-plan.type.ts`（`RetrievalPlan`：`searchTerms`、`strategies`、`maxResults`、`language`）
+- [X] T016 [P] [US1] 建立 `src/query-understanding/types/query-understanding-result.type.ts`（`QueryUnderstandingResult` 完整欄位：含 `tokenizer`、`tokens`、`keyPhrases`、`queryType`、`supportability`、`retrievalPlan`、`debugMeta`）
+- [X] T017 [P] [US1] 建立 `src/query-understanding/tokenizers/tokenizer.interface.ts`（`ITokenizer`：`tokenize(text, language): Promise<QueryToken[]>`）
 
 ### 工具與 Normalizer
 
-- [ ] T018 [P] [US1] 建立 `src/query-understanding/utils/query-normalizer.ts`（`QueryNormalizer.normalize(rawQuery, language)`：全形轉半形、trim、多空格合一）
+- [X] T018 [P] [US1] 建立 `src/query-understanding/utils/query-normalizer.ts`（`QueryNormalizer.normalize(rawQuery, language)`：全形轉半形、trim、多空格合一）
 
 ### Classifiers
 
-- [ ] T019 [US1] 實作 `src/query-understanding/classifiers/query-type.classifier.ts`（`QueryTypeClassifier.classify(tokens, normalizedQuery)`；判斷順序：1. hasContact 2. isBusinessHoursQuery **3. hasBusiness+isCatalogQuery** 4. hasBusiness 5. hasProduct+isComparisonQuery 6. hasProduct||hasMaterial 7. onlyNoise 8. Unknown）
-- [ ] T020 [P] [US2] 實作 `src/query-understanding/classifiers/knowledge-availability-checker.ts`（`KnowledgeAvailabilityChecker.hasContentFor(queryType, language)`；**雙來源查詢**：①先查 `KnowledgeEntry`（`status='approved'`、`visibility='public'`、`deletedAt IS NULL`、`language` 完全匹配）②再查 `KnowledgeDocument`（`visibility='public'`、`deletedAt IS NULL`、`language` 完全匹配）下的 `KnowledgeChunk`；兩邊均套用 language 優先完全匹配，無結果時 fallback 至語言無關內容（不帶 language 條件重查）；任一來源有結果即回傳 `true`；per-queryType TTL 快取 60s）
-- [ ] T021 [US2] 實作 `src/query-understanding/classifiers/supportability.classifier.ts`（`SupportabilityClassifier.classify(queryType, tokens, language)`；all-noise → unsupported；queryType=Unsupported → unsupported；呼叫 `KnowledgeAvailabilityChecker.hasContentFor(queryType, language)`）
+- [X] T019 [US1] 實作 `src/query-understanding/classifiers/query-type.classifier.ts`（`QueryTypeClassifier.classify(tokens, normalizedQuery)`；判斷順序：1. hasContact 2. isBusinessHoursQuery **3. hasBusiness+isCatalogQuery** 4. hasBusiness 5. hasProduct+isComparisonQuery 6. hasProduct||hasMaterial 7. onlyNoise 8. Unknown）
+- [X] T020 [P] [US2] 實作 `src/query-understanding/classifiers/knowledge-availability-checker.ts`（`KnowledgeAvailabilityChecker.hasContentFor(queryType, language)`；**雙來源查詢**：①先查 `KnowledgeEntry`（`status='approved'`、`visibility='public'`、`deletedAt IS NULL`、`language` 完全匹配）②再查 `KnowledgeDocument`（`visibility='public'`、`deletedAt IS NULL`、`language` 完全匹配）下的 `KnowledgeChunk`；兩邊均套用 language 優先完全匹配，無結果時 fallback 至語言無關內容（不帶 language 條件重查）；任一來源有結果即回傳 `true`；per-queryType TTL 快取 60s）
+- [X] T021 [US2] 實作 `src/query-understanding/classifiers/supportability.classifier.ts`（`SupportabilityClassifier.classify(queryType, tokens, language)`；all-noise → unsupported；queryType=Unsupported → unsupported；呼叫 `KnowledgeAvailabilityChecker.hasContentFor(queryType, language)`）
 
 ### Builders
 
-- [ ] T022 [US1] 實作 `src/query-understanding/builders/retrieval-plan.builder.ts`（`RetrievalPlanBuilder.build(tokens, queryType, supportability, language)`；過濾 Noise/Unknown token；依 weight 排序；`language` 等於傳入值，不允許空字串）
+- [X] T022 [US1] 實作 `src/query-understanding/builders/retrieval-plan.builder.ts`（`RetrievalPlanBuilder.build(tokens, queryType, supportability, language)`；過濾 Noise/Unknown token；依 weight 排序；`language` 等於傳入值，不允許空字串）
 
 ### RuleBasedTokenizer（Phase 1 可用的 fallback tokenizer）
 
-- [ ] T023 [US5] 實作 `src/query-understanding/tokenizers/rule-based.tokenizer.ts`（包裝現有 002 `RuleBasedQueryAnalyzer` bi-gram / sliding window 邏輯；所有 token 輸出 `source: 'rule-based'`；不複製 002 邏輯，透過 import 引用）
+- [X] T023 [US5] 實作 `src/query-understanding/tokenizers/rule-based.tokenizer.ts`（包裝現有 002 `RuleBasedQueryAnalyzer` bi-gram / sliding window 邏輯；所有 token 輸出 `source: 'rule-based'`；不複製 002 邏輯，透過 import 引用）
 
 ### TokenizerProvider（Phase 1 暫時版）
 
-- [ ] T024 [US5] 實作 `src/query-understanding/tokenizers/tokenizer-provider.service.ts`（Phase 1 版本：`language='en'` **暫時**回傳 `RuleBasedTokenizer`（Phase 2 T034 建立 `EnglishTokenizer` 後再切換）；其餘 language 亦回傳 `RuleBasedTokenizer`；Jieba 路徑留空，Phase 2 T034 補齊；Jieba 不可用時靜默 fallback，不拋例外；`getLastUsedName()` 回傳實際使用的 tokenizer 名稱）
+- [X] T024 [US5] 實作 `src/query-understanding/tokenizers/tokenizer-provider.service.ts`（Phase 1 版本：`language='en'` **暫時**回傳 `RuleBasedTokenizer`（Phase 2 T034 建立 `EnglishTokenizer` 後再切換）；其餘 language 亦回傳 `RuleBasedTokenizer`；Jieba 路徑留空，Phase 2 T034 補齊；Jieba 不可用時靜默 fallback，不拋例外；`getLastUsedName()` 回傳實際使用的 tokenizer 名稱）
 
 ### QueryUnderstandingService
 
-- [ ] T025 [US1] 實作 `src/query-understanding/query-understanding.service.ts`（`understand(rawQuery, language)`；協調 normalize → tokenize → classifyQueryType → classifySupportability → buildRetrievalPlan；記錄 `debugMeta.durationMs`）
-- [ ] T026 [US1] 更新 `src/query-understanding/query-understanding.module.ts`，wire T017–T025 所有 providers
+- [X] T025 [US1] 實作 `src/query-understanding/query-understanding.service.ts`（`understand(rawQuery, language)`；協調 normalize → tokenize → classifyQueryType → classifySupportability → buildRetrievalPlan；記錄 `debugMeta.durationMs`）
+- [X] T026 [US1] 更新 `src/query-understanding/query-understanding.module.ts`，wire T017–T025 所有 providers
 
 ### Phase 1 Unit Tests
 
-- [ ] T027 [P] [US1] 建立 `src/query-understanding/classifiers/query-type.classifier.spec.ts`（測試：「上班時間」→ BusinessHours 非 QuoteRequest；全 noise → Unsupported；isBusinessHoursQuery 在 hasBusiness 之前執行）
-- [ ] T028 [P] [US2] 建立 `src/query-understanding/classifiers/supportability.classifier.spec.ts`（all-noise → unsupported；queryType=Unsupported → unsupported；KB 有內容 → supported；language 正確傳入 hasContentFor）
-- [ ] T029 [P] [US2] 建立 `src/query-understanding/classifiers/knowledge-availability-checker.spec.ts`（KnowledgeEntry 有內容 → true；KnowledgeEntry 無內容 + KnowledgeDocument/KnowledgeChunk 有內容 → true；兩邊均無內容 → false；快取命中不重查 DB；status=draft/visibility=private/deletedAt 非 null 不計入；language 完全匹配優先，無匹配時 fallback 觸發；fallback 有結果亦回傳 true）
-- [ ] T030 [P] [US1] 建立 `src/query-understanding/builders/retrieval-plan.builder.spec.ts`（searchTerms 不含 Noise/Unknown；依 weight 排序；language 等於傳入值）
-- [ ] T031 [P] [US1] 建立 `src/query-understanding/query-understanding.service.spec.ts`（JiebaTokenizer 不可用時 fallback；`retrievalPlan.language` 不為空；`keyPhrases` 只含 weight≥0.7 非 Noise token；all-noise → supportability=unsupported）
+- [X] T027 [P] [US1] 建立 `src/query-understanding/classifiers/query-type.classifier.spec.ts`（測試：「上班時間」→ BusinessHours 非 QuoteRequest；全 noise → Unsupported；isBusinessHoursQuery 在 hasBusiness 之前執行）
+- [X] T028 [P] [US2] 建立 `src/query-understanding/classifiers/supportability.classifier.spec.ts`（all-noise → unsupported；queryType=Unsupported → unsupported；KB 有內容 → supported；language 正確傳入 hasContentFor）
+- [X] T029 [P] [US2] 建立 `src/query-understanding/classifiers/knowledge-availability-checker.spec.ts`（KnowledgeEntry 有內容 → true；KnowledgeEntry 無內容 + KnowledgeDocument/KnowledgeChunk 有內容 → true；兩邊均無內容 → false；快取命中不重查 DB；status=draft/visibility=private/deletedAt 非 null 不計入；language   完全匹配優先，無匹配時 fallback 觸發；fallback 有結果亦回傳 true）
+- [X] T030 [P] [US1] 建立 `src/query-understanding/builders/retrieval-plan.builder.spec.ts`（searchTerms 不含 Noise/Unknown；依 weight 排序；language 等於傳入值）
+- [X] T031 [P] [US1] 建立 `src/query-understanding/query-understanding.service.spec.ts`（JiebaTokenizer 不可用時 fallback；`retrievalPlan.language` 不為空；`keyPhrases` 只含 weight≥0.7 非 Noise token；all-noise → supportability=unsupported）
 
 **Phase 1 Checkpoint**：`npx jest src/query-understanding` 全數通過
 

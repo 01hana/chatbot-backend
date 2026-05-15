@@ -1,26 +1,40 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ITokenizer } from './tokenizer.interface.js';
 import { RuleBasedTokenizerAdapter } from './rule-based.tokenizer.js';
+import { EnglishTokenizer } from './english.tokenizer.js';
+import { JiebaTokenizer } from './jieba.tokenizer.js';
+import { SystemConfigService } from '../../system-config/system-config.service.js';
 
 /**
  * TokenizerProviderService — resolves the correct ITokenizer for a request.
  *
- * Phase 1 (T024):
- *   All languages, including 'en', are served by RuleBasedTokenizerAdapter.
- *   Jieba and EnglishTokenizer paths are left empty and will be wired in
- *   Phase 2 (T034) once those tokenizers are implemented.
+ * Phase 2 selection matrix (T034):
+ *   language='en'
+ *     → EnglishTokenizer
  *
- * Phase 2 design (preview — NOT yet implemented):
- *   - 'en'                                              → EnglishTokenizer
- *   - feature.zh_tokenizer='jieba' + Jieba.isReady()   → JiebaTokenizer
- *   - feature.zh_tokenizer='jieba' + !Jieba.isReady()  → RuleBasedTokenizerAdapter (WARN)
- *   - feature.zh_tokenizer='rule-based'                → RuleBasedTokenizerAdapter
+ *   language != 'en', feature.zh_tokenizer='jieba', JiebaTokenizer.isReady()
+ *     → JiebaTokenizer
  *
- * Never throws; falls back to RuleBasedTokenizerAdapter on any unexpected state.
+ *   language != 'en', feature.zh_tokenizer='jieba', !JiebaTokenizer.isReady()
+ *     → RuleBasedTokenizerAdapter  (WARN)
+ *
+ *   language != 'en', feature.zh_tokenizer='rule-based'
+ *     → RuleBasedTokenizerAdapter
+ *
+ *   language != 'en', unknown feature value
+ *     → RuleBasedTokenizerAdapter  (WARN)
+ *
+ *   SystemConfigService read error (any)
+ *     → RuleBasedTokenizerAdapter  (WARN)
+ *
+ * Never throws.
  */
 @Injectable()
 export class TokenizerProviderService {
+  private readonly logger = new Logger(TokenizerProviderService.name);
+
   private readonly ruleBasedTokenizer = new RuleBasedTokenizerAdapter();
+  private readonly englishTokenizer = new EnglishTokenizer();
 
   /**
    * The name of the tokenizer most recently returned by `getTokenizer()`.
@@ -28,19 +42,61 @@ export class TokenizerProviderService {
    */
   private lastUsedName = 'rule-based';
 
+  constructor(
+    private readonly systemConfigService: SystemConfigService,
+    private readonly jiebaTokenizer: JiebaTokenizer,
+  ) {}
+
   /**
    * Return the appropriate ITokenizer for the given language.
-   *
-   * Phase 1: always returns RuleBasedTokenizerAdapter.
    *
    * @param language  ISO language tag, e.g. 'zh-TW' | 'en'.
    * @returns         A resolved ITokenizer instance; never throws.
    */
-  getTokenizer(_language: string): ITokenizer {
-    // Phase 1: single tokenizer for all languages.
-    // Phase 2 (T034) will branch on language and feature flag.
-    this.lastUsedName = 'rule-based';
-    return this.ruleBasedTokenizer;
+  getTokenizer(language: string): ITokenizer {
+    try {
+      // ── English ─────────────────────────────────────────────────────────
+      if (language === 'en') {
+        this.lastUsedName = 'english';
+        return this.englishTokenizer;
+      }
+
+      // ── Non-English: check feature flag ──────────────────────────────────
+      const zhTokenizer = this.systemConfigService.getString(
+        'feature.zh_tokenizer',
+        'rule-based',
+      );
+
+      if (zhTokenizer === 'jieba') {
+        if (this.jiebaTokenizer.isReady()) {
+          this.lastUsedName = 'jieba';
+          return this.jiebaTokenizer;
+        }
+        this.logger.warn(
+          'TokenizerProviderService: JiebaTokenizer not ready, ' +
+            'falling back to RuleBasedTokenizer',
+        );
+        this.lastUsedName = 'rule-based';
+        return this.ruleBasedTokenizer;
+      }
+
+      if (zhTokenizer !== 'rule-based') {
+        this.logger.warn(
+          `TokenizerProviderService: unknown feature.zh_tokenizer value ` +
+            `"${zhTokenizer}", falling back to RuleBasedTokenizer`,
+        );
+      }
+
+      this.lastUsedName = 'rule-based';
+      return this.ruleBasedTokenizer;
+    } catch (err) {
+      this.logger.warn(
+        `TokenizerProviderService: error selecting tokenizer (${String(err)}), ` +
+          'falling back to RuleBasedTokenizer',
+      );
+      this.lastUsedName = 'rule-based';
+      return this.ruleBasedTokenizer;
+    }
   }
 
   /**

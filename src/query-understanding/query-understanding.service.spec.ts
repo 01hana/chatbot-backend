@@ -214,12 +214,28 @@ describe('QueryUnderstandingService', () => {
 
   describe('integration with RuleBasedTokenizerAdapter', () => {
     /**
+     * Build a real TokenizerProviderService wired for Phase 2, but with
+     * SystemConfigService defaulting to 'rule-based' and JiebaTokenizer not
+     * ready — so zh-TW still reaches RuleBasedTokenizerAdapter.
+     */
+    function makeRealProvider(): TokenizerProviderService {
+      const mockConfig = {
+        getString: jest.fn().mockReturnValue('rule-based'),
+      };
+      const mockJieba = { isReady: jest.fn().mockReturnValue(false) };
+      return new TokenizerProviderService(
+        mockConfig as never,
+        mockJieba as never,
+      );
+    }
+
+    /**
      * This test uses real RuleBasedTokenizerAdapter via TokenizerProviderService.
      * SupportabilityClassifier is mocked to avoid DB dependency.
      * Purpose: verify the pipeline wiring produces sensible output.
      */
     it('understand("你們有哪些螺絲類別", "zh-TW") → queryType=ProductLookup, non-empty searchTerms', async () => {
-      const realProvider = new TokenizerProviderService();
+      const realProvider = makeRealProvider();
       const supportabilityMock = makeSupportabilityMock('supported');
       const service = new QueryUnderstandingService(realProvider, supportabilityMock);
 
@@ -231,14 +247,14 @@ describe('QueryUnderstandingService', () => {
       expect(result.retrievalPlan.language).toBe('zh-TW');
     });
 
-    it('tokenizer is rule-based in Phase 1 for any language', async () => {
-      const realProvider = new TokenizerProviderService();
+    it('Phase 2: language="en" uses EnglishTokenizer (tokenizer="english")', async () => {
+      const realProvider = makeRealProvider();
       const supportabilityMock = makeSupportabilityMock('supported');
       const service = new QueryUnderstandingService(realProvider, supportabilityMock);
 
-      const result = await service.understand('test', 'en');
+      const result = await service.understand('screw catalog', 'en');
 
-      expect(result.tokenizer).toBe('rule-based');
+      expect(result.tokenizer).toBe('english');
     });
   });
 });

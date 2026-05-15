@@ -122,24 +122,24 @@
 
 ### EnglishTokenizer
 
-- [ ] T032 [P] [US3] 實作 `src/query-understanding/tokenizers/english.tokenizer.ts`（lowercasing；punctuation cleanup；STOP_WORDS 過濾；PRODUCT_TERMS → Product；BUSINESS_TERMS（含 hours/address/location）→ Business 非 Noise；CONTACT_TERMS → Contact；規格 pattern → Spec；所有 token `source='english'`）
+- [X] T032 [P] [US3] 實作 `src/query-understanding/tokenizers/english.tokenizer.ts`（lowercasing；punctuation cleanup；STOP_WORDS 過濾；PRODUCT_TERMS → Product；BUSINESS_TERMS（含 hours/address/location）→ Business 非 Noise；CONTACT_TERMS → Contact；規格 pattern → Spec；所有 token `source='english'`）
 
 ### JiebaTokenizer
 
-- [ ] T033 [US1] 實作 `src/query-understanding/tokenizers/jieba.tokenizer.ts`（實作 `ITokenizer` + `OnModuleInit`；動態 `import('nodejieba')`，失敗時 `_ready=false`，輸出 WARN，不拋例外；`classifyWord()`：上班時間/營業時間/公司地址 → Business **非 Noise**；304/316/M3/M4 保留為 Spec；domain dictionary `config/jieba-domain.txt` 載入；token.source 依來源標記 'jieba'/'dictionary'/'glossary'）
-- [ ] T034 [US5] 更新 `src/query-understanding/tokenizers/tokenizer-provider.service.ts` 完整版（`language='en'` → EnglishTokenizer；`feature.zh_tokenizer='jieba'` 且 `isReady()=true` → JiebaTokenizer；`feature.zh_tokenizer='jieba'` 且 `isReady()=false` → 靜默 fallback RuleBasedTokenizer + WARN；`feature.zh_tokenizer='rule-based'` → RuleBasedTokenizer；`getLastUsedName()` 回傳實際使用的 tokenizer 名稱）
+- [X] T033 [US1] 實作 `src/query-understanding/tokenizers/jieba.tokenizer.ts`（實作 `ITokenizer` + `OnModuleInit`；動態 `import('nodejieba')`，失敗時 `_ready=false`，輸出 WARN，不拋例外；`classifyWord()`：上班時間/營業時間/公司地址 → Business **非 Noise**；304/316/M3/M4 保留為 Spec；domain dictionary `config/jieba-domain.txt` 載入；token.source 依來源標記 'jieba'/'dictionary'/'glossary'）
+- [X] T034 [US5] 更新 `src/query-understanding/tokenizers/tokenizer-provider.service.ts` 完整版（`language='en'` → EnglishTokenizer；`feature.zh_tokenizer='jieba'` 且 `isReady()=true` → JiebaTokenizer；`feature.zh_tokenizer='jieba'` 且 `isReady()=false` → 靜默 fallback RuleBasedTokenizer + WARN；`feature.zh_tokenizer='rule-based'` → RuleBasedTokenizer；`getLastUsedName()` 回傳實際使用的 tokenizer 名稱）
 
 ### Domain Dictionary & Infrastructure
 
-- [ ] T035 [P] [US1] 建立 `config/jieba-domain.txt`（V1 靜態字典：螺絲、螺栓、螺帽、華司、不鏽鋼、碳鋼、鍍鋅等 domain 詞彙，Jieba 字典格式：`詞 頻率 詞性`）
-- [ ] T036 [P] 更新 `Dockerfile`，確保 `python3`、`make`、`g++` 已安裝（nodejieba native addon 編譯需求）；若 CI 未涵蓋 native addon 編譯驗證，加入對應 CI step
+- [X] T035 [P] [US1] 建立 `config/jieba-domain.txt`（V1 靜態字典：螺絲、螺栓、螺帽、華司、不鏽鋼、碳鋼、鍍鋅等 domain 詞彙，Jieba 字典格式：`詞 頻率 詞性`）
+- [X] T036 [P] 更新 `Dockerfile`，確保 `python3`、`make`、`g++` 已安裝（nodejieba native addon 編譯需求）；若 CI 未涵蓋 native addon 編譯驗證，加入對應 CI step
 
 ### Phase 2 Unit Tests
 
-- [ ] T037 [US1] 建立 `src/query-understanding/tokenizers/jieba.tokenizer.spec.ts`（螺絲/螺栓 → Product；304/316/M3/M4 → Spec；你們/請問/可以 → Noise；上班時間/營業時間/公司地址 → Business 非 Noise；init 失敗 isReady()=false 不拋例外；token.source 正確）
-- [ ] T038 [P] [US3] 建立 `src/query-understanding/tokenizers/english.tokenizer.spec.ts`（stop words 移除；screw/bolt/nut → Product；hours/address/location → Business 非 Noise；contact/email/phone → Contact；quote/catalog → Business；token.source='english'）
-- [ ] T039 [P] [US5] 建立 `src/query-understanding/tokenizers/rule-based.tokenizer.spec.ts`（fallback 輸出不為空；不拋例外；token.source='rule-based'）
-- [ ] T040 [US5] 建立 `src/query-understanding/tokenizers/tokenizer-provider.service.spec.ts`（en → EnglishTokenizer；jieba ready → JiebaTokenizer；jieba not ready → RuleBasedTokenizer + WARN 無例外；rule-based → RuleBasedTokenizer）
+- [X] T037 [US1] 建立 `src/query-understanding/tokenizers/jieba.tokenizer.spec.ts`（螺絲/螺栓 → Product；304/316/M3/M4 → Spec；你們/請問/可以 → Noise；上班時間/營業時間/公司地址 → Business 非 Noise；init 失敗 isReady()=false 不拋例外；token.source 正確）
+- [X] T038 [P] [US3] 建立 `src/query-understanding/tokenizers/english.tokenizer.spec.ts`（stop words 移除；screw/bolt/nut → Product；hours/address/location → Business 非 Noise；contact/email/phone → Contact；quote/catalog → Business；token.source='english'）
+- [X] T039 [P] [US5] 建立 `src/query-understanding/tokenizers/rule-based.tokenizer.spec.ts`（fallback 輸出不為空；不拋例外；token.source='rule-based'）
+- [X] T040 [US5] 建立 `src/query-understanding/tokenizers/tokenizer-provider.service.spec.ts`（en → EnglishTokenizer；jieba ready → JiebaTokenizer；jieba not ready → RuleBasedTokenizer + WARN 無例外；rule-based → RuleBasedTokenizer）
 
 **Phase 2 Checkpoint**：`npx jest src/query-understanding` 全數通過；SC-004 Jieba fallback scenario 不回 500
 

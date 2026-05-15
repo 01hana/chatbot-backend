@@ -1,5 +1,7 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
+# nodejieba native addon requires python3, make, g++ to compile C++ bindings
+RUN apk add --no-cache python3 make g++
 COPY package*.json ./
 COPY prisma ./prisma/ 
 RUN npm install

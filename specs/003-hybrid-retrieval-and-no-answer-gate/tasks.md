@@ -153,43 +153,43 @@
 
 ### 核心型別
 
-- [ ] T041 [P] [US1] 建立 `src/hybrid-retrieval/types/chunk-result.type.ts`（`ChunkResult`：`chunkId?`、`knowledgeEntryId?`、`sourceKey`、`content`、`score`、`language`、`isCrossLanguageFallback?`；兩者至少一個必填）
-- [ ] T042 [P] [US2] 建立 `src/hybrid-retrieval/types/retrieval-decision.type.ts`（`RetrievalDecision`：`canAnswer`、`reason`、`confidence`、`topK: ChunkResult[]`）
+- [X] T041 [P] [US1] 建立 `src/hybrid-retrieval/types/chunk-result.type.ts`（`ChunkResult`：`chunkId?`、`knowledgeEntryId?`、`sourceKey`、`content`、`score`、`language`、`isCrossLanguageFallback?`；兩者至少一個必填）
+- [X] T042 [P] [US2] 建立 `src/hybrid-retrieval/types/retrieval-decision.type.ts`（`RetrievalDecision`：`canAnswer`、`reason`、`confidence`、`topK: ChunkResult[]`）
 
 ### Retriever Interfaces & Stubs
 
-- [ ] T043 [P] [US1] 建立 `src/hybrid-retrieval/retrievers/vector.retriever.interface.ts`（`IVectorRetriever`；DI token `VECTOR_RETRIEVER`）與 `src/hybrid-retrieval/retrievers/vector.retriever.stub.ts`（永遠回傳 `Promise.resolve([])`）
-- [ ] T044 [P] [US1] 建立 `src/hybrid-retrieval/retrievers/graph.retriever.interface.ts`（`IGraphRetriever`；DI token `GRAPH_RETRIEVER`）與 `src/hybrid-retrieval/retrievers/graph.retriever.stub.ts`（永遠回傳 `Promise.resolve([])`）
+- [X] T043 [P] [US1] 建立 `src/hybrid-retrieval/retrievers/vector.retriever.interface.ts`（`IVectorRetriever`；DI token `VECTOR_RETRIEVER`）與 `src/hybrid-retrieval/retrievers/vector.retriever.stub.ts`（永遠回傳 `Promise.resolve([])`）
+- [X] T044 [P] [US1] 建立 `src/hybrid-retrieval/retrievers/graph.retriever.interface.ts`（`IGraphRetriever`；DI token `GRAPH_RETRIEVER`）與 `src/hybrid-retrieval/retrievers/graph.retriever.stub.ts`（永遠回傳 `Promise.resolve([])`）
 
 ### KeywordRetriever
 
-- [ ] T045 [US1] 實作 `src/hybrid-retrieval/retrievers/keyword.retriever.ts`（注入 `RETRIEVAL_SERVICE`（`PostgresRetrievalService`）；依 `plan.searchTerms` 依序呼叫 retrieve；**嚴格禁止**加入任何分詞、停用詞、bigram、domain signal 邏輯；去重 by `knowledgeEntryId` 保留最高分；`toChunkResult()` 正確對映 `knowledgeEntryId: r.entry.id`、`sourceKey: r.entry.sourceKey ?? ''`）
+- [X] T045 [US1] 實作 `src/hybrid-retrieval/retrievers/keyword.retriever.ts`（注入 `RETRIEVAL_SERVICE`（`PostgresRetrievalService`）；依 `plan.searchTerms` 依序呼叫 retrieve；**嚴格禁止**加入任何分詞、停用詞、bigram、domain signal 邏輯；去重 by `knowledgeEntryId` 保留最高分；`toChunkResult()` 正確對映 `knowledgeEntryId: r.entry.id`、`sourceKey: r.entry.sourceKey ?? ''`）
 
 ### Fusion & Reranker
 
-- [ ] T046 [US1] 實作 `src/hybrid-retrieval/fusion/retrieval-fusion.service.ts`（`fuse(keyword, vector, graph)`；canonical key = `r.chunkId ?? 'entry:${r.knowledgeEntryId}'`；相同 key 保留最高分）
-- [ ] T047 [P] [US1] 實作 `src/hybrid-retrieval/fusion/reranker.service.ts`（BM25-style term bonus：每命中 searchTerm 加 0.03，上限 0.15；結果依 score 排序）
+- [X] T046 [US1] 實作 `src/hybrid-retrieval/fusion/retrieval-fusion.service.ts`（`fuse(keyword, vector, graph)`；canonical key = `r.chunkId ?? 'entry:${r.knowledgeEntryId}'`；相同 key 保留最高分）
+- [X] T047 [P] [US1] 實作 `src/hybrid-retrieval/fusion/reranker.service.ts`（BM25-style term bonus：每命中 searchTerm 加 0.03，上限 0.15；結果依 score 排序）
 
 ### HybridRetrievalService
 
-- [ ] T048 [US1] 實作 `src/hybrid-retrieval/hybrid-retrieval.service.ts`（`retrieve(plan, limit)`；並行呼叫 KeywordRetriever / VectorRetriever stub / GraphRetriever stub；結果進 fuse → rerank → slice；V1 實際等同 KeywordRetriever）
+- [X] T048 [US1] 實作 `src/hybrid-retrieval/hybrid-retrieval.service.ts`（`retrieve(plan, limit)`；並行呼叫 KeywordRetriever / VectorRetriever stub / GraphRetriever stub；結果進 fuse → rerank → slice；V1 實際等同 KeywordRetriever）
 
 ### RetrievalDecisionService（No-answer Gate 邏輯）
 
-- [ ] T049 [US2] 實作 `src/hybrid-retrieval/gate/retrieval-decision.service.ts`（`decideFromChunks(chunks, understandingResult, minScore)`；`decideFromRetrievalResults(results, understandingResult, minScore)`（內部 toChunkResult 轉換）；`private evaluate()`：no results → low score → unsupported → all noise → ok；`understandingResult=undefined` 時只依 score 判斷）
+- [X] T049 [US2] 實作 `src/hybrid-retrieval/gate/retrieval-decision.service.ts`（`decideFromChunks(chunks, understandingResult, minScore)`；`decideFromRetrievalResults(results, understandingResult, minScore)`（內部 toChunkResult 轉換）；`private evaluate()`：no results → low score → unsupported → all noise → ok；`understandingResult=undefined` 時只依 score 判斷）
 
 ### Module Wiring
 
-- [ ] T050 更新 `src/hybrid-retrieval/hybrid-retrieval.module.ts`，wire T041–T049 所有 providers（VectorRetriever 以 `VECTOR_RETRIEVER` DI token 提供 stub；GraphRetriever 同）
+- [X] T050 更新 `src/hybrid-retrieval/hybrid-retrieval.module.ts`，wire T041–T049 所有 providers（VectorRetriever 以 `VECTOR_RETRIEVER` DI token 提供 stub；GraphRetriever 同）
 
 ### Phase 3 Unit Tests
 
-- [ ] T051 [P] [US1] 建立 `src/hybrid-retrieval/retrievers/keyword.retriever.spec.ts`（依序呼叫 retrieve；去重保留最高分；不含分詞邏輯的 code review 驗收說明）
-- [ ] T052 [P] [US1] 建立 `src/hybrid-retrieval/fusion/retrieval-fusion.service.spec.ts`（相同 chunkId dedup；相同 knowledgeEntryId dedup；keyword/vector/graph 來源合併正確）
-- [ ] T053 [P] [US1] 建立 `src/hybrid-retrieval/fusion/reranker.service.spec.ts`（termBonus 正確；上限 0.15；score 由高到低排序）
-- [ ] T054 [P] [US1] 建立 `src/hybrid-retrieval/retrievers/vector.retriever.stub.spec.ts` 與 `src/hybrid-retrieval/retrievers/graph.retriever.stub.spec.ts`（永遠回傳 `[]`）
-- [ ] T055 [US2] 建立 `src/hybrid-retrieval/gate/retrieval-decision.service.spec.ts`（hybrid path：空陣列 → no_results；低分 → low_score；unsupported → reason；all noise → all_tokens_noise；正常 → canAnswer=true；legacy path：空陣列 → false；低分 → false；正常 → true；understandingResult=undefined 只依 score）
-- [ ] T056 [US1] 建立 `src/hybrid-retrieval/hybrid-retrieval.service.spec.ts`（KeywordRetriever 結果正確傳遞；stubs 回 [] 不影響；dedup 正確）
+- [X] T051 [P] [US1] 建立 `src/hybrid-retrieval/retrievers/keyword.retriever.spec.ts`（依序呼叫 retrieve；去重保留最高分；不含分詞邏輯的 code review 驗收說明）
+- [X] T052 [P] [US1] 建立 `src/hybrid-retrieval/fusion/retrieval-fusion.service.spec.ts`（相同 chunkId dedup；相同 knowledgeEntryId dedup；keyword/vector/graph 來源合併正確）
+- [X] T053 [P] [US1] 建立 `src/hybrid-retrieval/fusion/reranker.service.spec.ts`（termBonus 正確；上限 0.15；score 由高到低排序）
+- [X] T054 [P] [US1] 建立 `src/hybrid-retrieval/retrievers/vector.retriever.stub.spec.ts` 與 `src/hybrid-retrieval/retrievers/graph.retriever.stub.spec.ts`（永遠回傳 `[]`）
+- [X] T055 [US2] 建立 `src/hybrid-retrieval/gate/retrieval-decision.service.spec.ts`（hybrid path：空陣列 → no_results；低分 → low_score；unsupported → reason；all noise → all_tokens_noise；正常 → canAnswer=true；legacy path：空陣列 → false；低分 → false；正常 → true；understandingResult=undefined 只依 score）
+- [X] T056 [US1] 建立 `src/hybrid-retrieval/hybrid-retrieval.service.spec.ts`（KeywordRetriever 結果正確傳遞；stubs 回 [] 不影響；dedup 正確）
 
 **Phase 3 Checkpoint**：`npx jest src/hybrid-retrieval` 全數通過
 

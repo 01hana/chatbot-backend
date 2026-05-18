@@ -1,7 +1,8 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type { Response } from 'express';
 import { franc } from 'franc';
 import { Conversation, ConversationMessage } from '../generated/prisma/client';
+import type { KnowledgeEntry } from '../generated/prisma/client';
 import { SafetyService } from '../safety/safety.service';
 import { IntentService } from '../intent/intent.service';
 import { SystemConfigService } from '../system-config/system-config.service';
@@ -28,6 +29,13 @@ import { QueryAnalysisService } from '../query-analysis/query-analysis.service';
 import type { AnalyzedQuery } from '../query-analysis/types/analyzed-query.type';
 import { AnswerTemplateResolver } from '../template/answer-template-resolver';
 import type { TemplateResolution } from '../template/types/template-resolution.type';
+import type { QueryUnderstandingResult } from '../query-understanding/types/query-understanding-result.type.js';
+import type { RetrievalDecision } from '../hybrid-retrieval/types/retrieval-decision.type.js';
+import type { ChunkResult } from '../hybrid-retrieval/types/chunk-result.type.js';
+import type { RetrievalPlan } from '../query-understanding/types/retrieval-plan.type.js';
+import { QueryUnderstandingService } from '../query-understanding/query-understanding.service.js';
+import { HybridRetrievalService } from '../hybrid-retrieval/hybrid-retrieval.service.js';
+import { RetrievalDecisionService } from '../hybrid-retrieval/gate/retrieval-decision.service.js';
 
 /** Internal state threaded through the pipeline steps. */
 interface PipelineContext {
@@ -55,6 +63,16 @@ interface PipelineContext {
    * When strategy is 'template' or 'rag+template', the pipeline skips the LLM.
    */
   templateResolution?: TemplateResolution;
+  /**
+   * Query Understanding V2 result (QU-003).
+   * Populated only when `feature.query_understanding_v2_enabled` is true.
+   */
+  queryUnderstandingResult?: QueryUnderstandingResult;
+  /**
+   * Retrieval decision from No-answer Gate (003).
+   * Populated when `feature.no_answer_gate_enabled` or `feature.hybrid_retrieval_enabled` is true.
+   */
+  retrievalDecision?: RetrievalDecision;
 }
 
 /**
@@ -98,6 +116,11 @@ export class ChatPipelineService {
     private readonly templateResolver: AnswerTemplateResolver,
     @Inject(LLM_PROVIDER) llmProvider: unknown,
     @Inject(RETRIEVAL_SERVICE) retrievalService: unknown,
+    // QU V2 (Phase 4-B): optional — not provided in legacy tests or when module is absent.
+    @Optional() @Inject(QueryUnderstandingService) private readonly queryUnderstandingService?: QueryUnderstandingService,
+    // Phase 4-C: optional — not provided when hybrid retrieval is disabled or in legacy tests.
+    @Optional() @Inject(HybridRetrievalService) private readonly hybridRetrievalService?: HybridRetrievalService,
+    @Optional() @Inject(RetrievalDecisionService) private readonly retrievalDecisionService?: RetrievalDecisionService,
   ) {
     this.llmProvider = llmProvider as ILlmProvider;
     this.retrievalService = retrievalService as IRetrievalService;
@@ -152,10 +175,30 @@ export class ChatPipelineService {
       // ── Step 2: Language detection ──────────────────────────────────────
       ctx.language = this.detectLanguage(userMessage, conversation.language);
 
-      // ── Step 2.5: Query analysis (feature flag) ─────────────────────────
+      // ── Step 2.5: Query analysis / understanding (feature flags) ──────────
+      const quV2Enabled =
+        this.systemConfigService.getBoolean('feature.query_understanding_v2_enabled') ?? false;
       const queryAnalysisEnabled =
         this.systemConfigService.getBoolean('feature.query_analysis_enabled') ?? false;
-      if (queryAnalysisEnabled) {
+
+      if (quV2Enabled) {
+        try {
+          const quResult = await this.runQueryUnderstanding(userMessage, ctx.language);
+          ctx.queryUnderstandingResult = quResult;
+          ctx.analyzedQuery = this.adaptToAnalyzedQuery(quResult);
+        } catch (err) {
+          this.logger.warn(
+            `QU V2 failed, falling back: ${(err as Error).message}`,
+            (err as Error).stack,
+          );
+          // Fallback priority:
+          //   feature.query_analysis_enabled=true  → fall back to QueryAnalysisService (002 path)
+          //   feature.query_analysis_enabled=false → continue with no analyzedQuery (001 path)
+          if (queryAnalysisEnabled) {
+            ctx.analyzedQuery = await this.analyzeQuery(userMessage, ctx.language);
+          }
+        }
+      } else if (queryAnalysisEnabled) {
         ctx.analyzedQuery = await this.analyzeQuery(userMessage, ctx.language);
       }
 
@@ -297,15 +340,68 @@ export class ChatPipelineService {
       ctx.intentLabel = intentResult.intentLabel;
 
       // ── Step 6: RAG retrieval ─────────────────────────────────────────────
-      ctx.ragResults = await this.retrieveKnowledge(
-        userMessage,
-        ctx.intentLabel,
-        ctx.language,
-        ctx.analyzedQuery,
-      );
+      const hybridEnabled =
+        this.systemConfigService.getBoolean('feature.hybrid_retrieval_enabled') ?? false;
+      const gateEnabled =
+        this.systemConfigService.getBoolean('feature.no_answer_gate_enabled') ?? false;
+      const minScore = this.systemConfigService.getNumber('rag_minimum_score') ?? 0.25;
+
+      if (hybridEnabled && ctx.queryUnderstandingResult && this.hybridRetrievalService) {
+        // T060 — Hybrid path: HybridRetrievalService → decideFromChunks
+        const chunks = await this.retrieveKnowledgeHybrid(
+          ctx.queryUnderstandingResult.retrievalPlan,
+          5,
+        );
+        ctx.ragResults = chunks.map(c => this.chunkToRetrievalResult(c));
+        if (this.retrievalDecisionService) {
+          ctx.retrievalDecision = this.retrievalDecisionService.decideFromChunks(
+            chunks,
+            ctx.queryUnderstandingResult,
+            minScore,
+          );
+        }
+      } else {
+        // Legacy path (001/002): PostgresRetrievalService
+        // Warn when hybrid was requested but the service was not injected.
+        if (hybridEnabled && !this.hybridRetrievalService) {
+          this.logger.warn(
+            'feature.hybrid_retrieval_enabled=true but HybridRetrievalService is not injected; ' +
+              'falling back to legacy retrieval.',
+          );
+        }
+        ctx.ragResults = await this.retrieveKnowledge(
+          userMessage,
+          ctx.intentLabel,
+          ctx.language,
+          ctx.analyzedQuery,
+        );
+        // T061 — fill retrievalDecision from legacy results when gate is enabled
+        if (gateEnabled && this.retrievalDecisionService) {
+          ctx.retrievalDecision = this.retrievalDecisionService.decideFromRetrievalResults(
+            ctx.ragResults,
+            ctx.queryUnderstandingResult,
+            minScore,
+          );
+        }
+      }
+
       ctx.ragConfidence = ctx.ragResults[0]?.score ?? 0;
       ctx.isCrossLanguageFallback =
         ctx.ragResults.length > 0 && ctx.ragResults[0].isCrossLanguageFallback === true;
+
+      // ── Step 6.5: No-answer Gate ─────────────────────────────────────
+      // feature.no_answer_gate_enabled=false → skip (gateAllows=true, pipeline continues)
+      // canAnswer=false → write fallback SSE, write AuditLog (llmCalled=false), return
+      const gateAllows = await this.applyNoAnswerGate(
+        ctx,
+        gateEnabled,
+        conversation,
+        userMessage,
+        requestId,
+        res,
+        startMs,
+      );
+      if (!gateAllows) return;
 
       // ── Step 7: Confidence evaluation ────────────────────────────────────
       // Two thresholds:
@@ -479,6 +575,43 @@ export class ChatPipelineService {
         role: 'user',
         content: userMessage,
       });
+
+      // T063 — Safety net: do NOT call LLM when gate is enabled and canAnswer=false.
+      // applyNoAnswerGate() (Step 6.5) should have already blocked this path;
+      // this guard provides defence-in-depth for edge cases.
+      if (gateEnabled && ctx.retrievalDecision?.canAnswer !== true) {
+        const gateFallbackContent = this.buildGateFallbackContent(ctx.language);
+        const assistantMsg = await this.conversationService.addMessage(conversation.id, {
+          role: 'assistant',
+          content: gateFallbackContent,
+        });
+        await this.auditService.log({
+          requestId,
+          sessionId: conversation.sessionId,
+          eventType: 'chat_response',
+          eventData: {
+            action: 'fallback',
+            fallbackReason: ctx.retrievalDecision?.reason ?? 'no_results',
+            canAnswer: false,
+            llmCalled: false,
+            intentLabel: ctx.intentLabel,
+          },
+          ragConfidence: ctx.ragConfidence,
+          durationMs: Date.now() - startMs,
+        });
+        res.write(
+          formatSseEvent('token', { token: gateFallbackContent } satisfies SseTokenPayload),
+        );
+        this.writeSseAndEnd(res, 'done', {
+          messageId: assistantMsg.id,
+          action: 'fallback' satisfies ChatAction,
+          intentLabel: ctx.intentLabel,
+          sourceReferences: [],
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        } satisfies SseDonePayload);
+        void userMsg;
+        return;
+      }
 
       let fullContent = '';
       let usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
@@ -714,6 +847,48 @@ export class ChatPipelineService {
     return this.queryAnalysisService.analyze(input, language);
   }
 
+  /**
+   * Step 2.5 (QU V2 path): Call QueryUnderstandingService.understand().
+   * Called only when `feature.query_understanding_v2_enabled` is true.
+   * Throws on error; the caller (run()) catches and falls back gracefully.
+   */
+  async runQueryUnderstanding(
+    input: string,
+    language: string,
+  ): Promise<QueryUnderstandingResult> {
+    if (!this.queryUnderstandingService) {
+      throw new Error('QueryUnderstandingService not injected');
+    }
+    return this.queryUnderstandingService!.understand(input, language);
+  }
+
+  /**
+   * Adapts a QueryUnderstandingResult (QU V2) to the AnalyzedQuery shape (QU 002).
+   *
+   * Pure format conversion — no DB access, no LLM calls.
+   * Ensures downstream pipeline steps (IntentService, RetrievalService, AuditLog)
+   * continue to operate correctly regardless of which analysis path was used.
+   */
+  private adaptToAnalyzedQuery(result: QueryUnderstandingResult): AnalyzedQuery {
+    return {
+      rawQuery: result.rawQuery,
+      normalizedQuery: result.normalizedQuery,
+      language: result.language,
+      tokens: result.tokens.map(t => t.text),
+      terms: result.keyPhrases.map(t => t.normalizedText),
+      phrases: result.retrievalPlan.searchTerms,
+      expandedTerms: result.retrievalPlan.searchTerms,
+      matchedRules: [],
+      selectedProfile: 'default',
+      intentHints: [],
+      debugMeta: {
+        processingMs: result.debugMeta.durationMs,
+        normalizerSteps: [],
+        expansionHits: 0,
+      },
+    };
+  }
+
   async retrieveKnowledge(
     query: string,
     intentLabel: string | null,
@@ -730,6 +905,176 @@ export class ChatPipelineService {
       rankingProfile: analyzedQuery?.selectedProfile,
       expandedTerms: analyzedQuery?.expandedTerms,
     });
+  }
+
+  /**
+   * T060 — Hybrid retrieval path.
+   * Delegates to HybridRetrievalService using the pre-computed RetrievalPlan
+   * produced by QueryUnderstandingService.
+   */
+  async retrieveKnowledgeHybrid(plan: RetrievalPlan, limit: number): Promise<ChunkResult[]> {
+    if (!this.hybridRetrievalService) throw new Error('HybridRetrievalService not injected');
+    return this.hybridRetrievalService!.retrieve(plan, limit);
+  }
+
+  /**
+   * T060 — Minimal adapter from ChunkResult to RetrievalResult.
+   * Populates only the KnowledgeEntry fields actually used by the downstream
+   * pipeline (PromptBuilder, TemplateResolver, source references).
+   * All other Prisma model fields are set to safe defaults.
+   */
+  private chunkToRetrievalResult(chunk: ChunkResult): RetrievalResult {
+    const entry = {
+      id: chunk.knowledgeEntryId ?? 0,
+      content: chunk.content,
+      language: chunk.language,
+      sourceKey: chunk.sourceKey || null,
+      answerType: null,
+      title: '',
+      status: 'approved',
+      visibility: 'public',
+      version: 1,
+      intentLabel: null,
+      tags: [],
+      aliases: [],
+      category: null,
+      templateKey: null,
+      faqQuestions: [],
+      crossLanguageGroupKey: null,
+      structuredAttributes: null,
+      deletedAt: null,
+      createdAt: new Date(0),
+      updatedAt: new Date(0),
+    } as unknown as KnowledgeEntry;
+    return { entry, score: chunk.score, isCrossLanguageFallback: chunk.isCrossLanguageFallback };
+  }
+
+  // ─── T062: No-answer Gate helpers ─────────────────────────────────────────
+
+  /**
+   * T062: Step 6.5 — No-answer gate.
+   *
+   * Returns `true` when the pipeline may continue, `false` when a fallback SSE
+   * response has been written and the caller must return immediately.
+   *
+   * Behaviour by flag + state:
+   *  - gateEnabled=false              → skip, return true
+   *  - no retrievalDecision, results  → conservative allow, return true
+   *  - no retrievalDecision, no results → fallback (no_results), return false
+   *  - canAnswer=true                 → return true
+   *  - canAnswer=false                → write fallback SSE + AuditLog, return false
+   */
+  private async applyNoAnswerGate(
+    ctx: PipelineContext,
+    gateEnabled: boolean,
+    conversation: Conversation,
+    userMessage: string,
+    requestId: string,
+    res: Response,
+    startMs: number,
+  ): Promise<boolean> {
+    if (!gateEnabled) return true;
+
+    // No retrievalDecision available — conservative: allow when there are RAG results,
+    // but synthesise a decision so the T063 Step-10 guard can confirm canAnswer=true.
+    if (!ctx.retrievalDecision) {
+      if (ctx.ragResults.length > 0) {
+        ctx.retrievalDecision = {
+          canAnswer: true,
+          reason: 'ok',
+          confidence: ctx.ragConfidence,
+          topK: [],
+        };
+        return true;
+      }
+      // No results and no decision → treat as blocked (no_results).
+      await this.writeGateFallbackResponse(
+        ctx,
+        'no_results',
+        conversation,
+        userMessage,
+        requestId,
+        res,
+        startMs,
+      );
+      return false;
+    }
+
+    if (!ctx.retrievalDecision.canAnswer) {
+      await this.writeGateFallbackResponse(
+        ctx,
+        ctx.retrievalDecision.reason,
+        conversation,
+        userMessage,
+        requestId,
+        res,
+        startMs,
+      );
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Persists messages, writes AuditLog, and emits the fallback SSE response
+   * when the No-answer Gate blocks the pipeline.
+   */
+  private async writeGateFallbackResponse(
+    ctx: PipelineContext,
+    fallbackReason: string,
+    conversation: Conversation,
+    userMessage: string,
+    requestId: string,
+    res: Response,
+    startMs: number,
+  ): Promise<void> {
+    const fallbackContent = this.buildGateFallbackContent(ctx.language);
+
+    const userMsg = await this.conversationService.addMessage(conversation.id, {
+      role: 'user',
+      content: userMessage,
+    });
+    const assistantMsg = await this.conversationService.addMessage(conversation.id, {
+      role: 'assistant',
+      content: fallbackContent,
+    });
+
+    await this.auditService.log({
+      requestId,
+      sessionId: conversation.sessionId,
+      eventType: 'chat_response',
+      eventData: {
+        action: 'fallback',
+        fallbackReason,
+        canAnswer: false,
+        llmCalled: false,
+        intentLabel: ctx.intentLabel,
+      },
+      ragConfidence: ctx.ragConfidence,
+      durationMs: Date.now() - startMs,
+    });
+
+    res.write(formatSseEvent('token', { token: fallbackContent } satisfies SseTokenPayload));
+    this.writeSseAndEnd(res, 'done', {
+      messageId: assistantMsg.id,
+      action: 'fallback' satisfies ChatAction,
+      intentLabel: ctx.intentLabel,
+      sourceReferences: [],
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    } satisfies SseDonePayload);
+
+    void userMsg;
+  }
+
+  /**
+   * Builds the language-appropriate fallback message used by the No-answer Gate.
+   * Shared between applyNoAnswerGate (Step 6.5) and the T063 safety net (Step 10).
+   */
+  private buildGateFallbackContent(language: string): string {
+    return language === 'en'
+      ? "I couldn't find relevant information in our knowledge base. Please leave your contact details and our team will follow up."
+      : '抱歉，我在知識庫中找不到相關資訊。請留下您的聯絡資料，我們的業務人員將儘速與您聯繫。';
   }
 
   /**

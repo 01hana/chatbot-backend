@@ -10,6 +10,8 @@ import { IntentModule } from '../intent/intent.module';
 import { HealthModule } from '../health/health.module';
 import { QueryAnalysisModule } from '../query-analysis/query-analysis.module';
 import { TemplateModule } from '../template/template.module';
+import { QueryUnderstandingModule } from '../query-understanding/query-understanding.module';
+import { HybridRetrievalModule } from '../hybrid-retrieval/hybrid-retrieval.module';
 
 /**
  * ChatModule — wires together the complete chat pipeline and HTTP endpoints.
@@ -38,6 +40,8 @@ import { TemplateModule } from '../template/template.module';
     HealthModule,
     QueryAnalysisModule,
     TemplateModule,
+    QueryUnderstandingModule,
+    HybridRetrievalModule,
   ],
   controllers: [ChatController],
   providers: [ChatPipelineService, PromptBuilder],

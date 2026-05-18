@@ -15,6 +15,14 @@ import { QueryAnalysisService } from '../query-analysis/query-analysis.service';
 import { AnswerTemplateResolver } from '../template/answer-template-resolver';
 import type { KnowledgeEntry } from '../generated/prisma/client';
 import type { RetrievalResult } from '../retrieval/types/retrieval.types';
+import { QueryUnderstandingService } from '../query-understanding/query-understanding.service.js';
+import { HybridRetrievalService } from '../hybrid-retrieval/hybrid-retrieval.service.js';
+import { RetrievalDecisionService } from '../hybrid-retrieval/gate/retrieval-decision.service.js';
+import { QueryType } from '../query-understanding/types/query-type.enum.js';
+import { TokenType } from '../query-understanding/types/token-type.enum.js';
+import type { ChunkResult } from '../hybrid-retrieval/types/chunk-result.type.js';
+import type { RetrievalDecision, RetrievalDecisionReason } from '../hybrid-retrieval/types/retrieval-decision.type.js';
+import type { QueryUnderstandingResult } from '../query-understanding/types/query-understanding-result.type.js';
 
 /**
  * T2-011 — Unit tests for ChatPipelineService.
@@ -211,6 +219,13 @@ describe('ChatPipelineService', () => {
   const mockTemplateResolver = {
     resolve: jest.fn().mockReturnValue({ strategy: 'rag', reason: 'rag:default' }),
   };
+  // Phase 4-E optional services (registered in all test modules so DI resolves correctly)
+  const mockQUS003 = { understand: jest.fn() };
+  const mockHRS003 = { retrieve: jest.fn() };
+  const mockRDS003 = {
+    decideFromChunks: jest.fn(),
+    decideFromRetrievalResults: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -227,6 +242,9 @@ describe('ChatPipelineService', () => {
         { provide: AnswerTemplateResolver, useValue: mockTemplateResolver },
         { provide: LLM_PROVIDER, useValue: mockLlmProvider },
         { provide: RETRIEVAL_SERVICE, useValue: mockRetrievalService },
+        { provide: QueryUnderstandingService, useValue: mockQUS003 },
+        { provide: HybridRetrievalService, useValue: mockHRS003 },
+        { provide: RetrievalDecisionService, useValue: mockRDS003 },
       ],
     }).compile();
 
@@ -265,6 +283,12 @@ describe('ChatPipelineService', () => {
     });
     // Default: 'rag' strategy (001 behaviour preserved)
     mockTemplateResolver.resolve.mockReturnValue({ strategy: 'rag', reason: 'rag:default' });
+    // Phase 4-E optional services: all flags OFF by default, so these mocks return safe defaults
+    // but should NOT be called in legacy-path tests (T064-1 verifies this).
+    mockQUS003.understand.mockResolvedValue(null);
+    mockHRS003.retrieve.mockResolvedValue([]);
+    mockRDS003.decideFromChunks.mockReturnValue(null);
+    mockRDS003.decideFromRetrievalResults.mockReturnValue(null);
   });
 
   describe('degraded mode', () => {
@@ -1577,6 +1601,350 @@ describe('ChatPipelineService', () => {
       expect(raw).toContain('LLM 回應');
       expect(raw).toContain('event: done');
       expect(raw).toContain('"action":"answer"');
+    });
+  });
+
+  // ── Phase 4-E: T064 — No-answer Gate + QU V2 integration ──────────────────
+
+  describe('Phase 4-E — No-answer Gate integration (T064)', () => {
+    const makeQu = (): QueryUnderstandingResult => ({
+      rawQuery: '測試查詢',
+      normalizedQuery: '測試查詢',
+      language: 'zh-TW',
+      tokenizer: 'rule-based',
+      tokens: [
+        {
+          text: '測試',
+          normalizedText: '測試',
+          tokenType: TokenType.Product,
+          weight: 0.9,
+          source: 'rule-based',
+        },
+      ],
+      keyPhrases: [
+        {
+          text: '測試',
+          normalizedText: '測試',
+          tokenType: TokenType.Product,
+          weight: 0.9,
+          source: 'rule-based',
+        },
+      ],
+      queryType: QueryType.ProductLookup,
+      supportability: 'supported',
+      retrievalPlan: {
+        searchTerms: ['測試'],
+        strategies: ['keyword'],
+        maxResults: 5,
+        language: 'zh-TW',
+      },
+      debugMeta: {
+        durationMs: 10,
+        tokenizerUsed: 'rule-based',
+        timestamp: new Date().toISOString(),
+      },
+    });
+
+    const makeChunk = (score: number): ChunkResult => ({
+      knowledgeEntryId: 1,
+      sourceKey: 'test-key',
+      content: '測試內容',
+      score,
+      language: 'zh-TW',
+    });
+
+    const makeGoodDecision = (): RetrievalDecision => ({
+      canAnswer: true,
+      reason: 'ok',
+      confidence: 0.9,
+      topK: [],
+    });
+
+    const makeBlockDecision = (reason: RetrievalDecisionReason = 'no_results'): RetrievalDecision => ({
+      canAnswer: false,
+      reason,
+      confidence: 0,
+      topK: [],
+    });
+
+    beforeEach(() => {
+      // Optional services are now registered in the shared TestingModule (outer beforeEach).
+      // Set up 003 mock defaults for Phase 4-E tests.
+      mockQUS003.understand.mockResolvedValue(makeQu());
+      mockHRS003.retrieve.mockResolvedValue([]);
+      mockRDS003.decideFromChunks.mockReturnValue(makeGoodDecision());
+      mockRDS003.decideFromRetrievalResults.mockReturnValue(makeGoodDecision());
+    });
+
+    it('T064-1: all feature flags false → 002 behaviour unchanged, optional services not called', async () => {
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, { content: '產品資訊' }),
+      ]);
+      async function* mockStream() {
+        yield { token: '回應', done: false };
+        yield {
+          token: '',
+          done: true,
+          provider: 'mock',
+          modelUsed: 'mock',
+          fallbackTriggered: false,
+          usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+        };
+      }
+      mockLlmProvider.stream.mockReturnValue(mockStream());
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '測試查詢',
+        'req-t064-1',
+        res as never,
+        new AbortController().signal,
+      );
+
+      expect(mockQUS003.understand).not.toHaveBeenCalled();
+      expect(mockHRS003.retrieve).not.toHaveBeenCalled();
+      expect(mockRDS003.decideFromChunks).not.toHaveBeenCalled();
+      expect(mockRDS003.decideFromRetrievalResults).not.toHaveBeenCalled();
+      expect(mockLlmProvider.stream).toHaveBeenCalled();
+    });
+
+    it('T064-2: quV2Enabled=true → understand() called with userMessage and language', async () => {
+      mockSystemConfigService.getBoolean.mockImplementation((key: string) => {
+        if (key === 'feature.query_understanding_v2_enabled') return true;
+        return null;
+      });
+      mockRetrievalService.retrieve.mockResolvedValue([]);
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '測試查詢',
+        'req-t064-2',
+        res as never,
+        new AbortController().signal,
+      );
+
+      expect(mockQUS003.understand).toHaveBeenCalledWith('測試查詢', expect.any(String));
+      const raw = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0] as string).join('');
+      expect(raw).toContain('event: done');
+    });
+
+    it('T064-3: gateEnabled=true + legacy hits → decideFromRetrievalResults called, canAnswer=true, LLM called', async () => {
+      mockSystemConfigService.getBoolean.mockImplementation((key: string) => {
+        if (key === 'feature.no_answer_gate_enabled') return true;
+        return null;
+      });
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, { content: '產品資訊' }),
+      ]);
+      mockRDS003.decideFromRetrievalResults.mockReturnValue(makeGoodDecision());
+      async function* mockStream() {
+        yield { token: '回應', done: false };
+        yield {
+          token: '',
+          done: true,
+          provider: 'mock',
+          modelUsed: 'mock',
+          fallbackTriggered: false,
+          usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+        };
+      }
+      mockLlmProvider.stream.mockReturnValue(mockStream());
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '產品詢問',
+        'req-t064-3',
+        res as never,
+        new AbortController().signal,
+      );
+
+      expect(mockRDS003.decideFromRetrievalResults).toHaveBeenCalled();
+      expect(mockLlmProvider.stream).toHaveBeenCalled();
+    });
+
+    it('T064-4: gateEnabled=true + no legacy hits + canAnswer=false → fallback SSE, LLM not called', async () => {
+      mockSystemConfigService.getBoolean.mockImplementation((key: string) => {
+        if (key === 'feature.no_answer_gate_enabled') return true;
+        return null;
+      });
+      mockRetrievalService.retrieve.mockResolvedValue([]);
+      mockRDS003.decideFromRetrievalResults.mockReturnValue(makeBlockDecision('no_results'));
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '無命中查詢',
+        'req-t064-4',
+        res as never,
+        new AbortController().signal,
+      );
+
+      expect(mockLlmProvider.stream).not.toHaveBeenCalled();
+      const raw = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0] as string).join('');
+      expect(raw).toContain('event: done');
+      expect(raw).toContain('fallback');
+    });
+
+    it('T064-5: gateEnabled=true + low_score result → canAnswer=false, fallbackReason=low_score and llmCalled=false in audit', async () => {
+      mockSystemConfigService.getBoolean.mockImplementation((key: string) => {
+        if (key === 'feature.no_answer_gate_enabled') return true;
+        return null;
+      });
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.1, { content: '低分內容' }),
+      ]);
+      mockRDS003.decideFromRetrievalResults.mockReturnValue(makeBlockDecision('low_score'));
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '低分查詢',
+        'req-t064-5',
+        res as never,
+        new AbortController().signal,
+      );
+
+      expect(mockLlmProvider.stream).not.toHaveBeenCalled();
+      const chatResponseAudit = (mockAuditService.log as jest.Mock).mock.calls.find(
+        (args: unknown[]) => (args[0] as { eventType: string }).eventType === 'chat_response',
+      );
+      expect(chatResponseAudit).toBeDefined();
+      const eventData = (chatResponseAudit![0] as { eventData: Record<string, unknown> }).eventData;
+      expect(eventData['fallbackReason']).toBe('low_score');
+      expect(eventData['llmCalled']).toBe(false);
+    });
+
+    it('T064-6: hybridEnabled=true + quV2=true + canAnswer=false → hybridRetrieve and decideFromChunks called, LLM not called', async () => {
+      mockSystemConfigService.getBoolean.mockImplementation((key: string) => {
+        if (key === 'feature.hybrid_retrieval_enabled') return true;
+        if (key === 'feature.no_answer_gate_enabled') return true;
+        if (key === 'feature.query_understanding_v2_enabled') return true;
+        return null;
+      });
+      const chunks: ChunkResult[] = [makeChunk(0.1)];
+      mockHRS003.retrieve.mockResolvedValue(chunks);
+      mockRDS003.decideFromChunks.mockReturnValue(makeBlockDecision('low_score'));
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '混合查詢',
+        'req-t064-6',
+        res as never,
+        new AbortController().signal,
+      );
+
+      expect(mockHRS003.retrieve).toHaveBeenCalled();
+      expect(mockRDS003.decideFromChunks).toHaveBeenCalled();
+      expect(mockLlmProvider.stream).not.toHaveBeenCalled();
+      const raw = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0] as string).join('');
+      expect(raw).toContain('fallback');
+    });
+
+    it('T064-7: gateEnabled=true + canAnswer=true + strategy=template → LLM not called', async () => {
+      mockSystemConfigService.getBoolean.mockImplementation((key: string) => {
+        if (key === 'feature.no_answer_gate_enabled') return true;
+        return null;
+      });
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, {
+          content: '模板內容',
+          answerType: 'template',
+          sourceKey: 'tpl-key',
+        }),
+      ]);
+      mockRDS003.decideFromRetrievalResults.mockReturnValue(makeGoodDecision());
+      mockTemplateResolver.resolve.mockReturnValue({
+        strategy: 'template',
+        resolvedContent: '直接模板回覆',
+        reason: 'template:tpl-key',
+      });
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '模板查詢',
+        'req-t064-7',
+        res as never,
+        new AbortController().signal,
+      );
+
+      expect(mockLlmProvider.stream).not.toHaveBeenCalled();
+      const raw = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0] as string).join('');
+      expect(raw).toContain('直接模板回覆');
+      expect(raw).toContain('event: done');
+    });
+
+    it('T064-8: gateEnabled=true + canAnswer=true + strategy=rag → LLM called', async () => {
+      mockSystemConfigService.getBoolean.mockImplementation((key: string) => {
+        if (key === 'feature.no_answer_gate_enabled') return true;
+        return null;
+      });
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, { content: '知識內容' }),
+      ]);
+      mockRDS003.decideFromRetrievalResults.mockReturnValue(makeGoodDecision());
+      mockTemplateResolver.resolve.mockReturnValue({ strategy: 'rag', reason: 'rag:default' });
+      async function* mockStream() {
+        yield { token: 'LLM回應', done: false };
+        yield {
+          token: '',
+          done: true,
+          provider: 'mock',
+          modelUsed: 'mock',
+          fallbackTriggered: false,
+          usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+        };
+      }
+      mockLlmProvider.stream.mockReturnValue(mockStream());
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '知識庫問題',
+        'req-t064-8',
+        res as never,
+        new AbortController().signal,
+      );
+
+      expect(mockLlmProvider.stream).toHaveBeenCalled();
+      const raw = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0] as string).join('');
+      expect(raw).toContain('event: done');
+      expect(raw).toContain('"action":"answer"');
+    });
+
+    it('T064-9: gateEnabled=true + canAnswer=false → action=fallback in SSE and llmCalled=false in audit', async () => {
+      mockSystemConfigService.getBoolean.mockImplementation((key: string) => {
+        if (key === 'feature.no_answer_gate_enabled') return true;
+        return null;
+      });
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, { content: '產品資訊' }),
+      ]);
+      mockRDS003.decideFromRetrievalResults.mockReturnValue(makeBlockDecision('unsupported'));
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '不支援的查詢',
+        'req-t064-9',
+        res as never,
+        new AbortController().signal,
+      );
+
+      expect(mockLlmProvider.stream).not.toHaveBeenCalled();
+      const raw = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0] as string).join('');
+      expect(raw).toContain('"action":"fallback"');
+      const chatResponseAudit = (mockAuditService.log as jest.Mock).mock.calls.find(
+        (args: unknown[]) => (args[0] as { eventType: string }).eventType === 'chat_response',
+      );
+      expect(chatResponseAudit).toBeDefined();
+      const eventData = (chatResponseAudit![0] as { eventData: Record<string, unknown> }).eventData;
+      expect(eventData['llmCalled']).toBe(false);
+      expect(eventData['canAnswer']).toBe(false);
     });
   });
 });

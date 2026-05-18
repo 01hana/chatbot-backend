@@ -256,5 +256,61 @@ describe('QueryUnderstandingService', () => {
 
       expect(result.tokenizer).toBe('english');
     });
+
+    // ── T064 regression: jieba-mode with recovered tokens ─────────────────────
+    // Uses a mock tokenizer that mimics the recovered output (post-recovery pass)
+    // to verify the pipeline wiring for "不鏽鋼螺絲 304 跟 316 差在哪".
+
+    it('T064: jieba-recovered tokens → queryType=ProductComparison, not BusinessHours', async () => {
+      const supportabilityMock = makeSupportabilityMock('supported');
+
+      // Mock the tokenizer provider to return a mock jieba tokenizer
+      // that simulates correctly recovered tokens (post-userDict fix).
+      const mockJiebaTokenizer = {
+        isReady: jest.fn().mockReturnValue(true),
+        tokenize: jest.fn().mockResolvedValue([
+          { text: '不鏽鋼螺絲', normalizedText: '不鏽鋼螺絲', tokenType: TokenType.Product, weight: 0.9, source: 'dictionary' },
+          { text: '304',       normalizedText: '304',       tokenType: TokenType.Spec,    weight: 0.85, source: 'dictionary' },
+          { text: '316',       normalizedText: '316',       tokenType: TokenType.Spec,    weight: 0.85, source: 'dictionary' },
+          { text: '不鏽鋼',    normalizedText: '不鏽鋼',    tokenType: TokenType.Material, weight: 0.8, source: 'dictionary' },
+        ]),
+      };
+      const mockConfig = { getString: jest.fn().mockReturnValue('jieba') };
+      const realProvider = new TokenizerProviderService(
+        mockConfig as never,
+        mockJiebaTokenizer as never,
+      );
+
+      const service = new QueryUnderstandingService(realProvider, supportabilityMock);
+      const result = await service.understand('我想知道不鏽鋼螺絲 304 跟 316 差在哪', 'zh-TW');
+
+      expect(result.queryType).not.toBe(QueryType.BusinessHours);
+      expect(result.queryType).not.toBe(QueryType.Unsupported);
+      expect(result.supportability).not.toBe('unsupported');
+      expect(result.retrievalPlan.searchTerms.length).toBeGreaterThan(0);
+      expect(result.retrievalPlan.searchTerms).toContain('304');
+      expect(result.retrievalPlan.searchTerms).toContain('316');
+    });
+
+    it('T064: keyPhrases is non-empty for recovered product+spec tokens', async () => {
+      const supportabilityMock = makeSupportabilityMock('supported');
+      const mockJiebaTokenizer = {
+        isReady: jest.fn().mockReturnValue(true),
+        tokenize: jest.fn().mockResolvedValue([
+          { text: '不鏽鋼螺絲', normalizedText: '不鏽鋼螺絲', tokenType: TokenType.Product,  weight: 0.9,  source: 'dictionary' },
+          { text: '304',       normalizedText: '304',       tokenType: TokenType.Spec,     weight: 0.85, source: 'dictionary' },
+          { text: '316',       normalizedText: '316',       tokenType: TokenType.Spec,     weight: 0.85, source: 'dictionary' },
+        ]),
+      };
+      const mockConfig = { getString: jest.fn().mockReturnValue('jieba') };
+      const realProvider = new TokenizerProviderService(
+        mockConfig as never,
+        mockJiebaTokenizer as never,
+      );
+      const service = new QueryUnderstandingService(realProvider, supportabilityMock);
+      const result = await service.understand('我想知道不鏽鋼螺絲 304 跟 316 差在哪', 'zh-TW');
+
+      expect(result.keyPhrases.length).toBeGreaterThan(0);
+    });
   });
 });

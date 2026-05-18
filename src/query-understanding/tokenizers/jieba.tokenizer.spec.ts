@@ -233,3 +233,121 @@ describe('JiebaTokenizer domain dictionary load failure', () => {
     await expect(tokenizer.tokenize('螺絲', 'zh-TW')).resolves.toEqual([]);
   });
 });
+
+// ── Dictionary recovery (_applyDictionaryRecovery) ───────────────────────────
+// Simulates the case where jieba returns over-fragmented single-char tokens
+// (as happens without the userDict loaded) and the recovery pass re-merges them.
+
+describe('JiebaTokenizer dictionary recovery (T064 regression)', () => {
+  /**
+   * Build a tokenizer whose _dictWords are pre-populated with the given words
+   * and whose mock cut() simulates over-fragmentation (single chars + spec code splits).
+   */
+  function makeRecoveryTokenizer(
+    dictWords: string[],
+    cutImpl: (text: string) => string[],
+  ): JiebaTokenizer {
+    const tokenizer = new JiebaTokenizer();
+    const mockMod: NodeJiebaModule = {
+      load: jest.fn(),
+      cut: jest.fn().mockImplementation(cutImpl),
+    };
+    tokenizer._setModuleForTesting(mockMod);
+    for (const w of dictWords) {
+      (tokenizer as unknown as { _dictWords: Set<string> })._dictWords.add(w);
+    }
+    return tokenizer;
+  }
+
+  const DICT_WORDS = [
+    '不鏽鋼螺絲',
+    '不鏽鋼',
+    '螺絲',
+    '304',
+    '316',
+    '差異',
+    '比較',
+    '差在',
+    '材質',
+  ];
+
+  // jieba without userDict commonly splits domain terms into single chars and digits
+  const FRAGMENTED_CUT = (_text: string): string[] =>
+    ['我', '想', '知', '道', '不', '鏽', '鋼', '螺', '絲', ' ', '3', '0', '4', '跟', '3', '1', '6', '差', '在', '哪'];
+
+  it('recovered tokens contain 不鏽鋼 or 不鏽鋼螺絲 (domain recovery)', async () => {
+    const t = makeRecoveryTokenizer(DICT_WORDS, FRAGMENTED_CUT);
+    const tokens = await t.tokenize('我想知道不鏽鋼螺絲 304 跟 316 差在哪', 'zh-TW');
+    const texts = tokens.map(tok => tok.text);
+    const hasMaterial = texts.includes('不鏽鋼') || texts.includes('不鏽鋼螺絲');
+    expect(hasMaterial).toBe(true);
+  });
+
+  it('recovered tokens contain 螺絲 or 不鏽鋼螺絲', async () => {
+    const t = makeRecoveryTokenizer(DICT_WORDS, FRAGMENTED_CUT);
+    const tokens = await t.tokenize('我想知道不鏽鋼螺絲 304 跟 316 差在哪', 'zh-TW');
+    const texts = tokens.map(tok => tok.text);
+    const hasProduct = texts.includes('螺絲') || texts.includes('不鏽鋼螺絲');
+    expect(hasProduct).toBe(true);
+  });
+
+  it('recovered tokens contain 304 as a single token (not 3/0/4)', async () => {
+    const t = makeRecoveryTokenizer(DICT_WORDS, FRAGMENTED_CUT);
+    const tokens = await t.tokenize('我想知道不鏽鋼螺絲 304 跟 316 差在哪', 'zh-TW');
+    const texts = tokens.map(tok => tok.text);
+    expect(texts).toContain('304');
+    expect(texts).not.toContain('3');
+  });
+
+  it('recovered tokens contain 316 as a single token (not 3/1/6)', async () => {
+    const t = makeRecoveryTokenizer(DICT_WORDS, FRAGMENTED_CUT);
+    const tokens = await t.tokenize('我想知道不鏽鋼螺絲 304 跟 316 差在哪', 'zh-TW');
+    const texts = tokens.map(tok => tok.text);
+    expect(texts).toContain('316');
+  });
+
+  it('tokens are not all single characters', async () => {
+    const t = makeRecoveryTokenizer(DICT_WORDS, FRAGMENTED_CUT);
+    const tokens = await t.tokenize('我想知道不鏽鋼螺絲 304 跟 316 差在哪', 'zh-TW');
+    const hasMultiChar = tokens.some(tok => tok.text.length > 1);
+    expect(hasMultiChar).toBe(true);
+  });
+
+  it('304 token has tokenType=Spec', async () => {
+    const t = makeRecoveryTokenizer(DICT_WORDS, FRAGMENTED_CUT);
+    const tokens = await t.tokenize('304', 'zh-TW');
+    // Mock cut returns each digit as single char
+    const mockMod = (t as unknown as { _jiebaModule: NodeJiebaModule })._jiebaModule;
+    (mockMod.cut as jest.Mock).mockReturnValue(['3', '0', '4']);
+    const tokens2 = await t.tokenize('304', 'zh-TW');
+    const tok304 = tokens2.find(tok => tok.text === '304');
+    expect(tok304).toBeDefined();
+    expect(tok304!.tokenType).toBe(TokenType.Spec);
+  });
+
+  it('不鏽鋼 recovered token has tokenType=Material', async () => {
+    const t = makeRecoveryTokenizer(DICT_WORDS, (_text) => ['不', '鏽', '鋼']);
+    const tokens = await t.tokenize('不鏽鋼', 'zh-TW');
+    const tokMat = tokens.find(tok => tok.text === '不鏽鋼');
+    expect(tokMat).toBeDefined();
+    expect(tokMat!.tokenType).toBe(TokenType.Material);
+  });
+
+  it('螺絲 recovered token has tokenType=Product', async () => {
+    const t = makeRecoveryTokenizer(DICT_WORDS, (_text) => ['螺', '絲']);
+    const tokens = await t.tokenize('螺絲', 'zh-TW');
+    const tokProd = tokens.find(tok => tok.text === '螺絲');
+    expect(tokProd).toBeDefined();
+    expect(tokProd!.tokenType).toBe(TokenType.Product);
+  });
+
+  it('source="domain-dictionary" or "dictionary" for recovered domain terms', async () => {
+    const t = makeRecoveryTokenizer(['不鏽鋼'], (_text) => ['不', '鏽', '鋼']);
+    const tokens = await t.tokenize('不鏽鋼', 'zh-TW');
+    const tokMat = tokens.find(tok => tok.text === '不鏽鋼');
+    expect(tokMat).toBeDefined();
+    // After recovery, the word is in _dictWords → source = 'dictionary'
+    expect(tokMat!.source).toBe('dictionary');
+  });
+});
+

@@ -216,4 +216,52 @@ describe('QueryTypeClassifier', () => {
       },
     );
   });
+
+  // ── T064 regression: "差在哪" must NOT trigger BusinessHours ─────────────
+
+  describe('T064 regression — 不鏽鋼螺絲 304 vs 316 comparison', () => {
+    const specToken304 = makeToken('304', TokenType.Spec, 0.85);
+    const specToken316 = makeToken('316', TokenType.Spec, 0.85);
+    const materialToken = makeToken('不鏽鋼', TokenType.Material, 0.8);
+    const productToken = makeToken('螺絲', TokenType.Product, 0.9);
+
+    it('isBusinessHoursQuery: "差在哪" alone does NOT match (no preceding char)', () => {
+      // standalone "差在哪" — no char before "在哪" that is "差" at the regex engine level
+      // because "差" IS the char before "在", so this SHOULD not match.
+      expect(QueryTypeClassifier.isBusinessHoursQuery('差在哪')).toBe(false);
+    });
+
+    it('isBusinessHoursQuery: "在哪" alone still matches (location question)', () => {
+      expect(QueryTypeClassifier.isBusinessHoursQuery('在哪')).toBe(true);
+    });
+
+    it('isBusinessHoursQuery: full query does not trigger business hours', () => {
+      expect(
+        QueryTypeClassifier.isBusinessHoursQuery('我想知道不鏽鋼螺絲 304 跟 316 差在哪'),
+      ).toBe(false);
+    });
+
+    it('isComparisonQuery: full query matches comparison', () => {
+      expect(
+        QueryTypeClassifier.isComparisonQuery('我想知道不鏽鋼螺絲 304 跟 316 差在哪'),
+      ).toBe(true);
+    });
+
+    it('classifies to ProductComparison (not BusinessHours) with material + spec tokens', () => {
+      const result = QueryTypeClassifier.classify(
+        [materialToken, productToken, specToken304, specToken316],
+        '我想知道不鏽鋼螺絲 304 跟 316 差在哪',
+      );
+      expect(result).toBe(QueryType.ProductComparison);
+      expect(result).not.toBe(QueryType.BusinessHours);
+    });
+
+    it('queryType is not Unsupported', () => {
+      const result = QueryTypeClassifier.classify(
+        [materialToken, productToken, specToken304, specToken316],
+        '我想知道不鏽鋼螺絲 304 跟 316 差在哪',
+      );
+      expect(result).not.toBe(QueryType.Unsupported);
+    });
+  });
 });

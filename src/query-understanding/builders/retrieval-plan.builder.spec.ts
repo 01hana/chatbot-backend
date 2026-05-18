@@ -209,4 +209,80 @@ describe('RetrievalPlanBuilder', () => {
       expect(plan.strategies).not.toContain('metadata');
     });
   });
+
+  // ── T064 regression ──────────────────────────────────────────────────────
+
+  describe('T064 regression — 不鏽鋼螺絲 304 vs 316 comparison', () => {
+    const stainlessProduct = makeToken('不鏽鋼螺絲', TokenType.Product, 0.9);
+    const stainlessMaterial = makeToken('不鏽鋼', TokenType.Material, 0.8);
+    const screwProduct = makeToken('螺絲', TokenType.Product, 0.9);
+    const spec304 = makeToken('304', TokenType.Spec, 0.85);
+    const spec316 = makeToken('316', TokenType.Spec, 0.85);
+
+    it('searchTerms is not empty for a product comparison query', () => {
+      const plan = RetrievalPlanBuilder.build(
+        [stainlessMaterial, screwProduct, spec304, spec316],
+        QueryType.ProductComparison,
+        'supported',
+        'zh-TW',
+      );
+      expect(plan.searchTerms.length).toBeGreaterThan(0);
+    });
+
+    it('searchTerms contains 不鏽鋼 or 不鏽鋼螺絲', () => {
+      const plan = RetrievalPlanBuilder.build(
+        [stainlessProduct, spec304, spec316],
+        QueryType.ProductComparison,
+        'supported',
+        'zh-TW',
+      );
+      const hasMaterial =
+        plan.searchTerms.includes('不鏽鋼') || plan.searchTerms.includes('不鏽鋼螺絲');
+      expect(hasMaterial).toBe(true);
+    });
+
+    it('searchTerms contains 螺絲 or 不鏽鋼螺絲', () => {
+      const plan = RetrievalPlanBuilder.build(
+        [stainlessMaterial, screwProduct, spec304, spec316],
+        QueryType.ProductComparison,
+        'supported',
+        'zh-TW',
+      );
+      const hasProduct =
+        plan.searchTerms.includes('螺絲') || plan.searchTerms.includes('不鏽鋼螺絲');
+      expect(hasProduct).toBe(true);
+    });
+
+    it('searchTerms contains 304', () => {
+      const plan = RetrievalPlanBuilder.build(
+        [stainlessMaterial, screwProduct, spec304, spec316],
+        QueryType.ProductComparison,
+        'supported',
+        'zh-TW',
+      );
+      expect(plan.searchTerms).toContain('304');
+    });
+
+    it('searchTerms contains 316', () => {
+      const plan = RetrievalPlanBuilder.build(
+        [stainlessMaterial, screwProduct, spec304, spec316],
+        QueryType.ProductComparison,
+        'supported',
+        'zh-TW',
+      );
+      expect(plan.searchTerms).toContain('316');
+    });
+
+    it('strategies include keyword and metadata for ProductComparison', () => {
+      const plan = RetrievalPlanBuilder.build(
+        [stainlessMaterial, screwProduct, spec304, spec316],
+        QueryType.ProductComparison,
+        'supported',
+        'zh-TW',
+      );
+      expect(plan.strategies).toContain('keyword');
+      expect(plan.strategies).toContain('metadata');
+    });
+  });
 });
+

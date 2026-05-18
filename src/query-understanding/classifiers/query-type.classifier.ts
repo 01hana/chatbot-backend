@@ -14,7 +14,7 @@ import { TokenType } from '../types/token-type.enum.js';
  * en patterns:   office hours, business hours, location, address
  */
 const BUSINESS_HOURS_RE =
-  /上班|下班|營業|辦公|工作時間|工作日|幾點|幾號|地址|位置|在哪|地點|office\s*hours?|business\s*hours?|location|address/i;
+  /上班|下班|營業|辦公|工作時間|工作日|幾點|幾號|地址|位置|(?<!差)在哪|地點|office\s*hours?|business\s*hours?|location|address/i;
 
 /**
  * Matches catalog / brochure / download intent.

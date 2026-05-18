@@ -210,7 +210,11 @@ export class JiebaTokenizer implements ITokenizer, OnModuleInit {
     }
 
     try {
-      const segments = this._jiebaModule.cut(text);
+      const rawSegments = this._jiebaModule.cut(text).filter(seg => seg.trim().length > 0);
+      // Apply longest-match dictionary recovery as a defensive pass.
+      // This corrects over-fragmented segments (e.g. 不/鏽/鋼 → 不鏽鋼) even
+      // when nodejieba's HMM overrides the userDict for a given segment.
+      const segments = this._applyDictionaryRecovery(rawSegments);
       return segments
         .filter(seg => seg.trim().length > 0)
         .map((seg): QueryToken => {
@@ -231,6 +235,68 @@ export class JiebaTokenizer implements ITokenizer, OnModuleInit {
   }
 
   // ── Private helpers ────────────────────────────────────────────────────────
+
+  /**
+   * Defensive post-processing pass: merge over-fragmented single-character
+   * segments back into multi-character domain terms using the loaded dictionary.
+   *
+   * Algorithm (greedy longest-match):
+   *   - Collect consecutive single-character segments into a "run".
+   *   - Scan each run with the domain dictionary (longest match first).
+   *   - Multi-char dict matches replace the raw single-char segments.
+   *   - Multi-char jieba segments are passed through unchanged.
+   *
+   * This is a safety net for cases where the HMM segmenter overrides the
+   * userDict for a given span (e.g. pure-digit codes like 304 / 316).
+   */
+  private _applyDictionaryRecovery(rawSegments: string[]): string[] {
+    if (this._dictWords.size === 0) return rawSegments;
+
+    // Pre-sort dict words by descending length for greedy longest-match.
+    const sortedWords = [...this._dictWords].sort((a, b) => b.length - a.length);
+
+    const result: string[] = [];
+    let i = 0;
+
+    while (i < rawSegments.length) {
+      const seg = rawSegments[i];
+
+      // A single-character segment (CJK char, ASCII digit, or ASCII letter)
+      // that should potentially be merged with adjacent chars.
+      if (seg.length === 1) {
+        // Collect the contiguous run of single-char segments.
+        const runStart = i;
+        while (i < rawSegments.length && rawSegments[i].length === 1) {
+          i++;
+        }
+        const run = rawSegments.slice(runStart, i).join('');
+
+        // Greedy longest-match over this run using the domain dictionary.
+        let pos = 0;
+        while (pos < run.length) {
+          let matched = false;
+          for (const word of sortedWords) {
+            if (word.length > 1 && run.startsWith(word, pos)) {
+              result.push(word);
+              pos += word.length;
+              matched = true;
+              break;
+            }
+          }
+          if (!matched) {
+            result.push(run[pos]);
+            pos++;
+          }
+        }
+      } else {
+        // Multi-char jieba segment — pass through unchanged.
+        result.push(seg);
+        i++;
+      }
+    }
+
+    return result;
+  }
 
   private dictPath(): string {
     return this._overrideDictPath ?? resolve(process.cwd(), 'config', 'jieba-domain.txt');
@@ -267,7 +333,7 @@ export class JiebaTokenizer implements ITokenizer, OnModuleInit {
       const mod = ((raw as any).default ?? raw) as NodeJiebaModule;
 
       //   mod.load({ userDict: dictPath });
-      mod.load({});
+      mod.load({ userDict: dictPath });
 
       this._jiebaModule = mod;
       this._ready = true;

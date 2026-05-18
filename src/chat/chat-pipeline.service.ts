@@ -117,10 +117,16 @@ export class ChatPipelineService {
     @Inject(LLM_PROVIDER) llmProvider: unknown,
     @Inject(RETRIEVAL_SERVICE) retrievalService: unknown,
     // QU V2 (Phase 4-B): optional — not provided in legacy tests or when module is absent.
-    @Optional() @Inject(QueryUnderstandingService) private readonly queryUnderstandingService?: QueryUnderstandingService,
+    @Optional()
+    @Inject(QueryUnderstandingService)
+    private readonly queryUnderstandingService?: QueryUnderstandingService,
     // Phase 4-C: optional — not provided when hybrid retrieval is disabled or in legacy tests.
-    @Optional() @Inject(HybridRetrievalService) private readonly hybridRetrievalService?: HybridRetrievalService,
-    @Optional() @Inject(RetrievalDecisionService) private readonly retrievalDecisionService?: RetrievalDecisionService,
+    @Optional()
+    @Inject(HybridRetrievalService)
+    private readonly hybridRetrievalService?: HybridRetrievalService,
+    @Optional()
+    @Inject(RetrievalDecisionService)
+    private readonly retrievalDecisionService?: RetrievalDecisionService,
   ) {
     this.llmProvider = llmProvider as ILlmProvider;
     this.retrievalService = retrievalService as IRetrievalService;
@@ -852,10 +858,7 @@ export class ChatPipelineService {
    * Called only when `feature.query_understanding_v2_enabled` is true.
    * Throws on error; the caller (run()) catches and falls back gracefully.
    */
-  async runQueryUnderstanding(
-    input: string,
-    language: string,
-  ): Promise<QueryUnderstandingResult> {
+  async runQueryUnderstanding(input: string, language: string): Promise<QueryUnderstandingResult> {
     if (!this.queryUnderstandingService) {
       throw new Error('QueryUnderstandingService not injected');
     }

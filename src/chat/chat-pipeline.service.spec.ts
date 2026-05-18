@@ -1947,4 +1947,496 @@ describe('ChatPipelineService', () => {
       expect(eventData['canAnswer']).toBe(false);
     });
   });
+
+  // ── Phase 5-D: T073 — sourceReferences / answerMode / trace traceability ──
+
+  describe('Phase 5-D — T073 traceability (sourceReferences / answerMode / trace)', () => {
+    /** Parse the first `event: done` payload from SSE writes. */
+    const parseDonePayload = (
+      res: jest.Mocked<Partial<Response>>,
+    ): Record<string, unknown> | undefined => {
+      const raw = (res.write as jest.Mock).mock.calls
+        .map((c: unknown[]) => c[0] as string)
+        .join('');
+      for (const block of raw.split('\n\n').filter(Boolean)) {
+        const lines = block.split('\n');
+        if (lines.some(l => l.startsWith('event:') && l.includes('done'))) {
+          const dataLine = lines.find(l => l.startsWith('data:'));
+          if (dataLine)
+            return JSON.parse(dataLine.replace(/^data:\s*/, '')) as Record<string, unknown>;
+        }
+      }
+      return undefined;
+    };
+
+    /** Return the first `chat_response` audit log call argument, or undefined. */
+    const getChatResponseAuditArg = (): Record<string, unknown> | undefined => {
+      const call = (mockAuditService.log as jest.Mock).mock.calls.find(
+        (args: unknown[]) => (args[0] as { eventType: string }).eventType === 'chat_response',
+      );
+      return call ? (call[0] as Record<string, unknown>) : undefined;
+    };
+
+    /** Factory: fresh async generator that simulates a successful LLM stream. */
+    const makeLlmStream = () =>
+      (async function* () {
+        yield { token: '回應', done: false };
+        yield {
+          token: '',
+          done: true,
+          provider: 'mock',
+          modelUsed: 'mock',
+          fallbackTriggered: false,
+          usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 },
+        };
+      })();
+
+    // ── T073-1: LLM answer path — sourceReferences present and non-empty ──
+
+    it('T073-1: LLM answer path: sourceReferences present and non-empty in SSE done and AuditLog', async () => {
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, { id: 42, content: '產品資訊', sourceKey: 'product-key' }),
+      ]);
+      mockLlmProvider.stream.mockReturnValue(makeLlmStream());
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '螺絲查詢',
+        'req-t073-1',
+        res as never,
+        new AbortController().signal,
+      );
+
+      // SSE done
+      const done = parseDonePayload(res);
+      expect(done).toBeDefined();
+      const doneRefs = done!['sourceReferences'] as Record<string, unknown>[];
+      expect(Array.isArray(doneRefs)).toBe(true);
+      expect(doneRefs.length).toBeGreaterThan(0);
+      expect(doneRefs[0]['knowledgeEntryId']).toBe(42);
+      expect(doneRefs[0]['sourceKey']).toBe('product-key');
+      expect(typeof doneRefs[0]['score']).toBe('number');
+      expect(doneRefs[0]['chunkIndex']).toBe(0);
+
+      // AuditLog V2 fields
+      const audit = getChatResponseAuditArg();
+      expect(audit).toBeDefined();
+      const auditRefs = audit!['sourceReferences'] as Record<string, unknown>[];
+      expect(Array.isArray(auditRefs)).toBe(true);
+      expect(auditRefs.length).toBeGreaterThan(0);
+      expect(audit!['llmCalled']).toBe(true);
+      expect(typeof audit!['answerMode']).toBe('string');
+    });
+
+    // ── T073-2: Template path — sourceReferences present and non-empty ──
+
+    it('T073-2: template path: LLM not called, sourceReferences non-empty, answerMode=template in AuditLog', async () => {
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, {
+          id: 10,
+          content: '模板內容',
+          answerType: 'template',
+          sourceKey: 'tpl-key',
+        }),
+      ]);
+      mockTemplateResolver.resolve.mockReturnValue({
+        strategy: 'template',
+        resolvedContent: '模板答案',
+        reason: 'template:tpl-key',
+      });
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '模板查詢',
+        'req-t073-2',
+        res as never,
+        new AbortController().signal,
+      );
+
+      expect(mockLlmProvider.stream).not.toHaveBeenCalled();
+
+      const done = parseDonePayload(res);
+      const doneRefs = done!['sourceReferences'] as Record<string, unknown>[];
+      expect(Array.isArray(doneRefs)).toBe(true);
+      expect(doneRefs.length).toBeGreaterThan(0);
+      expect(doneRefs[0]['knowledgeEntryId']).toBe(10);
+
+      const audit = getChatResponseAuditArg();
+      expect(audit!['answerMode']).toBe('template');
+      expect(audit!['llmCalled']).toBe(false);
+      const auditRefs = audit!['sourceReferences'] as Record<string, unknown>[];
+      expect(Array.isArray(auditRefs)).toBe(true);
+      expect(auditRefs.length).toBeGreaterThan(0);
+    });
+
+    // ── T073-3: rag+template path — sourceReferences present and non-empty ──
+
+    it('T073-3: rag+template path: LLM not called, sourceReferences non-empty, answerMode=rag+template', async () => {
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.85, {
+          id: 11,
+          content: 'M3 螺絲 100 元',
+          answerType: 'rag+template',
+          sourceKey: 'pricing-key',
+        }),
+      ]);
+      mockTemplateResolver.resolve.mockReturnValue({
+        strategy: 'rag+template',
+        resolvedContent: '填好的回答',
+        reason: 'rag+template:pricing-key',
+      });
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '螺絲多少錢',
+        'req-t073-3',
+        res as never,
+        new AbortController().signal,
+      );
+
+      expect(mockLlmProvider.stream).not.toHaveBeenCalled();
+
+      const done = parseDonePayload(res);
+      const doneRefs = done!['sourceReferences'] as Record<string, unknown>[];
+      expect(Array.isArray(doneRefs)).toBe(true);
+      expect(doneRefs.length).toBeGreaterThan(0);
+
+      const audit = getChatResponseAuditArg();
+      expect(audit!['answerMode']).toBe('rag+template');
+      expect(audit!['llmCalled']).toBe(false);
+    });
+
+    // ── T073-4a: Step 7 no-hits fallback — sourceReferences=[] ──
+
+    it('T073-4a: Step 7 no-hits fallback: sourceReferences=[] in SSE done and AuditLog', async () => {
+      mockRetrievalService.retrieve.mockResolvedValue([]);
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '無命中查詢',
+        'req-t073-4a',
+        res as never,
+        new AbortController().signal,
+      );
+
+      expect(mockLlmProvider.stream).not.toHaveBeenCalled();
+
+      const done = parseDonePayload(res);
+      expect(done!['action']).toBe('fallback');
+      expect(done!['sourceReferences']).toEqual([]);
+
+      const audit = getChatResponseAuditArg();
+      expect(audit!['answerMode']).toBe('fallback');
+      expect(audit!['llmCalled']).toBe(false);
+      expect(audit!['sourceReferences']).toEqual([]);
+    });
+
+    // ── T073-4b: No-answer Gate canAnswer=false — sourceReferences=[] ──
+
+    it('T073-4b: No-answer gate canAnswer=false fallback: sourceReferences=[] in SSE done and AuditLog', async () => {
+      mockSystemConfigService.getBoolean.mockImplementation((key: string) => {
+        if (key === 'feature.no_answer_gate_enabled') return true;
+        return null;
+      });
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, { content: '產品資訊' }),
+      ]);
+      mockRDS003.decideFromRetrievalResults.mockReturnValue({
+        canAnswer: false,
+        reason: 'unsupported',
+        confidence: 0,
+        topK: [],
+      });
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '不支援的查詢',
+        'req-t073-4b',
+        res as never,
+        new AbortController().signal,
+      );
+
+      expect(mockLlmProvider.stream).not.toHaveBeenCalled();
+
+      const done = parseDonePayload(res);
+      expect(done!['action']).toBe('fallback');
+      expect(done!['sourceReferences']).toEqual([]);
+
+      const audit = getChatResponseAuditArg();
+      expect(audit!['answerMode']).toBe('fallback');
+      expect(audit!['llmCalled']).toBe(false);
+      expect(audit!['sourceReferences']).toEqual([]);
+    });
+
+    // ── T073-5: traceable_answer_enabled=false — sourceReferences present, trace absent ──
+
+    it('T073-5: traceable_answer_enabled=false: sourceReferences present, trace absent in AuditLog', async () => {
+      mockSystemConfigService.getBoolean.mockImplementation((key: string) => {
+        if (key === 'feature.traceable_answer_enabled') return false;
+        return null;
+      });
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, { id: 1, content: '資訊', sourceKey: 'sk-1' }),
+      ]);
+      mockLlmProvider.stream.mockReturnValue(makeLlmStream());
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '查詢',
+        'req-t073-5',
+        res as never,
+        new AbortController().signal,
+      );
+
+      const done = parseDonePayload(res);
+      // sourceReferences MUST exist (even when trace is off)
+      expect(Array.isArray(done!['sourceReferences'])).toBe(true);
+      // SSE done does not carry trace
+      expect(done!['trace']).toBeUndefined();
+
+      const audit = getChatResponseAuditArg();
+      const auditRefs = audit!['sourceReferences'] as unknown[];
+      expect(Array.isArray(auditRefs)).toBe(true);
+      expect(auditRefs.length).toBeGreaterThan(0);
+      // trace must be absent when flag=false
+      expect(audit!['trace']).toBeUndefined();
+    });
+
+    // ── T073-6: traceable_answer_enabled=true — trace present in AuditLog ──
+
+    it('T073-6: traceable_answer_enabled=true: trace present in AuditLog with correct shape', async () => {
+      mockSystemConfigService.getBoolean.mockImplementation((key: string) => {
+        if (key === 'feature.traceable_answer_enabled') return true;
+        return null;
+      });
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, { id: 1, content: '資訊', sourceKey: 'sk-2' }),
+      ]);
+      mockLlmProvider.stream.mockReturnValue(makeLlmStream());
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '查詢',
+        'req-t073-6',
+        res as never,
+        new AbortController().signal,
+      );
+
+      const audit = getChatResponseAuditArg();
+
+      // sourceReferences still present when trace is on
+      const auditRefs = audit!['sourceReferences'] as unknown[];
+      expect(Array.isArray(auditRefs)).toBe(true);
+      expect(auditRefs.length).toBeGreaterThan(0);
+
+      // trace must exist with expected numeric fields
+      const trace = audit!['trace'] as Record<string, unknown>;
+      expect(trace).toBeDefined();
+      expect(typeof trace['totalMs']).toBe('number');
+      expect(typeof trace['queryUnderstandingMs']).toBe('number');
+      // LLM path: llmMs is set (may be 0 in tests due to instant mock)
+      expect(typeof trace['llmMs']).toBe('number');
+
+      // SSE done never carries trace (not part of SseDonePayload)
+      const done = parseDonePayload(res);
+      expect(done!['trace']).toBeUndefined();
+    });
+
+    // ── T073-7: SSE done payload backward compatibility ──
+
+    it('T073-7: SSE done payload has all required backward-compat fields', async () => {
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, { id: 1, content: '資訊' }),
+      ]);
+      mockIntentService.detect.mockResolvedValue({
+        intentLabel: 'product-inquiry',
+        confidence: 0.85,
+        language: 'zh-TW',
+      });
+      mockConversationService.addMessage
+        .mockResolvedValueOnce({ id: 5 })
+        .mockResolvedValueOnce({ id: 6 });
+      mockLlmProvider.stream.mockReturnValue(makeLlmStream());
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '查詢',
+        'req-t073-7',
+        res as never,
+        new AbortController().signal,
+      );
+
+      const done = parseDonePayload(res);
+      expect(done).toBeDefined();
+      // All 5 required fields must be present
+      expect(done!).toHaveProperty('messageId');
+      expect(done!).toHaveProperty('action');
+      expect(done!).toHaveProperty('intentLabel');
+      expect(done!).toHaveProperty('sourceReferences');
+      expect(done!).toHaveProperty('usage');
+      // usage sub-fields
+      const usage = done!['usage'] as Record<string, unknown>;
+      expect(usage).toHaveProperty('promptTokens');
+      expect(usage).toHaveProperty('completionTokens');
+      expect(usage).toHaveProperty('totalTokens');
+      // messageId is the assistant message ID (second addMessage call)
+      expect(done!['messageId']).toBe(6);
+    });
+
+    // ── T073-8: all feature flags false — 002 baseline preserved ──
+
+    it('T073-8: all feature flags false — sourceReferences present, trace absent (002 baseline)', async () => {
+      // beforeEach already sets all getBoolean → null (flags off)
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, { id: 1, content: '資訊', sourceKey: 'sk-3' }),
+      ]);
+      mockLlmProvider.stream.mockReturnValue(makeLlmStream());
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '查詢',
+        'req-t073-8',
+        res as never,
+        new AbortController().signal,
+      );
+
+      // 003 optional services must NOT be called
+      expect(mockQUS003.understand).not.toHaveBeenCalled();
+      expect(mockHRS003.retrieve).not.toHaveBeenCalled();
+
+      // sourceReferences must exist even on the 001 code path
+      const done = parseDonePayload(res);
+      expect(Array.isArray(done!['sourceReferences'])).toBe(true);
+      // SSE done has no trace field
+      expect(done!['trace']).toBeUndefined();
+
+      const audit = getChatResponseAuditArg();
+      // trace absent (traceable flag off)
+      expect(audit!['trace']).toBeUndefined();
+      // sourceReferences populated from legacy adapter
+      const auditRefs = audit!['sourceReferences'] as unknown[];
+      expect(Array.isArray(auditRefs)).toBe(true);
+      expect(auditRefs.length).toBeGreaterThan(0);
+    });
+
+    // ── T073-9: hybrid path — sourceReferences built from ChunkResult ──
+
+    it('T073-9: hybrid path: sourceReferences from ChunkResult, answerMode=hybrid_rag', async () => {
+      mockSystemConfigService.getBoolean.mockImplementation((key: string) => {
+        if (key === 'feature.query_understanding_v2_enabled') return true;
+        if (key === 'feature.hybrid_retrieval_enabled') return true;
+        if (key === 'feature.no_answer_gate_enabled') return true;
+        return null;
+      });
+      mockQUS003.understand.mockResolvedValue({
+        rawQuery: '混合查詢',
+        normalizedQuery: '混合查詢',
+        language: 'zh-TW',
+        tokenizer: 'rule-based',
+        tokens: [],
+        keyPhrases: [],
+        queryType: QueryType.ProductLookup,
+        supportability: 'supported',
+        retrievalPlan: {
+          searchTerms: ['混合查詢'],
+          strategies: ['keyword'],
+          maxResults: 5,
+          language: 'zh-TW',
+        },
+        debugMeta: {
+          durationMs: 10,
+          tokenizerUsed: 'rule-based',
+          timestamp: new Date().toISOString(),
+        },
+      });
+      const chunks: ChunkResult[] = [
+        {
+          knowledgeEntryId: 99,
+          sourceKey: 'hybrid-key',
+          content: '混合內容',
+          score: 0.88,
+          language: 'zh-TW',
+        },
+      ];
+      mockHRS003.retrieve.mockResolvedValue(chunks);
+      mockRDS003.decideFromChunks.mockReturnValue({
+        canAnswer: true,
+        reason: 'ok',
+        confidence: 0.88,
+        topK: chunks,
+      });
+      mockLlmProvider.stream.mockReturnValue(makeLlmStream());
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '混合查詢',
+        'req-t073-9',
+        res as never,
+        new AbortController().signal,
+      );
+
+      const done = parseDonePayload(res);
+      const doneRefs = done!['sourceReferences'] as Record<string, unknown>[];
+      expect(Array.isArray(doneRefs)).toBe(true);
+      expect(doneRefs.length).toBeGreaterThan(0);
+      expect(doneRefs[0]['knowledgeEntryId']).toBe(99);
+      expect(doneRefs[0]['sourceKey']).toBe('hybrid-key');
+      expect(doneRefs[0]['score']).toBe(0.88);
+      expect(doneRefs[0]['chunkIndex']).toBe(0);
+
+      const audit = getChatResponseAuditArg();
+      // resolveAnswerMode: ctx.retrievedChunks !== undefined && ctx.queryUnderstandingResult → hybrid_rag
+      expect(audit!['answerMode']).toBe('hybrid_rag');
+      const auditRefs = audit!['sourceReferences'] as Record<string, unknown>[];
+      expect(Array.isArray(auditRefs)).toBe(true);
+      expect(auditRefs.length).toBeGreaterThan(0);
+      expect(auditRefs[0]['knowledgeEntryId']).toBe(99);
+    });
+
+    // ── T073-10: legacy path — sourceReferences built from RetrievalResult adapter ──
+
+    it('T073-10: legacy path: sourceReferences from RetrievalResult adapter, answerMode=llm', async () => {
+      // Hybrid disabled — uses PostgresRetrievalService (legacy path)
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.85, { id: 77, content: 'Legacy 內容', sourceKey: 'legacy-key' }),
+      ]);
+      mockLlmProvider.stream.mockReturnValue(makeLlmStream());
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        'Legacy 查詢',
+        'req-t073-10',
+        res as never,
+        new AbortController().signal,
+      );
+
+      const done = parseDonePayload(res);
+      const doneRefs = done!['sourceReferences'] as Record<string, unknown>[];
+      expect(Array.isArray(doneRefs)).toBe(true);
+      expect(doneRefs.length).toBeGreaterThan(0);
+      expect(doneRefs[0]['knowledgeEntryId']).toBe(77);
+      expect(doneRefs[0]['sourceKey']).toBe('legacy-key');
+      expect(doneRefs[0]['score']).toBe(0.85);
+      expect(doneRefs[0]['chunkIndex']).toBe(0);
+
+      const audit = getChatResponseAuditArg();
+      // No hybrid, no QU V2, no template → answerMode='llm'
+      expect(audit!['answerMode']).toBe('llm');
+      const auditRefs = audit!['sourceReferences'] as Record<string, unknown>[];
+      expect(Array.isArray(auditRefs)).toBe(true);
+      expect(auditRefs.length).toBeGreaterThan(0);
+      expect(auditRefs[0]['knowledgeEntryId']).toBe(77);
+    });
+  });
 });

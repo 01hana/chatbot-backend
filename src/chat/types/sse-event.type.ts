@@ -1,3 +1,5 @@
+import type { SourceReference } from './source-reference.type.js';
+
 /**
  * All possible SSE event types for the chat stream.
  *
@@ -35,7 +37,7 @@ export interface SseDonePayload {
    * intent detection could run (safety guard / confidentiality short-circuit).
    */
   intentLabel: string | null;
-  sourceReferences: number[];
+  sourceReferences: SourceReference[];
   usage: SseUsage;
 }
 

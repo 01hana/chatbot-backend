@@ -7,6 +7,11 @@ import { SafetyService } from '../safety/safety.service';
 import { IntentService } from '../intent/intent.service';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { AuditService } from '../audit/audit.service';
+import type {
+  AuditQueryUnderstandingSummary,
+  AuditChunkSummary,
+  AuditRetrievalDecisionSummary,
+} from '../audit/types/audit-log-v2-payload.type.js';
 import { ConversationService } from '../conversation/conversation.service';
 import { AiStatusService } from '../health/ai-status.service';
 import { LlmTimeoutError } from '../llm/errors/llm-timeout.error';
@@ -33,6 +38,9 @@ import type { QueryUnderstandingResult } from '../query-understanding/types/quer
 import type { RetrievalDecision } from '../hybrid-retrieval/types/retrieval-decision.type.js';
 import type { ChunkResult } from '../hybrid-retrieval/types/chunk-result.type.js';
 import type { RetrievalPlan } from '../query-understanding/types/retrieval-plan.type.js';
+import type { SourceReference } from './types/source-reference.type.js';
+import type { AnswerMode } from './types/answer-mode.type.js';
+import type { AnswerTrace } from './types/answer-trace.type.js';
 import { QueryUnderstandingService } from '../query-understanding/query-understanding.service.js';
 import { HybridRetrievalService } from '../hybrid-retrieval/hybrid-retrieval.service.js';
 import { RetrievalDecisionService } from '../hybrid-retrieval/gate/retrieval-decision.service.js';
@@ -73,6 +81,13 @@ interface PipelineContext {
    * Populated when `feature.no_answer_gate_enabled` or `feature.hybrid_retrieval_enabled` is true.
    */
   retrievalDecision?: RetrievalDecision;
+  /**
+   * Raw ChunkResult[] from the retrieval step (T070).
+   * Set by the hybrid path directly; set via retrievalResultsToChunks() for the legacy path
+   * when sourceReferences are needed (Phase 5-B).
+   * Used by buildSourceReferences() to populate GeneratedAnswer.sourceReferences.
+   */
+  retrievedChunks?: ChunkResult[];
 }
 
 /**
@@ -168,6 +183,9 @@ export class ChatPipelineService {
     };
 
     try {
+      const verboseAudit =
+        this.systemConfigService.getBoolean('feature.audit_verbose_enabled') ?? false;
+
       // ── Step 1: Validate ────────────────────────────────────────────────
       const maxLen = this.systemConfigService.getNumber('max_message_length') ?? 2000;
       if (!this.validateInput(userMessage, maxLen)) {
@@ -358,6 +376,7 @@ export class ChatPipelineService {
           ctx.queryUnderstandingResult.retrievalPlan,
           5,
         );
+        ctx.retrievedChunks = chunks;
         ctx.ragResults = chunks.map(c => this.chunkToRetrievalResult(c));
         if (this.retrievalDecisionService) {
           ctx.retrievalDecision = this.retrievalDecisionService.decideFromChunks(
@@ -474,6 +493,17 @@ export class ChatPipelineService {
             rag_minimum_score: minimumScore,
             rag_answer_threshold: answerThreshold,
           },
+          // V2 fields (T071)
+          answerMode: 'fallback',
+          sourceReferences: [],
+          llmCalled: false,
+          fallbackReason: hasHits ? 'low_rag_confidence' : 'no_rag_hits',
+          canAnswer: ctx.retrievalDecision?.canAnswer,
+          queryUnderstanding: this.buildAuditQueryUnderstanding(ctx.queryUnderstandingResult, verboseAudit),
+          retrievalPlan: ctx.queryUnderstandingResult?.retrievalPlan,
+          retrievalCandidates: [],
+          retrievalDecision: this.buildAuditRetrievalDecision(ctx.retrievalDecision, verboseAudit),
+          trace: this.buildAnswerTrace(ctx, startMs),
         });
 
         res.write(formatSseEvent('token', { token: fallback } satisfies SseTokenPayload));
@@ -522,6 +552,8 @@ export class ChatPipelineService {
         });
 
         const sourceRefs = ctx.ragResults.map(r => r.entry.id);
+        const sourceReferences = this.buildSourceReferences(this.getCurrentChunksForSourceRefs(ctx));
+        const answerMode = this.resolveAnswerMode(ctx, hybridEnabled, false);
 
         await this.auditService.log({
           requestId,
@@ -558,6 +590,16 @@ export class ChatPipelineService {
               0.55,
             llm_max_context_tokens: maxContextTokens,
           },
+          // V2 fields (T071)
+          answerMode,
+          sourceReferences,
+          llmCalled: false,
+          canAnswer: ctx.retrievalDecision?.canAnswer,
+          queryUnderstanding: this.buildAuditQueryUnderstanding(ctx.queryUnderstandingResult, verboseAudit),
+          retrievalPlan: ctx.queryUnderstandingResult?.retrievalPlan,
+          retrievalCandidates: this.buildAuditRetrievalCandidates(this.getCurrentChunksForSourceRefs(ctx), verboseAudit),
+          retrievalDecision: this.buildAuditRetrievalDecision(ctx.retrievalDecision, verboseAudit),
+          trace: this.buildAnswerTrace(ctx, startMs),
         });
 
         // Write SSE token then done — LLM is NOT called
@@ -566,7 +608,7 @@ export class ChatPipelineService {
           messageId: assistantMsg.id,
           action: 'answer' satisfies ChatAction,
           intentLabel: ctx.intentLabel,
-          sourceReferences: sourceRefs,
+          sourceReferences: sourceReferences,
           usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
         } satisfies SseDonePayload);
 
@@ -604,6 +646,17 @@ export class ChatPipelineService {
           },
           ragConfidence: ctx.ragConfidence,
           durationMs: Date.now() - startMs,
+          // V2 fields (T071)
+          answerMode: 'fallback',
+          sourceReferences: [],
+          llmCalled: false,
+          canAnswer: false,
+          fallbackReason: ctx.retrievalDecision?.reason ?? 'no_results',
+          queryUnderstanding: this.buildAuditQueryUnderstanding(ctx.queryUnderstandingResult, verboseAudit),
+          retrievalPlan: ctx.queryUnderstandingResult?.retrievalPlan,
+          retrievalCandidates: [],
+          retrievalDecision: this.buildAuditRetrievalDecision(ctx.retrievalDecision, verboseAudit),
+          trace: this.buildAnswerTrace(ctx, startMs),
         });
         res.write(
           formatSseEvent('token', { token: gateFallbackContent } satisfies SseTokenPayload),
@@ -719,6 +772,10 @@ export class ChatPipelineService {
       this.aiStatusService.recordSuccess();
 
       const sourceRefs = ctx.ragResults.map(r => r.entry.id);
+      const sourceReferences = this.buildSourceReferences(this.getCurrentChunksForSourceRefs(ctx));
+      const answerMode = this.resolveAnswerMode(ctx, hybridEnabled, false);
+      const trace = this.buildAnswerTrace(ctx, startMs, llmDurationMs);
+
       await this.auditService.log({
         requestId,
         sessionId: conversation.sessionId,
@@ -752,16 +809,25 @@ export class ChatPipelineService {
             0.55,
           llm_max_context_tokens: maxContextTokens,
         },
+        // V2 fields (T071)
+        answerMode,
+        sourceReferences,
+        llmCalled: true,
+        canAnswer: ctx.retrievalDecision?.canAnswer,
+        queryUnderstanding: this.buildAuditQueryUnderstanding(ctx.queryUnderstandingResult, verboseAudit),
+        retrievalPlan: ctx.queryUnderstandingResult?.retrievalPlan,
+        retrievalCandidates: this.buildAuditRetrievalCandidates(this.getCurrentChunksForSourceRefs(ctx), verboseAudit),
+        retrievalDecision: this.buildAuditRetrievalDecision(ctx.retrievalDecision, verboseAudit),
+        trace,
       });
 
       void llmError; // no-op — already handled above
-      void llmDurationMs;
 
       this.writeSseAndEnd(res, 'done', {
         messageId: assistantMsg.id,
         action: 'answer' satisfies ChatAction,
         intentLabel: ctx.intentLabel,
-        sourceReferences: sourceRefs,
+        sourceReferences: sourceReferences,
         usage,
       } satisfies SseDonePayload);
     } catch (err) {
@@ -1056,6 +1122,23 @@ export class ChatPipelineService {
       },
       ragConfidence: ctx.ragConfidence,
       durationMs: Date.now() - startMs,
+      // V2 fields (T071)
+      answerMode: 'fallback',
+      sourceReferences: [],
+      llmCalled: false,
+      canAnswer: false,
+      fallbackReason,
+      queryUnderstanding: this.buildAuditQueryUnderstanding(
+        ctx.queryUnderstandingResult,
+        this.systemConfigService.getBoolean('feature.audit_verbose_enabled') ?? false,
+      ),
+      retrievalPlan: ctx.queryUnderstandingResult?.retrievalPlan,
+      retrievalCandidates: [],
+      retrievalDecision: this.buildAuditRetrievalDecision(
+        ctx.retrievalDecision,
+        this.systemConfigService.getBoolean('feature.audit_verbose_enabled') ?? false,
+      ),
+      trace: this.buildAnswerTrace(ctx, startMs),
     });
 
     res.write(formatSseEvent('token', { token: fallbackContent } satisfies SseTokenPayload));
@@ -1092,6 +1175,186 @@ export class ChatPipelineService {
     language: string,
   ): TemplateResolution {
     return this.templateResolver.resolve(ragResults, intentLabel, language);
+  }
+
+  /**
+   * T070 — Map ChunkResult[] to SourceReference[] for traceability.
+   *
+   * - `chunkIndex` is the zero-based position in the input array.
+   * - When `sourceKey` is absent on the chunk, falls back to an empty string.
+   * - Passing an empty array returns an empty array (covers the `fallback` answerMode).
+   * - Pure transform: no DB access, no retrieval, no LLM calls.
+   */
+  buildSourceReferences(chunks: ChunkResult[]): SourceReference[] {
+    return chunks.map((chunk, index): SourceReference => {
+      const chunkId: string | undefined = chunk.chunkId;
+      const knowledgeEntryId: number | undefined = chunk.knowledgeEntryId;
+      const base = {
+        sourceKey: chunk.sourceKey ?? '',
+        language: chunk.language,
+        score: chunk.score,
+        chunkIndex: index,
+      };
+      if (chunkId !== undefined) {
+        return { ...base, chunkId, knowledgeEntryId };
+      }
+      // ChunkResultWithEntryId: knowledgeEntryId is guaranteed by the ChunkResult union.
+      return { ...base, knowledgeEntryId: knowledgeEntryId! };
+    });
+  }
+
+  /**
+   * T070 — Minimal adapter from legacy RetrievalResult[] to ChunkResult[].
+   *
+   * Used by the legacy retrieval path to produce ChunkResult-like values that
+   * buildSourceReferences() can consume.  Does NOT re-score, re-rank, or tokenise.
+   */
+  private retrievalResultsToChunks(results: RetrievalResult[]): ChunkResult[] {
+    return results.map(r => ({
+      knowledgeEntryId: r.entry.id,
+      sourceKey: r.entry.sourceKey ?? '',
+      content: r.entry.content,
+      score: r.score,
+      language: r.entry.language,
+      isCrossLanguageFallback: r.isCrossLanguageFallback,
+    }));
+  }
+
+  /**
+   * T071 — Determine the AnswerMode that reflects the actual pipeline path taken.
+   *
+   * Called at each exit point; the result is stored in AuditLogV2Payload
+   * and (when applicable) the SSE done payload for offline analysis.
+   */
+  private resolveAnswerMode(
+    ctx: PipelineContext,
+    hybridEnabled: boolean,
+    isFallback: boolean,
+  ): AnswerMode {
+    if (isFallback) return 'fallback';
+    const strategy = ctx.templateResolution?.strategy;
+    if (strategy === 'template') return 'template';
+    if (strategy === 'rag+template') return 'rag+template';
+    // LLM path: hybrid_rag when chunks actually came from hybrid retrieval AND QU V2 produced a plan.
+    if (ctx.retrievedChunks !== undefined && ctx.queryUnderstandingResult) return 'hybrid_rag';
+    return 'llm';
+  }
+
+  /**
+   * T071 — Return the ChunkResult array to pass to buildSourceReferences().
+   *
+   * Priority:
+   *  1. isFallback=true    → [] (no sources available)
+   *  2. ctx.retrievedChunks (hybrid path, set in Step 6) → use directly
+   *  3. ctx.ragResults (legacy path) → adapt via retrievalResultsToChunks()
+   */
+  private getCurrentChunksForSourceRefs(
+    ctx: PipelineContext,
+    isFallback = false,
+  ): ChunkResult[] {
+    if (isFallback) return [];
+    if (ctx.retrievedChunks !== undefined) return ctx.retrievedChunks;
+    return this.retrievalResultsToChunks(ctx.ragResults);
+  }
+
+  /**
+   * T071 — Build AnswerTrace timing/detail when feature.traceable_answer_enabled=true.
+   *
+   * Returns undefined when the flag is off so callers can pass the return
+   * value directly into AuditLogV2Payload.trace without an extra check.
+   * retrievalMs and fusionMs are 0 in V1 (no per-step stop-watch yet).
+   */
+  private buildAnswerTrace(
+    ctx: PipelineContext,
+    startMs: number,
+    llmDurationMs?: number,
+  ): AnswerTrace | undefined {
+    const traceEnabled =
+      this.systemConfigService.getBoolean('feature.traceable_answer_enabled') ?? false;
+    if (!traceEnabled) return undefined;
+    const chunks = this.getCurrentChunksForSourceRefs(ctx);
+    const retrieverLabel = ctx.retrievedChunks !== undefined ? 'keyword' : 'legacy';
+    return {
+      queryUnderstandingMs: ctx.queryUnderstandingResult?.debugMeta?.durationMs ?? 0,
+      retrievalMs: 0,
+      fusionMs: 0,
+      llmMs: llmDurationMs,
+      totalMs: Date.now() - startMs,
+      chunkDetails: chunks.map(c => ({
+        chunkId: c.chunkId,
+        knowledgeEntryId: c.knowledgeEntryId,
+        score: c.score,
+        retriever: retrieverLabel,
+      })),
+    };
+  }
+
+  // ─── Phase 5 slim-down audit helpers ─────────────────────────────────────
+
+  /**
+   * Convert a single ChunkResult to an audit-safe summary (no content field).
+   * Used by buildAuditRetrievalDecision and buildAuditRetrievalCandidates.
+   */
+  private chunkToAuditSummary(chunk: ChunkResult): AuditChunkSummary {
+    return {
+      knowledgeEntryId: chunk.knowledgeEntryId,
+      chunkId: chunk.chunkId,
+      sourceKey: chunk.sourceKey,
+      score: chunk.score,
+      language: chunk.language,
+    };
+  }
+
+  /**
+   * Build the queryUnderstanding value for the audit log.
+   * Default: slim summary (tokenizer/queryType/supportability/keyPhrases/durationMs).
+   * Verbose (feature.audit_verbose_enabled=true): full QueryUnderstandingResult.
+   */
+  private buildAuditQueryUnderstanding(
+    qu: QueryUnderstandingResult | undefined,
+    verboseEnabled: boolean,
+  ): AuditQueryUnderstandingSummary | QueryUnderstandingResult | undefined {
+    if (!qu) return undefined;
+    if (verboseEnabled) return qu;
+    return {
+      tokenizer: qu.tokenizer,
+      queryType: qu.queryType,
+      supportability: qu.supportability,
+      keyPhrases: qu.keyPhrases.map(kp => kp.normalizedText),
+      durationMs: qu.debugMeta.durationMs,
+    };
+  }
+
+  /**
+   * Build the retrievalDecision value for the audit log.
+   * Default: slim summary with topK items stripped of content.
+   * Verbose: full RetrievalDecision.
+   */
+  private buildAuditRetrievalDecision(
+    decision: RetrievalDecision | undefined,
+    verboseEnabled: boolean,
+  ): AuditRetrievalDecisionSummary | RetrievalDecision | undefined {
+    if (!decision) return undefined;
+    if (verboseEnabled) return decision;
+    return {
+      canAnswer: decision.canAnswer,
+      reason: decision.reason,
+      confidence: decision.confidence,
+      topK: decision.topK.map(c => this.chunkToAuditSummary(c)),
+    };
+  }
+
+  /**
+   * Build the retrievalCandidates array for the audit log.
+   * Default: AuditChunkSummary[] (content stripped).
+   * Verbose: full ChunkResult[].
+   */
+  private buildAuditRetrievalCandidates(
+    chunks: ChunkResult[],
+    verboseEnabled: boolean,
+  ): AuditChunkSummary[] | ChunkResult[] {
+    if (verboseEnabled) return chunks;
+    return chunks.map(c => this.chunkToAuditSummary(c));
   }
 
   buildPrompt(userMessage: string, ctx: PipelineContext, maxContextTokens: number) {
@@ -1198,6 +1461,16 @@ export class ChatPipelineService {
       eventType: 'llm_fallback',
       eventData: { reason: 'ai_degraded' },
       durationMs: Date.now() - startMs,
+      // V2 fields (T071)
+      answerMode: 'fallback',
+      sourceReferences: [],
+      llmCalled: false,
+      canAnswer: false,
+      fallbackReason: 'ai_degraded',
+      retrievalCandidates: [],
+      trace: this.systemConfigService.getBoolean('feature.traceable_answer_enabled') ?? false
+        ? { queryUnderstandingMs: 0, retrievalMs: 0, fusionMs: 0, totalMs: Date.now() - startMs, chunkDetails: [] }
+        : undefined,
     });
 
     res.write(formatSseEvent('token', { token: fallback } satisfies SseTokenPayload));

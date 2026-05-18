@@ -251,27 +251,27 @@
 
 ### 核心型別
 
-- [ ] T065 [P] [US4] 建立 `src/chat/types/source-reference.type.ts`（`SourceReference`：`knowledgeEntryId?`、`chunkId?`、`sourceKey`、`title?`、`language?`、`category?`、`score?`、`chunkIndex`）
-- [ ] T066 [P] [US4] 建立 `src/chat/types/answer-mode.type.ts`（`AnswerMode = 'llm' | 'rag+template' | 'template' | 'hybrid_rag' | 'fallback'`）
-- [ ] T067 [P] [US4] 建立 `src/chat/types/generated-answer.type.ts`（`GeneratedAnswer`：`message`、`sourceReferences: SourceReference[]`（始終存在）、`answerMode`、`confidence`、`trace?: AnswerTrace`）
-- [ ] T068 [P] [US4] 建立 `src/chat/types/answer-trace.type.ts`（`AnswerTrace`：`queryUnderstandingMs`、`retrievalMs`、`fusionMs`、`llmMs?`、`totalMs`；`ChunkTraceDetail`：`chunkId`、`score`、`retriever`、`tokenType`）
-- [ ] T069 [P] [US4] 建立 `src/audit/types/audit-log-v2-payload.type.ts`（`AuditLogV2Payload extends AuditLogPayload`：新增 `queryUnderstanding?`、`retrievalPlan?`、`retrievalCandidates?`、`retrievalDecision?`、`answerMode?`、`sourceReferences?`、`llmCalled`、`canAnswer?`、`fallbackReason?`、`trace?`）
+- [x] T065 [P] [US4] 建立 `src/chat/types/source-reference.type.ts`（`SourceReference`：`knowledgeEntryId?`、`chunkId?`、`sourceKey`、`title?`、`language?`、`category?`、`score?`、`chunkIndex`）
+- [x] T066 [P] [US4] 建立 `src/chat/types/answer-mode.type.ts`（`AnswerMode = 'llm' | 'rag+template' | 'template' | 'hybrid_rag' | 'fallback'`）
+- [x] T067 [P] [US4] 建立 `src/chat/types/generated-answer.type.ts`（`GeneratedAnswer`：`message`、`sourceReferences: SourceReference[]`（始終存在）、`answerMode`、`confidence`、`trace?: AnswerTrace`）
+- [x] T068 [P] [US4] 建立 `src/chat/types/answer-trace.type.ts`（`AnswerTrace`：`queryUnderstandingMs`、`retrievalMs`、`fusionMs`、`llmMs?`、`totalMs`；`ChunkTraceDetail`：`chunkId`、`score`、`retriever`、`tokenType`）
+- [x] T069 [P] [US4] 建立 `src/audit/types/audit-log-v2-payload.type.ts`（`AuditLogV2Payload extends AuditLogPayload`：新增 `queryUnderstanding?`、`retrievalPlan?`、`retrievalCandidates?`、`retrievalDecision?`、`answerMode?`、`sourceReferences?`、`llmCalled`、`canAnswer?`、`fallbackReason?`、`trace?`）
 
 ### sourceReferences 建立
 
-- [ ] T070 [US4] 在 `src/chat/chat-pipeline.service.ts` 實作 `buildSourceReferences(chunks: ChunkResult[]): SourceReference[]`（從 `ChunkResult[]` 對映；`chunkIndex` 為陣列索引；`fallback` 時傳入空陣列 `[]`）
+- [x] T070 [US4] 在 `src/chat/chat-pipeline.service.ts` 實作 `buildSourceReferences(chunks: ChunkResult[]): SourceReference[]`（從 `ChunkResult[]` 對映；`chunkIndex` 為陣列索引；`fallback` 時傳入空陣列 `[]`）
 
 ### Step 11 — GeneratedAnswer Assembly
 
-- [ ] T071 [US4] 更新 `src/chat/chat-pipeline.service.ts` Step 11（`writeAndReturn`），組裝 `GeneratedAnswer`：填入 `sourceReferences`（所有 answerMode 均填；fallback 時為 `[]`）；填入 `answerMode`；`feature.traceable_answer_enabled=true` 時填入 `trace`
+- [x] T071 [US4] 更新 `src/chat/chat-pipeline.service.ts` Step 11（`writeAndReturn`），組裝 `GeneratedAnswer`：填入 `sourceReferences`（所有 answerMode 均填；fallback 時為 `[]`）；填入 `answerMode`；`feature.traceable_answer_enabled=true` 時填入 `trace`
 
 ### AuditService V2
 
-- [ ] T072 [US4] 更新 `src/audit/audit.service.ts`，接受並寫入 `AuditLogV2Payload` 中的新增欄位（加法性；不修改現有欄位；舊呼叫端傳入 V1 payload 時正常運作）
+- [x] T072 [US4] 更新 `src/audit/audit.service.ts`，接受並寫入 `AuditLogV2Payload` 中的新增欄位（加法性；不修改現有欄位；舊呼叫端傳入 V1 payload 時正常運作）
 
 ### Phase 5 Unit Tests
 
-- [ ] T073 [P] [US4] 擴充 `src/chat/chat-pipeline.service.spec.ts`（`sourceReferences` 在所有 answerMode 均存在；`fallback` 時為空陣列 `[]`；`feature.traceable_answer_enabled=true` 時 `trace` 填入；`false` 時 `trace` 不填入但 `sourceReferences` 仍存在；SSE done payload 向下相容，新欄位不影響未升級客戶端）
+- [x] T073 [P] [US4] 擴充 `src/chat/chat-pipeline.service.spec.ts`（`sourceReferences` 在所有 answerMode 均存在；`fallback` 時為空陣列 `[]`；`feature.traceable_answer_enabled=true` 時 `trace` 填入；`false` 時 `trace` 不填入但 `sourceReferences` 仍存在；SSE done payload 向下相容，新欄位不影響未升級客戶端）
 
 **Phase 5 Checkpoint**：SC-006 通過（LLM-generated 答案 AuditLog 含非空 `sourceReferences`）
 

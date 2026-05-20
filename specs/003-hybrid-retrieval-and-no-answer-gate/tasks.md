@@ -285,21 +285,21 @@
 
 ### Baseline 驗收
 
-- [ ] T074 確認 `npm test` 全數通過，feature flags 全 false（SC-007）；若失敗，追查並修復 Phase 0–5 引入的 side effect
+- [x] T074 確認 `npm test` 全數通過，feature flags 全 false（SC-007）；若失敗，追查並修復 Phase 0–5 引入的 side effect
 
 ### Regression Fixtures
 
-- [ ] T075 在 `src/regression/` 建立 / 更新 zh-TW FAQ regression fixtures（20 條）；啟用 `feature.query_understanding_v2_enabled=true`，驗證 `expectedAction=answer|template` 仍符合（SC-002）
-- [ ] T076 [P] 在 `src/regression/` 建立 / 更新 en FAQ regression fixtures（10 條）；啟用 QU V2 後，score ≥ `rag_minimum_score`（SC-003）
-- [ ] T077 在 `src/regression/` 建立 Jieba fallback regression fixtures（模擬 Jieba init 失敗）；驗證零 500 錯誤（SC-004）
-- [ ] T078 [P] 在 `src/regression/` 建立 English tokenizer regression fixtures；`feature.zh_tokenizer=jieba` 啟用後，英文查詢分數不退化（SC-003）
-- [ ] T079 在 `src/regression/` 建立 No-answer Gate regression fixtures；`feature.no_answer_gate_enabled=true`，domain-out 查詢 100% `llmCalled=false`（SC-001）
-- [ ] T080 [P] 在 `src/regression/` 建立 business_hours fixtures（兩種情境）：KB 無 `business_hours`/`company_info` 內容 → `canAnswer=false`，`llmCalled=false`；KB 有對應內容 → `canAnswer=true`
-- [ ] T081 [P] 在 `src/regression/` 建立 traceable answer regression fixtures；`feature.traceable_answer_enabled=true`，LLM-generated 答案 AuditLog 含非空 `sourceReferences`（SC-006）
+- [x] T075 在 `src/regression/` 建立 / 更新 zh-TW FAQ regression fixtures（20 條）；啟用 `feature.query_understanding_v2_enabled=true`，驗證 `expectedAction=answer|template` 仍符合（SC-002）
+- [x] T076 [P] 在 `src/regression/` 建立 / 更新 en FAQ regression fixtures（10 條）；啟用 QU V2 後，score ≥ `rag_minimum_score`（SC-003）
+- [x] T077 在 `src/regression/` 建立 Jieba fallback regression fixtures（模擬 Jieba init 失敗）；驗證零 500 錯誤（SC-004）
+- [x] T078 [P] 在 `src/regression/` 建立 English tokenizer regression fixtures；`feature.zh_tokenizer=jieba` 啟用後，英文查詢分數不退化（SC-003）
+- [x] T079 在 `src/regression/` 建立 No-answer Gate regression fixtures；`feature.no_answer_gate_enabled=true`，domain-out 查詢 100% `llmCalled=false`（SC-001）
+- [x] T080 [P] 在 `src/regression/` 建立 business_hours fixtures（兩種情境）：KB 無 `business_hours`/`company_info` 內容 → `canAnswer=false`，`llmCalled=false`；KB 有對應內容 → `canAnswer=true`
+- [x] T081 [P] 在 `src/regression/` 建立 traceable answer regression fixtures；`feature.traceable_answer_enabled=true`，LLM-generated 答案 AuditLog 含非空 `sourceReferences`（SC-006）
 
 ### CI & Infra
 
-- [ ] T082 確認 CI pipeline 在 build stage 能成功編譯 nodejieba（或選定 Jieba package）；若失敗，於 build 前加入依賴安裝 step 並更新 Dockerfile
+- [x] T082 確認 CI pipeline 在 build stage 能成功編譯 nodejieba（或選定 Jieba package）；若失敗，於 build 前加入依賴安裝 step 並更新 Dockerfile
 
 ### Optional Tasks
 

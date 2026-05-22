@@ -481,17 +481,18 @@ Phase 7（品質補強與驗收準備）
 
 ---
 
-- [ ] **T5-001** `DATA` **建立 Lead / NotificationJob / NotificationDelivery / Ticket / Feedback Migration**
+- [x] **T5-001** `DATA` **建立 Lead / NotificationJob / NotificationDelivery / Ticket / Feedback Migration**
   - 說明：`Lead` model（`id`、`sessionId`、`name`（必填）、`email`（必填）、`company`（選填）、`phone`（選填）、`message`（選填）、`language`（選填，如 `zh-TW` / `en`）、`type`（general/confidential）、`riskLevel`、`confidentialityTriggered`、`promptInjectionDetected`、`sensitiveIntentCount`、`highIntentScore`、`summary`（選填，AI 非同步生成）、`transcriptRef`、`notificationStatus`（pending/success/failed）、`createdAt`、`deletedAt`）；`NotificationJob` model（`id`、`leadId`、`channel`（webhook）、`status`（pending/processing/success/failed）、`retryCount`、`nextRetryAt`、`createdAt`、`updatedAt`）；`NotificationDelivery` model（`id`、`notificationJobId`、`attemptedAt`、`statusCode`、`responseBody`、`success`）；`Ticket` model（`id`、`leadId`（FK, nullable）、`sessionId`（FK）、`status` enum：`open / in_progress / resolved / closed`（四段，不可簡化）、`triggerReason`、`summary`、`assignee`（可選）、`notes`（JSONB array）、`resolvedAt`、`createdAt`、`updatedAt`）；`Feedback` model（`id`、`sessionId`（FK）、`messageId`（FK，ConversationMessage）、`value` enum：`up / down`（不使用 1-5 分制）、`reason`（選填，自由文字）、`createdAt`）；執行 migration
   - 輸出物：`prisma/schema.prisma`（更新）、migration 檔案
   - 驗收：migration 執行成功；5 張表含所有欄位；`Lead` 含 `name`（必填）、`email`（必填）、`company`（選填）、`phone`（選填）、`message`（選填）、`language`（選填）；`Ticket.status` 為四段 enum `open/in_progress/resolved/closed`；`Feedback.value` 為 `up/down` enum（不使用整數評分）
+  - **⚠️ 實作備注（Phase 5-A subset）**：NotificationJob / NotificationDelivery 留待 Webhook 閉環實作；Lead / Ticket / Feedback 已於 `20260520052112_add_lead_ticket_feedback` migration 完成
 
-- [ ] **T5-002** `CORE` **建立 LeadModule（LeadService + LeadRepository）**
+- [x] **T5-002** `CORE` **建立 LeadModule（LeadService + LeadRepository）**
   - 說明：`LeadRepository`（`createLead()`、`findById()`、`updateNotificationStatus()`）；`LeadService.createLead(dto: CreateLeadDto, conversation: Conversation): Promise<Lead>`（建立 Lead → 從 Conversation 帶入 `type`、`riskLevel`、`confidentialityTriggered`、`promptInjectionDetected`、`sensitiveIntentCount`、`highIntentScore` → 呼叫 `SummaryService.generate()` 生成摘要 → 呼叫 `TicketService.createTicket(leadId, sessionId, triggerReason, summary)` 同步建立 Ticket（`status=open`）→ 更新 `Conversation`（標記已留資）→ 呼叫 `NotificationService.enqueue()` 寫入 `notification_jobs`）；`lead_created` + `ticket_created` 事件各自寫入 AuditLog
   - 輸出物：`src/lead/lead.module.ts`、`src/lead/lead.service.ts`、`src/lead/lead.repository.ts`
   - 驗收：Lead 建立後 `notification_jobs` 有一筆 `channel=webhook, status=pending`；同時 `Ticket` 建立（`status=open`）；AuditLog 有 `lead_created` + `ticket_created` 事件；交接欄位從 Conversation 正確帶入
 
-- [ ] **T5-003** `CORE` **實作留資 API（POST /api/v1/chat/sessions/:sessionToken/lead）**
+- [x] **T5-003** `CORE` **實作留資 API（POST /api/v1/chat/sessions/:sessionToken/lead）**
   - 說明：`POST /api/v1/chat/sessions/:sessionToken/lead`（依 sessionToken 查找對應 Conversation；接收 `CreateLeadDto`：`name`（必填）、`email`（必填）、`company?`（選填）、`phone?`（選填）、`message?`（選填）、`language?`（選填，前端語系如 `zh-TW` / `en`））；驗證 session 存在；驗證同一 session 未重複留資；呼叫 `LeadService.createLead()`；回傳 `{ leadId, ticketId, status: 'pending' }`（`leadId` 成功時不可為 `null`）；DTO 使用 `class-validator`
   - 輸出物：`src/chat/chat.controller.ts`（更新）、`src/lead/dto/create-lead.dto.ts`
   - 驗收：API 可建立 Lead（`leadId` 必非 null）；`name` 或 `email` 缺少時回傳 400；重複留資回傳 409；sessionToken 不存在回傳 404；回傳 `leadId`（必非 null）與 `ticketId`
@@ -526,32 +527,32 @@ Phase 7（品質補強與驗收準備）
   - 輸出物：`src/notification/providers/webhook.provider.spec.ts`
   - 驗收：FR-063 所有欄位有測試覆蓋（含 `message`、`language`、`summary`）；選填欄位為 null 時正確輸出 null；無 undefined 欄位
 
-- [ ] **T5-010** `CORE` **建立 TicketModule（TicketService + TicketRepository）**
+- [x] **T5-010** `CORE` **建立 TicketModule（TicketService + TicketRepository）**
   - 說明：`TicketRepository`（`createTicket()`；`findById()`；`findMany(filter: TicketFilter)`；`updateStatus(id, status)`；`addNote(id, noteContent)`（append to JSONB notes array））；`TicketService.createTicket(leadId, sessionId, triggerReason, summary): Promise<Ticket>`（建立 Ticket，`status=open`）；`TicketService.updateStatus(id, status)`（狀態流轉：`open→in_progress→resolved→closed`；非法轉換回傳 400）；`ticket_created` / `ticket_status_changed` 事件寫入 AuditLog
   - 輸出物：`src/ticket/ticket.module.ts`、`src/ticket/ticket.service.ts`、`src/ticket/ticket.repository.ts`、`src/ticket/types/`
   - 驗收：`createTicket()` 建立 status=open；狀態流轉正確；非法轉換有錯誤；notes JSONB append 正確運作
 
-- [ ] **T5-011** `ADMIN` **實作 Ticket Admin API**
+- [x] **T5-011** `ADMIN` **實作 Ticket Admin API**
   - 說明：`GET /api/v1/admin/tickets`（列表，支援 filter：`status`、`dateFrom`、`dateTo`、`sessionId`；支援分頁）；`GET /api/v1/admin/tickets/:id`（單筆，含 Lead 關聯資訊）；`PATCH /api/v1/admin/tickets/:id/status`（狀態更新，`body: { status }`）；`POST /api/v1/admin/tickets/:id/notes`（新增備注至 JSONB array，`body: { content }`）；所有 DTO 含 `class-validator` 驗證
   - 輸出物：`src/admin/ticket/ticket-admin.controller.ts`、`src/admin/ticket/ticket-admin.service.ts`、`src/admin/ticket/dto/`
   - 驗收：列表 filter 與分頁正確；狀態更新回傳更新後 Ticket；notes 新增後 JSONB array 正確追加
 
-- [ ] **T5-012** `CORE` **建立 FeedbackModule（FeedbackService + FeedbackRepository）**
+- [x] **T5-012** `CORE` **建立 FeedbackModule（FeedbackService + FeedbackRepository）**
   - 說明：`FeedbackRepository`（`create()`；`findBySession()`；`findMany(filter: FeedbackFilter)`）；`FeedbackService.createFeedback(sessionToken: string, messageId: string, dto: CreateFeedbackDto): Promise<Feedback>`（依 sessionToken 解析 sessionId；驗證 messageId 屬於該 session；驗證同一 (sessionId, messageId) 未重複評分；建立 Feedback）
   - 輸出物：`src/feedback/feedback.module.ts`、`src/feedback/feedback.service.ts`、`src/feedback/feedback.repository.ts`
   - 驗收：`createFeedback()` 正確建立；重複評分回傳 409；messageId 不屬於 session 時回傳 404
 
-- [ ] **T5-013** `CORE` **實作 Feedback API（POST 評分 + Admin 查詢）**
+- [x] **T5-013** `CORE` **實作 Feedback API（POST 評分 + Admin 查詢）**
   - 說明：`POST /api/v1/chat/sessions/:sessionToken/messages/:messageId/feedback`（公開端點；`CreateFeedbackDto`：`value: "up" | "down"`（必填）、`reason?: string`（可選，自由文字）；呼叫 `FeedbackService.createFeedback()`）；Admin 端：`GET /api/v1/admin/feedback`（支援 filter：`value`（up/down）、`dateFrom`、`dateTo`、`sessionId`；分頁）
   - 輸出物：`src/chat/chat.controller.ts`（更新）、`src/admin/feedback/feedback-admin.controller.ts`、`src/admin/feedback/dto/`
   - 驗收：`POST` 端點成功建立評分；`value` 不為 `up` 或 `down` 時回傳 400；Admin 列表 filter 正確；分頁回傳 `total`
 
-- [ ] **T5-014** `TEST` **Phase 5 測試：LeadService + TicketService 整合測試（含 handoff 閉環）**
+- [x] **T5-014** `TEST` **Phase 5 測試：LeadService + TicketService 整合測試（含 handoff 閉環）**
   - 說明：整合測試（測試 DB）：Lead 建立後 `notification_jobs` 有一筆 pending webhook + `Ticket` 同步建立（`status=open`）；交接欄位（`type`、`riskLevel` 等）從 Conversation 正確帶入；AuditLog 有 `lead_created` + `ticket_created` 事件；重複留資被拒絕（409）；Ticket 狀態流轉正確，非法轉換 400
   - 輸出物：`src/lead/lead.service.spec.ts`（更新）、`src/ticket/ticket.service.spec.ts`
   - 驗收：整合測試通過；handoff 閉環（Lead 與 / 或 Ticket 建立，`leadId` / `ticketId` nullable 語意正確，`accepted = true` 時兩者不同時為 `null`）有測試案例覆蓋
 
-- [ ] **T5-015** `TEST` **Phase 5 測試：Feedback API 測試**
+- [x] **T5-015** `TEST` **Phase 5 測試：Feedback API 測試**
   - 說明：`FeedbackService` 單元測試（mock DB）：`value: "up"` / `"down"` 有效；其他值無效（400）；重複評分 409；messageId 不屬於 session 404；`POST /api/v1/chat/sessions/:sessionToken/messages/:messageId/feedback` E2E 測試；Admin `GET /api/v1/admin/feedback` filter（`value`、`dateFrom`、`dateTo`、`sessionId`）+ 分頁測試
   - 輸出物：`src/feedback/feedback.service.spec.ts`、`test/feedback.e2e-spec.ts`
   - 驗收：所有 Feedback 測試通過；`value` enum 驗證邊界案例有覆蓋

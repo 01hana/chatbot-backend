@@ -107,3 +107,19 @@ export type KnowledgeEntity = Prisma.KnowledgeEntityModel
  * 003 V2 directed relation between two KnowledgeEntity nodes.
  */
 export type KnowledgeRelation = Prisma.KnowledgeRelationModel
+/**
+ * Model Lead
+ * Visitor lead captured via handoff or explicit lead form submission.
+ */
+export type Lead = Prisma.LeadModel
+/**
+ * Model Ticket
+ * Support ticket created on handoff or manually by admin.
+ * Status lifecycle: open → in_progress → resolved → closed
+ */
+export type Ticket = Prisma.TicketModel
+/**
+ * Model Feedback
+ * User feedback on a specific assistant message — up or down only, no 1-5 scale.
+ */
+export type Feedback = Prisma.FeedbackModel

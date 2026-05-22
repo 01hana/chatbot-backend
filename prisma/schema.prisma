@@ -164,7 +164,10 @@ model Conversation {
   updatedAt            DateTime              @updatedAt
   deletedAt            DateTime?
 
-  messages ConversationMessage[]
+  messages  ConversationMessage[]
+  leads     Lead[]
+  tickets   Ticket[]
+  feedbacks Feedback[]
 
   @@map("conversations")
 }
@@ -184,6 +187,8 @@ model ConversationMessage {
   /// Reason the message was blocked, if applicable
   blockedReason  String?
   createdAt      DateTime     @default(now())
+
+  feedbacks      Feedback[]
 
   @@map("conversation_messages")
 }
@@ -349,4 +354,137 @@ enum KnowledgeRelationType {
   belongs_to_category
   compatible_with
   see_also
+}
+
+// ─── Phase 5: Lead / Ticket / Feedback ───────────────────────────────────────
+
+enum LeadStatus {
+  new
+  contacted
+  qualified
+  closed
+}
+
+enum TicketStatus {
+  open
+  in_progress
+  resolved
+  closed
+}
+
+enum TicketPriority {
+  low
+  medium
+  high
+}
+
+enum FeedbackValue {
+  up
+  down
+}
+
+/// Visitor lead captured via handoff or explicit lead form submission.
+model Lead {
+  id                       Int          @id @default(autoincrement())
+  /// FK to Conversation.id
+  conversationId           Int
+  conversation             Conversation @relation(fields: [conversationId], references: [id])
+  /// Visitor name — required
+  name                     String
+  /// Visitor email — required
+  email                    String
+  /// Visitor company name — optional
+  company                  String?
+  /// Visitor phone number — optional
+  phone                    String?
+  /// Visitor's original message / inquiry — optional
+  message                  String?
+  /// Frontend language at time of submission: zh-TW | en
+  language                 String?
+  /// Conversation classification copied from Conversation: general | confidential
+  type                     String       @default("general")
+  /// Risk level copied from Conversation: low | medium | high | null
+  riskLevel                String?
+  /// Whether a confidentiality keyword triggered in this session
+  confidentialityTriggered Boolean      @default(false)
+  /// Whether prompt injection was detected in this session
+  promptInjectionDetected  Boolean      @default(false)
+  /// Accumulated sensitive intent count copied from Conversation
+  sensitiveIntentCount     Int          @default(0)
+  /// Running high-intent score copied from Conversation
+  highIntentScore          Int          @default(0)
+  /// AI-generated conversation summary — populated asynchronously
+  summary                  String?
+  /// Reference to archived transcript storage (e.g. S3 key)
+  transcriptRef            String?
+  /// Notification dispatch status: pending | success | failed
+  notificationStatus       String       @default("pending")
+  /// Admin workflow status
+  status                   LeadStatus   @default(new)
+  /// Admin notes / remarks
+  notes                    String?
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
+  deletedAt                DateTime?
+
+  tickets  Ticket[]
+
+  @@index([conversationId])
+  @@index([email])
+  @@index([status])
+  @@index([createdAt])
+  @@map("leads")
+}
+
+/// Support ticket created on handoff or manually by admin.
+/// Status lifecycle: open → in_progress → resolved → closed
+model Ticket {
+  id             Int            @id @default(autoincrement())
+  /// Optional FK to Lead — nullable when ticket created independently
+  leadId         Int?
+  lead           Lead?          @relation(fields: [leadId], references: [id])
+  /// FK to Conversation.id
+  conversationId Int
+  conversation   Conversation   @relation(fields: [conversationId], references: [id])
+  /// Four-state lifecycle
+  status         TicketStatus   @default(open)
+  /// Why the ticket was created: handoff | high_intent | sensitive_intent | manual
+  triggerReason  String
+  summary        String?
+  priority       TicketPriority @default(medium)
+  /// Assigned agent identifier — optional
+  assignee       String?
+  /// Timestamped admin notes stored as JSONB array: [{content, createdAt, author?}]
+  notes          Json           @default("[]")
+  resolvedAt     DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  deletedAt      DateTime?
+
+  @@index([conversationId])
+  @@index([leadId])
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+  @@map("tickets")
+}
+
+/// User feedback on a specific assistant message — up or down only, no 1-5 scale.
+model Feedback {
+  id             Int                 @id @default(autoincrement())
+  /// FK to Conversation.id
+  conversationId Int
+  conversation   Conversation        @relation(fields: [conversationId], references: [id])
+  /// FK to ConversationMessage.id
+  messageId      Int
+  message        ConversationMessage @relation(fields: [messageId], references: [id])
+  /// up | down — not a numeric rating
+  value          FeedbackValue
+  /// Optional free-text reason
+  reason         String?
+  createdAt      DateTime            @default(now())
+
+  @@index([conversationId])
+  @@index([messageId])
+  @@map("feedbacks")
 }

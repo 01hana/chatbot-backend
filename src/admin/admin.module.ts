@@ -9,6 +9,7 @@ import { SafetyModule } from '../safety/safety.module.js';
 import { KnowledgeModule } from '../knowledge/knowledge.module';
 import { AdminIntentModule } from './intent/admin-intent.module';
 import { AdminGlossaryModule } from './glossary/admin-glossary.module';
+import { TicketsAdminModule } from './tickets/tickets-admin.module';
 
 /**
  * AdminModule — aggregates all admin-facing route controllers.
@@ -17,9 +18,10 @@ import { AdminGlossaryModule } from './glossary/admin-glossary.module';
  * Phase 3 (T3-006): Safety admin CRUD is fully implemented.
  * Knowledge admin CRUD is fully implemented (create/update support language + aliases).
  * 002 IG-002/IG-003: Intent and Glossary admin modules wired in.
+ * Phase 5-C (T5-010): Ticket admin API wired in via TicketsAdminModule.
  */
 @Module({
-  imports: [SafetyModule, KnowledgeModule, AdminIntentModule, AdminGlossaryModule],
+  imports: [SafetyModule, KnowledgeModule, AdminIntentModule, AdminGlossaryModule, TicketsAdminModule],
   controllers: [
     AdminKnowledgeController,
     AdminSystemConfigController,

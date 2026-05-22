@@ -4,6 +4,8 @@ import { NotFoundException } from '@nestjs/common';
 import { ChatController } from './chat.controller';
 import { ChatPipelineService } from './chat-pipeline.service';
 import { ConversationService } from '../conversation/conversation.service';
+import { LeadService } from '../lead/lead.service';
+import { FeedbackService } from '../feedback/feedback.service';
 import { WidgetConfigService } from '../widget-config/widget-config.service';
 import { WidgetConfigController } from '../widget-config/widget-config.controller';
 import { SystemConfigService } from '../system-config/system-config.service';
@@ -21,10 +23,12 @@ import { AiStatusService } from '../health/ai-status.service';
  *  4. GET  /chat/sessions/:token/history  → returns ConversationMessage list
  *  5. GET  /chat/sessions/:token/history  → 404 when sessionToken not found
  *  6. POST /chat/sessions/:token/messages → AbortController aborted on disconnect (close event)
- *  7. POST /chat/sessions/:token/handoff  → Phase 5 stub: accepted=false, action=handoff
+ *  7. POST /chat/sessions/:token/handoff  → T5-003: accepted=true, ticketId non-null, leadId null
  *  8. POST /chat/sessions/:token/handoff  → 404 when sessionToken not found
- *  9. GET  /widget/config  → returns multi-language JSONB shape
- * 10. GET  /widget/config  → status degraded when AiStatusService.isDegraded()
+ *  9. POST /chat/sessions/:token/lead     → 404 when sessionToken not found
+ * 10. POST /chat/sessions/:token/lead     → 201 with non-null leadId and ticketId
+ * 11. GET  /widget/config  → returns multi-language JSONB shape
+ * 12. GET  /widget/config  → status degraded when AiStatusService.isDegraded()
  */
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -94,6 +98,15 @@ describe('T2-016 SSE / sessionToken / Widget acceptance (mock)', () => {
       run: jest.fn().mockResolvedValue(undefined),
     };
 
+    const mockLeadService = {
+      createLead: jest.fn(),
+      createTicketOnly: jest.fn().mockResolvedValue({ id: 99 }),
+    };
+
+    const mockFeedbackService = {
+      submitFeedback: jest.fn(),
+    };
+
     beforeEach(async () => {
       jest.clearAllMocks();
 
@@ -102,6 +115,8 @@ describe('T2-016 SSE / sessionToken / Widget acceptance (mock)', () => {
         providers: [
           { provide: ConversationService, useValue: mockConversationService },
           { provide: ChatPipelineService, useValue: mockChatPipeline },
+          { provide: LeadService, useValue: mockLeadService },
+          { provide: FeedbackService, useValue: mockFeedbackService },
         ],
       }).compile();
 
@@ -213,14 +228,17 @@ describe('T2-016 SSE / sessionToken / Widget acceptance (mock)', () => {
       expect(capturedSignal!.aborted).toBe(true);
     });
 
-    // Test 7: Handoff returns Phase 5 stub (accepted=false, action=handoff)
-    it('should return accepted=false Phase 5 stub for handoff', async () => {
+    // Test 7: T5-003 — handoff creates Ticket, returns accepted=true with ticketId
+    it('should return accepted=true with ticketId when handoff succeeds', async () => {
       mockConversationService.findBySessionToken.mockResolvedValueOnce(SAMPLE_CONVERSATION);
+      mockLeadService.createTicketOnly.mockResolvedValueOnce({ id: 99 });
 
       const result = await chatController.handoff('ext-token-abc', { reason: 'test handoff' });
 
-      expect(result.accepted).toBe(false);
+      expect(result.accepted).toBe(true);
       expect(result.action).toBe('handoff');
+      expect(result.ticketId).toBe(99);
+      expect(result.leadId).toBeNull();
     });
 
     // Test 8: Handoff 404 when not found
@@ -228,6 +246,85 @@ describe('T2-016 SSE / sessionToken / Widget acceptance (mock)', () => {
       mockConversationService.findBySessionToken.mockResolvedValueOnce(null);
 
       await expect(chatController.handoff('no-token', {})).rejects.toThrow(NotFoundException);
+    });
+
+    // Test 9: T5-003 — /lead 404 when session not found
+    it('should throw NotFoundException when sessionToken not found (lead)', async () => {
+      mockConversationService.findBySessionToken.mockResolvedValueOnce(null);
+
+      await expect(
+        chatController.createLead('ghost-token', { name: 'X', email: 'x@x.com' }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    // Test 10: T5-003 — /lead success returns non-null leadId and ticketId
+    it('should return accepted=true with non-null leadId and ticketId on /lead success', async () => {
+      mockConversationService.findBySessionToken.mockResolvedValueOnce(SAMPLE_CONVERSATION);
+      mockLeadService.createLead.mockResolvedValueOnce({
+        lead: { id: 42 },
+        ticket: { id: 77 },
+      });
+
+      const result = await chatController.createLead('ext-token-abc', {
+        name: 'Alice',
+        email: 'alice@example.com',
+      });
+
+      expect(result.accepted).toBe(true);
+      expect(result.leadId).toBe(42);
+      expect(result.ticketId).toBe(77);
+      expect(result.leadId).not.toBeNull();
+      expect(result.ticketId).not.toBeNull();
+    });
+
+    // ── T5-012: feedback endpoint ────────────────────────────────────────────
+
+    // Test 11: POST /sessions/:token/messages/:id/feedback → calls feedbackService
+    it('should call feedbackService.submitFeedback and return { id, value, reason, createdAt }', async () => {
+      const createdAt = new Date('2026-01-01T00:00:00.000Z');
+      mockFeedbackService.submitFeedback.mockResolvedValueOnce({
+        id: 1,
+        conversationId: 1,
+        messageId: 42,
+        value: 'up',
+        reason: null,
+        createdAt,
+      });
+
+      const result = await chatController.submitFeedback('ext-token-abc', 42, { value: 'up' });
+
+      expect(mockFeedbackService.submitFeedback).toHaveBeenCalledWith('ext-token-abc', 42, { value: 'up' });
+      expect(result).toEqual({ id: 1, value: 'up', reason: null, createdAt });
+    });
+
+    // Test 12: feedback endpoint with reason
+    it('should pass reason to feedbackService and return it in the response', async () => {
+      const createdAt = new Date();
+      mockFeedbackService.submitFeedback.mockResolvedValueOnce({
+        id: 2,
+        conversationId: 1,
+        messageId: 10,
+        value: 'down',
+        reason: 'Wrong answer',
+        createdAt,
+      });
+
+      const result = await chatController.submitFeedback('ext-token-abc', 10, {
+        value: 'down',
+        reason: 'Wrong answer',
+      });
+
+      expect(result.value).toBe('down');
+      expect(result.reason).toBe('Wrong answer');
+    });
+
+    // Test 13: feedbackService throws NotFoundException → controller re-throws
+    it('should re-throw NotFoundException from feedbackService', async () => {
+      mockFeedbackService.submitFeedback.mockRejectedValueOnce(new NotFoundException('Session not found'));
+
+      await expect(
+        chatController.submitFeedback('unknown-token', 42, { value: 'up' }),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 

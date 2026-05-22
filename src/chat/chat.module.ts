@@ -12,6 +12,8 @@ import { QueryAnalysisModule } from '../query-analysis/query-analysis.module';
 import { TemplateModule } from '../template/template.module';
 import { QueryUnderstandingModule } from '../query-understanding/query-understanding.module';
 import { HybridRetrievalModule } from '../hybrid-retrieval/hybrid-retrieval.module';
+import { LeadModule } from '../lead/lead.module';
+import { FeedbackModule } from '../feedback/feedback.module';
 
 /**
  * ChatModule — wires together the complete chat pipeline and HTTP endpoints.
@@ -25,6 +27,8 @@ import { HybridRetrievalModule } from '../hybrid-retrieval/hybrid-retrieval.modu
  *  - HealthModule          → AiStatusService (degraded tracking)
  *  - QueryAnalysisModule   → QueryAnalysisService (QA-005; feature-flag-guarded)
  *  - TemplateModule        → AnswerTemplateResolver (TM-002; template/rag+template paths)
+ *  - LeadModule            → LeadService (T5-002/T5-003: lead capture + handoff)
+ *  - FeedbackModule        → FeedbackService (T5-012: up/down feedback endpoint)
  *
  * AuditModule is @Global, so AuditService is available without explicit import.
  * SystemConfigModule is @Global, so SystemConfigService is available too.
@@ -42,6 +46,8 @@ import { HybridRetrievalModule } from '../hybrid-retrieval/hybrid-retrieval.modu
     TemplateModule,
     QueryUnderstandingModule,
     HybridRetrievalModule,
+    LeadModule,
+    FeedbackModule,
   ],
   controllers: [ChatController],
   providers: [ChatPipelineService, PromptBuilder],

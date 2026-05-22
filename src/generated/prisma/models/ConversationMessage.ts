@@ -245,6 +245,7 @@ export type ConversationMessageWhereInput = {
   blockedReason?: Prisma.StringNullableFilter<"ConversationMessage"> | string | null
   createdAt?: Prisma.DateTimeFilter<"ConversationMessage"> | Date | string
   conversation?: Prisma.XOR<Prisma.ConversationScalarRelationFilter, Prisma.ConversationWhereInput>
+  feedbacks?: Prisma.FeedbackListRelationFilter
 }
 
 export type ConversationMessageOrderByWithRelationInput = {
@@ -257,6 +258,7 @@ export type ConversationMessageOrderByWithRelationInput = {
   blockedReason?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   conversation?: Prisma.ConversationOrderByWithRelationInput
+  feedbacks?: Prisma.FeedbackOrderByRelationAggregateInput
 }
 
 export type ConversationMessageWhereUniqueInput = Prisma.AtLeast<{
@@ -272,6 +274,7 @@ export type ConversationMessageWhereUniqueInput = Prisma.AtLeast<{
   blockedReason?: Prisma.StringNullableFilter<"ConversationMessage"> | string | null
   createdAt?: Prisma.DateTimeFilter<"ConversationMessage"> | Date | string
   conversation?: Prisma.XOR<Prisma.ConversationScalarRelationFilter, Prisma.ConversationWhereInput>
+  feedbacks?: Prisma.FeedbackListRelationFilter
 }, "id">
 
 export type ConversationMessageOrderByWithAggregationInput = {
@@ -312,6 +315,7 @@ export type ConversationMessageCreateInput = {
   blockedReason?: string | null
   createdAt?: Date | string
   conversation: Prisma.ConversationCreateNestedOneWithoutMessagesInput
+  feedbacks?: Prisma.FeedbackCreateNestedManyWithoutMessageInput
 }
 
 export type ConversationMessageUncheckedCreateInput = {
@@ -323,6 +327,7 @@ export type ConversationMessageUncheckedCreateInput = {
   riskLevel?: string | null
   blockedReason?: string | null
   createdAt?: Date | string
+  feedbacks?: Prisma.FeedbackUncheckedCreateNestedManyWithoutMessageInput
 }
 
 export type ConversationMessageUpdateInput = {
@@ -333,6 +338,7 @@ export type ConversationMessageUpdateInput = {
   blockedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   conversation?: Prisma.ConversationUpdateOneRequiredWithoutMessagesNestedInput
+  feedbacks?: Prisma.FeedbackUpdateManyWithoutMessageNestedInput
 }
 
 export type ConversationMessageUncheckedUpdateInput = {
@@ -344,6 +350,7 @@ export type ConversationMessageUncheckedUpdateInput = {
   riskLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   blockedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  feedbacks?: Prisma.FeedbackUncheckedUpdateManyWithoutMessageNestedInput
 }
 
 export type ConversationMessageCreateManyInput = {
@@ -430,6 +437,11 @@ export type ConversationMessageSumOrderByAggregateInput = {
   conversationId?: Prisma.SortOrder
 }
 
+export type ConversationMessageScalarRelationFilter = {
+  is?: Prisma.ConversationMessageWhereInput
+  isNot?: Prisma.ConversationMessageWhereInput
+}
+
 export type ConversationMessageCreateNestedManyWithoutConversationInput = {
   create?: Prisma.XOR<Prisma.ConversationMessageCreateWithoutConversationInput, Prisma.ConversationMessageUncheckedCreateWithoutConversationInput> | Prisma.ConversationMessageCreateWithoutConversationInput[] | Prisma.ConversationMessageUncheckedCreateWithoutConversationInput[]
   connectOrCreate?: Prisma.ConversationMessageCreateOrConnectWithoutConversationInput | Prisma.ConversationMessageCreateOrConnectWithoutConversationInput[]
@@ -472,6 +484,20 @@ export type ConversationMessageUncheckedUpdateManyWithoutConversationNestedInput
   deleteMany?: Prisma.ConversationMessageScalarWhereInput | Prisma.ConversationMessageScalarWhereInput[]
 }
 
+export type ConversationMessageCreateNestedOneWithoutFeedbacksInput = {
+  create?: Prisma.XOR<Prisma.ConversationMessageCreateWithoutFeedbacksInput, Prisma.ConversationMessageUncheckedCreateWithoutFeedbacksInput>
+  connectOrCreate?: Prisma.ConversationMessageCreateOrConnectWithoutFeedbacksInput
+  connect?: Prisma.ConversationMessageWhereUniqueInput
+}
+
+export type ConversationMessageUpdateOneRequiredWithoutFeedbacksNestedInput = {
+  create?: Prisma.XOR<Prisma.ConversationMessageCreateWithoutFeedbacksInput, Prisma.ConversationMessageUncheckedCreateWithoutFeedbacksInput>
+  connectOrCreate?: Prisma.ConversationMessageCreateOrConnectWithoutFeedbacksInput
+  upsert?: Prisma.ConversationMessageUpsertWithoutFeedbacksInput
+  connect?: Prisma.ConversationMessageWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.ConversationMessageUpdateToOneWithWhereWithoutFeedbacksInput, Prisma.ConversationMessageUpdateWithoutFeedbacksInput>, Prisma.ConversationMessageUncheckedUpdateWithoutFeedbacksInput>
+}
+
 export type ConversationMessageCreateWithoutConversationInput = {
   role: string
   content: string
@@ -479,6 +505,7 @@ export type ConversationMessageCreateWithoutConversationInput = {
   riskLevel?: string | null
   blockedReason?: string | null
   createdAt?: Date | string
+  feedbacks?: Prisma.FeedbackCreateNestedManyWithoutMessageInput
 }
 
 export type ConversationMessageUncheckedCreateWithoutConversationInput = {
@@ -489,6 +516,7 @@ export type ConversationMessageUncheckedCreateWithoutConversationInput = {
   riskLevel?: string | null
   blockedReason?: string | null
   createdAt?: Date | string
+  feedbacks?: Prisma.FeedbackUncheckedCreateNestedManyWithoutMessageInput
 }
 
 export type ConversationMessageCreateOrConnectWithoutConversationInput = {
@@ -531,6 +559,64 @@ export type ConversationMessageScalarWhereInput = {
   createdAt?: Prisma.DateTimeFilter<"ConversationMessage"> | Date | string
 }
 
+export type ConversationMessageCreateWithoutFeedbacksInput = {
+  role: string
+  content: string
+  type?: string
+  riskLevel?: string | null
+  blockedReason?: string | null
+  createdAt?: Date | string
+  conversation: Prisma.ConversationCreateNestedOneWithoutMessagesInput
+}
+
+export type ConversationMessageUncheckedCreateWithoutFeedbacksInput = {
+  id?: number
+  conversationId: number
+  role: string
+  content: string
+  type?: string
+  riskLevel?: string | null
+  blockedReason?: string | null
+  createdAt?: Date | string
+}
+
+export type ConversationMessageCreateOrConnectWithoutFeedbacksInput = {
+  where: Prisma.ConversationMessageWhereUniqueInput
+  create: Prisma.XOR<Prisma.ConversationMessageCreateWithoutFeedbacksInput, Prisma.ConversationMessageUncheckedCreateWithoutFeedbacksInput>
+}
+
+export type ConversationMessageUpsertWithoutFeedbacksInput = {
+  update: Prisma.XOR<Prisma.ConversationMessageUpdateWithoutFeedbacksInput, Prisma.ConversationMessageUncheckedUpdateWithoutFeedbacksInput>
+  create: Prisma.XOR<Prisma.ConversationMessageCreateWithoutFeedbacksInput, Prisma.ConversationMessageUncheckedCreateWithoutFeedbacksInput>
+  where?: Prisma.ConversationMessageWhereInput
+}
+
+export type ConversationMessageUpdateToOneWithWhereWithoutFeedbacksInput = {
+  where?: Prisma.ConversationMessageWhereInput
+  data: Prisma.XOR<Prisma.ConversationMessageUpdateWithoutFeedbacksInput, Prisma.ConversationMessageUncheckedUpdateWithoutFeedbacksInput>
+}
+
+export type ConversationMessageUpdateWithoutFeedbacksInput = {
+  role?: Prisma.StringFieldUpdateOperationsInput | string
+  content?: Prisma.StringFieldUpdateOperationsInput | string
+  type?: Prisma.StringFieldUpdateOperationsInput | string
+  riskLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  blockedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  conversation?: Prisma.ConversationUpdateOneRequiredWithoutMessagesNestedInput
+}
+
+export type ConversationMessageUncheckedUpdateWithoutFeedbacksInput = {
+  id?: Prisma.IntFieldUpdateOperationsInput | number
+  conversationId?: Prisma.IntFieldUpdateOperationsInput | number
+  role?: Prisma.StringFieldUpdateOperationsInput | string
+  content?: Prisma.StringFieldUpdateOperationsInput | string
+  type?: Prisma.StringFieldUpdateOperationsInput | string
+  riskLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  blockedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
 export type ConversationMessageCreateManyConversationInput = {
   id?: number
   role: string
@@ -548,6 +634,7 @@ export type ConversationMessageUpdateWithoutConversationInput = {
   riskLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   blockedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  feedbacks?: Prisma.FeedbackUpdateManyWithoutMessageNestedInput
 }
 
 export type ConversationMessageUncheckedUpdateWithoutConversationInput = {
@@ -558,6 +645,7 @@ export type ConversationMessageUncheckedUpdateWithoutConversationInput = {
   riskLevel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   blockedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  feedbacks?: Prisma.FeedbackUncheckedUpdateManyWithoutMessageNestedInput
 }
 
 export type ConversationMessageUncheckedUpdateManyWithoutConversationInput = {
@@ -571,6 +659,35 @@ export type ConversationMessageUncheckedUpdateManyWithoutConversationInput = {
 }
 
 
+/**
+ * Count Type ConversationMessageCountOutputType
+ */
+
+export type ConversationMessageCountOutputType = {
+  feedbacks: number
+}
+
+export type ConversationMessageCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  feedbacks?: boolean | ConversationMessageCountOutputTypeCountFeedbacksArgs
+}
+
+/**
+ * ConversationMessageCountOutputType without action
+ */
+export type ConversationMessageCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the ConversationMessageCountOutputType
+   */
+  select?: Prisma.ConversationMessageCountOutputTypeSelect<ExtArgs> | null
+}
+
+/**
+ * ConversationMessageCountOutputType without action
+ */
+export type ConversationMessageCountOutputTypeCountFeedbacksArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.FeedbackWhereInput
+}
+
 
 export type ConversationMessageSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -582,6 +699,8 @@ export type ConversationMessageSelect<ExtArgs extends runtime.Types.Extensions.I
   blockedReason?: boolean
   createdAt?: boolean
   conversation?: boolean | Prisma.ConversationDefaultArgs<ExtArgs>
+  feedbacks?: boolean | Prisma.ConversationMessage$feedbacksArgs<ExtArgs>
+  _count?: boolean | Prisma.ConversationMessageCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["conversationMessage"]>
 
 export type ConversationMessageSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -622,6 +741,8 @@ export type ConversationMessageSelectScalar = {
 export type ConversationMessageOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "conversationId" | "role" | "content" | "type" | "riskLevel" | "blockedReason" | "createdAt", ExtArgs["result"]["conversationMessage"]>
 export type ConversationMessageInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   conversation?: boolean | Prisma.ConversationDefaultArgs<ExtArgs>
+  feedbacks?: boolean | Prisma.ConversationMessage$feedbacksArgs<ExtArgs>
+  _count?: boolean | Prisma.ConversationMessageCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type ConversationMessageIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   conversation?: boolean | Prisma.ConversationDefaultArgs<ExtArgs>
@@ -634,6 +755,7 @@ export type $ConversationMessagePayload<ExtArgs extends runtime.Types.Extensions
   name: "ConversationMessage"
   objects: {
     conversation: Prisma.$ConversationPayload<ExtArgs>
+    feedbacks: Prisma.$FeedbackPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: number
@@ -1051,6 +1173,7 @@ readonly fields: ConversationMessageFieldRefs;
 export interface Prisma__ConversationMessageClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
   conversation<T extends Prisma.ConversationDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ConversationDefaultArgs<ExtArgs>>): Prisma.Prisma__ConversationClient<runtime.Types.Result.GetResult<Prisma.$ConversationPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+  feedbacks<T extends Prisma.ConversationMessage$feedbacksArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ConversationMessage$feedbacksArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$FeedbackPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1486,6 +1609,30 @@ export type ConversationMessageDeleteManyArgs<ExtArgs extends runtime.Types.Exte
    * Limit how many ConversationMessages to delete.
    */
   limit?: number
+}
+
+/**
+ * ConversationMessage.feedbacks
+ */
+export type ConversationMessage$feedbacksArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Feedback
+   */
+  select?: Prisma.FeedbackSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the Feedback
+   */
+  omit?: Prisma.FeedbackOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.FeedbackInclude<ExtArgs> | null
+  where?: Prisma.FeedbackWhereInput
+  orderBy?: Prisma.FeedbackOrderByWithRelationInput | Prisma.FeedbackOrderByWithRelationInput[]
+  cursor?: Prisma.FeedbackWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.FeedbackScalarFieldEnum | Prisma.FeedbackScalarFieldEnum[]
 }
 
 /**

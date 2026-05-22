@@ -6,12 +6,17 @@ import {
   HttpStatus,
   NotFoundException,
   Param,
+  ParseIntPipe,
   Post,
   Req,
   Res,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ConversationService } from '../conversation/conversation.service';
+import { LeadService } from '../lead/lead.service';
+import { CreateLeadDto } from '../lead/dto/create-lead.dto';
+import { FeedbackService } from '../feedback/feedback.service';
+import { CreateFeedbackDto } from '../feedback/dto/create-feedback.dto';
 import { ChatPipelineService } from './chat-pipeline.service';
 import { CreateSessionDto, HandoffDto, SendMessageDto } from './dto/chat.dto';
 
@@ -37,6 +42,8 @@ export class ChatController {
   constructor(
     private readonly conversationService: ConversationService,
     private readonly chatPipeline: ChatPipelineService,
+    private readonly leadService: LeadService,
+    private readonly feedbackService: FeedbackService,
   ) {}
 
   // ─── Create Session ───────────────────────────────────────────────────────
@@ -136,6 +143,44 @@ export class ChatController {
     };
   }
 
+  // ─── Lead ─────────────────────────────────────────────────────────────────
+
+  /**
+   * POST /api/v1/chat/sessions/:sessionToken/lead
+   *
+   * Visitor explicitly submits contact info to capture a Lead.
+   * Creates a Lead row and a paired Ticket (status=open, triggerReason=lead_form).
+   *
+   * Errors:
+   *   404 — sessionToken not found
+   *   409 — a Lead already exists for this session (ConflictException from service)
+   *   400 — validation failure (name/email missing or malformed)
+   */
+  @Post('sessions/:sessionToken/lead')
+  @HttpCode(HttpStatus.CREATED)
+  async createLead(
+    @Param('sessionToken') sessionToken: string,
+    @Body() dto: CreateLeadDto,
+  ) {
+    const conversation = await this.conversationService.findBySessionToken(sessionToken);
+    if (!conversation) {
+      throw new NotFoundException('Session not found');
+    }
+
+    const { lead, ticket } = await this.leadService.createLead(
+      conversation,
+      dto,
+      'lead_form',
+    );
+
+    return {
+      accepted: true,
+      leadId: lead.id,
+      ticketId: ticket.id,
+      message: '感謝您的留言，我們的業務人員將儘速與您聯繫。',
+    };
+  }
+
   // ─── Handoff ──────────────────────────────────────────────────────────────
 
   /**
@@ -143,38 +188,69 @@ export class ChatController {
    *
    * Visitor explicitly requests human hand-off.
    *
-   * Contract (task.md §0 + T2-008):
+   * Contract (task.md §0 + T5-003):
    *   { accepted, action: "handoff", leadId, ticketId, message }
    *   When `accepted = true`, `leadId` and `ticketId` must not BOTH be null.
    *
-   * Phase 2 — Phase 5 stub:
-   *   Lead and Ticket creation is deferred to Phase 5 (T5-002/T5-003).
-   *   `accepted: false` with null ids is the correct Phase-2 response given
-   *   that no Lead/Ticket module exists yet. The frontend must handle
-   *   `accepted: false` by showing a contact form.
+   * Behaviour:
+   *   Always creates a Ticket (status=open, triggerReason=handoff).
+   *   ticketId is therefore always non-null on success, satisfying the
+   *   "not both null" constraint even when leadId is null.
    *
-   * TODO(T5-002/T5-003): inject LeadService + TicketService, create Lead and
-   *   Ticket rows, return `accepted: true` with actual `leadId` / `ticketId`.
+   * No Webhook / Email / Notification are triggered — Webhook / Notification
+   * deferred to a later notification slice.
    */
   @Post('sessions/:sessionToken/handoff')
   @HttpCode(HttpStatus.OK)
   async handoff(
     @Param('sessionToken') sessionToken: string,
-    @Body() _dto: HandoffDto,
+    @Body() dto: HandoffDto,
   ) {
     const conversation = await this.conversationService.findBySessionToken(sessionToken);
     if (!conversation) {
       throw new NotFoundException('Session not found');
     }
 
-    // Phase 2: Lead/Ticket creation pending Phase 5 (T5-002/T5-003).
-    // accepted=false is the correct response while no Lead/Ticket module exists.
+    const ticket = await this.leadService.createTicketOnly(
+      conversation,
+      'handoff',
+      dto.reason,
+    );
+
     return {
-      accepted: false,
+      accepted: true,
       action: 'handoff' as const,
-      leadId: null as string | null,
-      ticketId: null as string | null,
+      leadId: null as number | null,
+      ticketId: ticket.id,
       message: '您的轉接請求已收到。我們的業務人員將儘速與您聯繫。',
+    };
+  }
+
+  // ── Phase 5-D: Feedback ───────────────────────────────────────────────────
+
+  /**
+   * Submit (or replace) thumbs-up / thumbs-down feedback for an assistant message.
+   *
+   * Contract (T5-012):
+   *   POST /api/v1/chat/sessions/:sessionToken/messages/:messageId/feedback
+   *   Body: { value: 'up' | 'down', reason?: string }
+   *   → 201 { id, value, reason, createdAt }
+   *
+   * Only the latest feedback per message is kept (upsert: delete-then-create).
+   */
+  @Post('sessions/:sessionToken/messages/:messageId/feedback')
+  @HttpCode(HttpStatus.CREATED)
+  async submitFeedback(
+    @Param('sessionToken') sessionToken: string,
+    @Param('messageId', ParseIntPipe) messageId: number,
+    @Body() dto: CreateFeedbackDto,
+  ) {
+    const feedback = await this.feedbackService.submitFeedback(sessionToken, messageId, dto);
+    return {
+      id: feedback.id,
+      value: feedback.value,
+      reason: feedback.reason,
+      createdAt: feedback.createdAt,
     };
   }
 }

@@ -65,7 +65,10 @@ export const ModelName = {
   KnowledgeDocument: 'KnowledgeDocument',
   KnowledgeChunk: 'KnowledgeChunk',
   KnowledgeEntity: 'KnowledgeEntity',
-  KnowledgeRelation: 'KnowledgeRelation'
+  KnowledgeRelation: 'KnowledgeRelation',
+  Lead: 'Lead',
+  Ticket: 'Ticket',
+  Feedback: 'Feedback'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -307,6 +310,65 @@ export const KnowledgeRelationScalarFieldEnum = {
 export type KnowledgeRelationScalarFieldEnum = (typeof KnowledgeRelationScalarFieldEnum)[keyof typeof KnowledgeRelationScalarFieldEnum]
 
 
+export const LeadScalarFieldEnum = {
+  id: 'id',
+  conversationId: 'conversationId',
+  name: 'name',
+  email: 'email',
+  company: 'company',
+  phone: 'phone',
+  message: 'message',
+  language: 'language',
+  type: 'type',
+  riskLevel: 'riskLevel',
+  confidentialityTriggered: 'confidentialityTriggered',
+  promptInjectionDetected: 'promptInjectionDetected',
+  sensitiveIntentCount: 'sensitiveIntentCount',
+  highIntentScore: 'highIntentScore',
+  summary: 'summary',
+  transcriptRef: 'transcriptRef',
+  notificationStatus: 'notificationStatus',
+  status: 'status',
+  notes: 'notes',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  deletedAt: 'deletedAt'
+} as const
+
+export type LeadScalarFieldEnum = (typeof LeadScalarFieldEnum)[keyof typeof LeadScalarFieldEnum]
+
+
+export const TicketScalarFieldEnum = {
+  id: 'id',
+  leadId: 'leadId',
+  conversationId: 'conversationId',
+  status: 'status',
+  triggerReason: 'triggerReason',
+  summary: 'summary',
+  priority: 'priority',
+  assignee: 'assignee',
+  notes: 'notes',
+  resolvedAt: 'resolvedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  deletedAt: 'deletedAt'
+} as const
+
+export type TicketScalarFieldEnum = (typeof TicketScalarFieldEnum)[keyof typeof TicketScalarFieldEnum]
+
+
+export const FeedbackScalarFieldEnum = {
+  id: 'id',
+  conversationId: 'conversationId',
+  messageId: 'messageId',
+  value: 'value',
+  reason: 'reason',
+  createdAt: 'createdAt'
+} as const
+
+export type FeedbackScalarFieldEnum = (typeof FeedbackScalarFieldEnum)[keyof typeof FeedbackScalarFieldEnum]
+
+
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -321,6 +383,13 @@ export const NullableJsonNullValueInput = {
 } as const
 
 export type NullableJsonNullValueInput = (typeof NullableJsonNullValueInput)[keyof typeof NullableJsonNullValueInput]
+
+
+export const JsonNullValueInput = {
+  JsonNull: JsonNull
+} as const
+
+export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
 
 
 export const QueryMode = {

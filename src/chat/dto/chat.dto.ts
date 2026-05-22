@@ -1,5 +1,9 @@
 import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
+// Re-export CreateLeadDto from the lead module so ChatController can import
+// everything from one location.
+export { CreateLeadDto } from '../../lead/dto/create-lead.dto';
+
 /**
  * DTO for `POST /api/v1/chat/sessions`.
  * All fields are optional — the server generates sessionToken automatically.

@@ -38,3 +38,40 @@ export const KnowledgeRelationType = {
 } as const
 
 export type KnowledgeRelationType = (typeof KnowledgeRelationType)[keyof typeof KnowledgeRelationType]
+
+
+export const LeadStatus = {
+  new: 'new',
+  contacted: 'contacted',
+  qualified: 'qualified',
+  closed: 'closed'
+} as const
+
+export type LeadStatus = (typeof LeadStatus)[keyof typeof LeadStatus]
+
+
+export const TicketStatus = {
+  open: 'open',
+  in_progress: 'in_progress',
+  resolved: 'resolved',
+  closed: 'closed'
+} as const
+
+export type TicketStatus = (typeof TicketStatus)[keyof typeof TicketStatus]
+
+
+export const TicketPriority = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high'
+} as const
+
+export type TicketPriority = (typeof TicketPriority)[keyof typeof TicketPriority]
+
+
+export const FeedbackValue = {
+  up: 'up',
+  down: 'down'
+} as const
+
+export type FeedbackValue = (typeof FeedbackValue)[keyof typeof FeedbackValue]

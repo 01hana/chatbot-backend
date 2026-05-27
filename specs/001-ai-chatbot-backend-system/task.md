@@ -583,27 +583,27 @@ Phase 7（品質補強與驗收準備）
   - 輸出物：`src/admin/system-config/system-config-admin.controller.ts`、`src/admin/system-config/dto/`
   - 驗收：更新後 cache 重新載入；AuditLog 有 before/after snapshot；runtime 即時生效（不需重啟）
 
-- [ ] **T6-004** `ADMIN` **實作對話查詢 Admin API**
+- [X] **T6-004** `ADMIN` **實作對話查詢 Admin API**
   - 說明：`GET /api/v1/admin/conversations`（支援 filter：`sessionId`、`dateFrom`、`dateTo`、`intentLabel`、`type`（normal/confidential）；支援分頁 `PaginationDto`（`page`、`limit`，`limit` 最大 100））；回傳含 `ConversationMessage` 摘要的列表
   - 輸出物：`src/admin/conversation/conversation-admin.controller.ts`、`src/admin/conversation/conversation-admin.service.ts`、`src/admin/conversation/dto/`
   - 驗收：filter 組合查詢正確；分頁回傳含 `total`、`page`、`limit`、`data`
 
-- [ ] **T6-005** `ADMIN` **實作 AuditLog 查詢 Admin API**
+- [X] **T6-005** `ADMIN` **實作 AuditLog 查詢 Admin API**
   - 說明：`GET /api/v1/admin/audit-logs`（支援 filter：`requestId`、`sessionId`、`dateFrom`、`dateTo`、`eventType`；支援分頁）；`requestId` 精確查詢回傳單筆；所有回傳含 token 欄位
   - 輸出物：`src/admin/audit/audit-admin.controller.ts`、`src/admin/audit/audit-admin.service.ts`、`src/admin/audit/dto/`
   - 驗收：可依 `requestId` 查詢單筆；日期範圍 + 事件類型 filter 正確作用
 
-- [ ] **T6-006** `ADMIN` **實作 Lead 查詢與狀態更新 Admin API**
+- [X] **T6-006** `ADMIN` **實作 Lead 查詢與狀態更新 Admin API**
   - 說明：`GET /api/v1/admin/leads`（支援 filter：`notificationStatus`、`type`、`dateFrom`、`dateTo`；分頁）；`PATCH /api/v1/admin/leads/:id/status`（更新 Lead 狀態，如 `contacted`、`closed`）；`GET /api/v1/admin/leads/:id/notifications`（查詢該 Lead 的推送記錄 `NotificationDelivery`）
   - 輸出物：`src/admin/lead/lead-admin.controller.ts`、`src/admin/lead/lead-admin.service.ts`、`src/admin/lead/dto/`
   - 驗收：列表 filter 正確；狀態更新成功；推送記錄查詢回傳 `NotificationDelivery` 列表
 
-- [ ] **T6-007** `CORE` **建立 DashboardModule 與 DashboardService**
+- [X] **T6-007** `CORE` **建立 DashboardModule 與 DashboardService**
   - 說明：`DashboardService.getStats(startDate: Date, endDate: Date): Promise<DashboardStats>`；聚合查詢來源：`AuditLog`（eventType 分組統計）+ `Conversation`（總對話數、語言分布）+ `Lead`（留資量）+ `Ticket`（Ticket 狀態分布）+ `Feedback`（up/down 統計）；回傳欄位：`totalConversations`、`totalMessages`、`totalLeads`、`handoffCount`、`fallbackRate`（fallback事件數/總訊息數）、`avgRagConfidence`（AuditLog ragConfidence 平均）、`feedbackSummary`（`{ totalCount, upCount, downCount, upRate }`）、`ticketStatusSummary`（`{ open, in_progress, resolved, closed }`）、`topIntents`（top 5 intent + count）、`guardBlockCount`（PromptGuard 攔截次數）、`confidentialRefuseCount`（機密拒答次數）；日期範圍必填；查詢採單次多表 aggregation，不使用 N+1
   - 輸出物：`src/dashboard/dashboard.module.ts`、`src/dashboard/dashboard.service.ts`、`src/dashboard/types/dashboard-stats.type.ts`
   - 驗收：`getStats()` 回傳所有欄位；日期範圍 filter 正確套用；無 N+1 查詢
 
-- [ ] **T6-008** `ADMIN` **實作 Dashboard Admin API**
+- [X] **T6-008** `ADMIN` **實作 Dashboard Admin API**
   - 說明：`GET /api/v1/admin/dashboard?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD`；`startDate`、`endDate` 為必填 query param（ISO 8601 格式）；缺少或格式錯誤時回傳 400；呼叫 `DashboardService.getStats()`；回傳完整 `DashboardStats` 物件
   - 輸出物：`src/dashboard/dashboard.controller.ts`、`src/dashboard/dto/dashboard-query.dto.ts`
   - 驗收：`GET /api/v1/admin/dashboard?startDate=...&endDate=...` 回傳 200 + 完整 stats；缺少日期參數 400；日期格式錯誤 400
@@ -618,7 +618,7 @@ Phase 7（品質補強與驗收準備）
   - 輸出物：`test/knowledge-admin.integration-spec.ts`
   - 驗收：版本管理與審核流程整合測試通過
 
-- [ ] **T6-011** `TEST` **Phase 6 測試：Dashboard API 測試 + 查詢 API E2E 測試**
+- [X] **T6-011** `TEST` **Phase 6 測試：Dashboard API 測試 + 查詢 API E2E 測試**
   - 說明：`DashboardService` 單元測試（mock DB）：`getStats()` 回傳所有欄位（含 `feedbackSummary: {totalCount, upCount, downCount, upRate}`）；日期範圍 filter 正確；E2E 測試（supertest）：`GET /api/v1/admin/dashboard` 含日期參數回傳 200；缺少日期 400；`GET /api/v1/admin/conversations` filter 組合查詢；`GET /api/v1/admin/audit-logs?requestId=xxx` 單筆查詢；`GET /api/v1/admin/leads` 分頁查詢；SystemConfig 更新 API AuditLog 記錄 before/after；`GET /api/v1/admin/tickets` filter + 分頁；`GET /api/v1/admin/feedback` filter + 分頁
   - 輸出物：`src/dashboard/dashboard.service.spec.ts`、`test/admin-query.e2e-spec.ts`（更新）
   - 驗收：Dashboard 與所有查詢 API E2E 測試通過；filter 與分頁行為正確

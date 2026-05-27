@@ -10,18 +10,25 @@ import { KnowledgeModule } from '../knowledge/knowledge.module';
 import { AdminIntentModule } from './intent/admin-intent.module';
 import { AdminGlossaryModule } from './glossary/admin-glossary.module';
 import { TicketsAdminModule } from './tickets/tickets-admin.module';
+import { ConversationsAdminModule } from './conversations/conversations-admin.module';
+import { AuditAdminModule } from './audit/audit-admin.module';
+import { FeedbackAdminModule } from './feedback/feedback-admin.module';
+import { LeadsAdminModule } from './leads/leads-admin.module';
+import { DashboardAdminModule } from './dashboard/dashboard-admin.module';
 
-/**
- * AdminModule — aggregates all admin-facing route controllers.
- *
- * Phase 1 status: SystemConfig controller returns 501.
- * Phase 3 (T3-006): Safety admin CRUD is fully implemented.
- * Knowledge admin CRUD is fully implemented (create/update support language + aliases).
- * 002 IG-002/IG-003: Intent and Glossary admin modules wired in.
- * Phase 5-C (T5-010): Ticket admin API wired in via TicketsAdminModule.
- */
 @Module({
-  imports: [SafetyModule, KnowledgeModule, AdminIntentModule, AdminGlossaryModule, TicketsAdminModule],
+  imports: [
+    SafetyModule,
+    KnowledgeModule,
+    AdminIntentModule,
+    AdminGlossaryModule,
+    TicketsAdminModule,
+    ConversationsAdminModule,
+    AuditAdminModule,
+    FeedbackAdminModule,
+    LeadsAdminModule,
+    DashboardAdminModule,
+  ],
   controllers: [
     AdminKnowledgeController,
     AdminSystemConfigController,

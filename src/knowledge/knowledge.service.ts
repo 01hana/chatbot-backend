@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { KnowledgeEntry } from '../generated/prisma/client';
-import { KnowledgeRepository } from './knowledge.repository';
+import { KnowledgeEntry, KnowledgeVersion } from '../generated/prisma/client';
+import { KnowledgeRepository, KnowledgeListParams } from './knowledge.repository';
 import { RetrievalQuery } from './types/retrieval-query.type';
 
 /**
@@ -70,5 +70,64 @@ export class KnowledgeService {
    */
   async findByCategory(category: string): Promise<KnowledgeEntry[]> {
     return this.knowledgeRepository.findByCategory(category);
+  }
+
+  /**
+   * Paginated, filtered list of non-deleted entries for the admin panel.
+   */
+  async findFiltered(
+    params: KnowledgeListParams,
+  ): Promise<{ items: KnowledgeEntry[]; total: number }> {
+    return this.knowledgeRepository.findFiltered(params);
+  }
+
+  /**
+   * Find a single entry by ID including its version history.
+   * Returns null when not found.
+   */
+  async findByIdWithVersions(
+    id: number,
+  ): Promise<(KnowledgeEntry & { versions: KnowledgeVersion[] }) | null> {
+    return this.knowledgeRepository.findByIdWithVersions(id);
+  }
+
+  /**
+   * Create an immutable version snapshot for a knowledge entry.
+   */
+  async createVersion(data: {
+    knowledgeEntryId: number;
+    versionNumber: number;
+    contentSnapshot: string;
+  }): Promise<KnowledgeVersion> {
+    return this.knowledgeRepository.createVersion(data);
+  }
+
+  /**
+   * Update a knowledge entry, snapshot current content as a new version,
+   * increment the version counter, and reset status to 'draft'.
+   * Returns null when the entry does not exist.
+   */
+  async updateWithVersionSnapshot(
+    id: number,
+    data: Partial<
+      Pick<
+        KnowledgeEntry,
+        | 'title'
+        | 'content'
+        | 'intentLabel'
+        | 'tags'
+        | 'aliases'
+        | 'language'
+        | 'visibility'
+        | 'sourceKey'
+        | 'category'
+        | 'answerType'
+        | 'templateKey'
+        | 'faqQuestions'
+        | 'crossLanguageGroupKey'
+      >
+    >,
+  ): Promise<KnowledgeEntry | null> {
+    return this.knowledgeRepository.updateWithVersionSnapshot(id, data);
   }
 }

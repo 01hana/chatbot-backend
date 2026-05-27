@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Get,
-  Patch,
-  Param,
-  Body,
-  HttpCode,
-  HttpStatus,
-} from '@nestjs/common';
+import { Controller, Get, Patch, Param, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { SystemConfig } from '../../generated/prisma/client';
 import { UpdateSystemConfigDto } from './dto/system-config-admin.dto';
 import { AdminSystemConfigService } from './admin-system-config.service';
@@ -32,13 +24,10 @@ export class AdminSystemConfigController {
     return this.adminSystemConfigService.getOne(key);
   }
 
-  /** Upsert a SystemConfig entry (creates the key if it does not yet exist). */
+  /** Update an existing SystemConfig entry by key. */
   @Patch(':key')
   @HttpCode(HttpStatus.OK)
-  update(
-    @Param('key') key: string,
-    @Body() dto: UpdateSystemConfigDto,
-  ): Promise<SystemConfig> {
+  update(@Param('key') key: string, @Body() dto: UpdateSystemConfigDto): Promise<SystemConfig> {
     return this.adminSystemConfigService.update(key, dto);
   }
 }

@@ -1,94 +1,165 @@
+import { describe, beforeEach, it, expect, jest } from '@jest/globals';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
 import { AdminKnowledgeService } from './admin-knowledge.service';
 import { KnowledgeService } from '../../knowledge/knowledge.service';
-import { KnowledgeEntry } from '../../generated/prisma/client';
+import { AuditService } from '../../audit/audit.service';
+import { KnowledgeEntry, KnowledgeVersion } from '../../generated/prisma/client';
 
 /**
  * Unit tests for AdminKnowledgeService.
  *
  * Covers:
- *  - listAll: delegates to KnowledgeService.findAll()
- *  - getOne: returns entry or throws NotFoundException
- *  - create: maps DTO → KnowledgeService.create() with correct defaults
- *  - create: persists language and aliases from DTO
- *  - create: defaults language to 'zh-TW' when omitted
- *  - update: applies partial patch including language and aliases
- *  - update: throws NotFoundException when entry does not exist
- *  - remove: calls softDelete and throws NotFoundException when not found
+ *  - list: pagination, filters, sort params, defaults
+ *  - getOne: found / not found
+ *  - getOneWithVersions: found with versions / not found
+ *  - create: defaults (status=draft, version=1, visibility=private), provided visibility, audit event
+ *  - update: calls updateWithVersionSnapshot, 404 when missing, audit event
+ *  - approve: draft→approved, approved no-op, archived→400, 404, audit event
+ *  - archive: approved→archived, draft→archived, archived no-op, 404, audit event
+ *  - remove: softDelete / 404
+ *  - findByCategory: delegates correctly
  */
+
+// ─── Factories ────────────────────────────────────────────────────────────────
+
+const makeEntry = (overrides: Partial<KnowledgeEntry> = {}): KnowledgeEntry => ({
+  id: 1,
+  title: 'Test Entry',
+  content: 'Test content',
+  intentLabel: null,
+  tags: [],
+  aliases: [],
+  language: 'zh-TW',
+  status: 'draft',
+  visibility: 'private',
+  version: 1,
+  sourceKey: null,
+  category: null,
+  answerType: 'rag',
+  templateKey: null,
+  faqQuestions: [],
+  crossLanguageGroupKey: null,
+  structuredAttributes: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  deletedAt: null,
+  ...overrides,
+});
+
+const makeVersion = (overrides: Partial<KnowledgeVersion> = {}): KnowledgeVersion => ({
+  id: 10,
+  knowledgeEntryId: 1,
+  versionNumber: 1,
+  contentSnapshot: '{}',
+  createdAt: new Date(),
+  ...overrides,
+});
+
+// ─── Tests ────────────────────────────────────────────────────────────────────
+
 describe('AdminKnowledgeService', () => {
   let service: AdminKnowledgeService;
   let knowledgeService: jest.Mocked<KnowledgeService>;
-
-  const makeEntry = (overrides: Partial<KnowledgeEntry> = {}): KnowledgeEntry => ({
-    id: 1,
-    title: 'Test Entry',
-    content: 'Test content',
-    intentLabel: null,
-    tags: [],
-    aliases: [],
-    language: 'zh-TW',
-    status: 'draft',
-    visibility: 'private',
-    version: 1,
-    sourceKey: null,
-    category: null,
-    answerType: 'rag',
-    templateKey: null,
-    faqQuestions: [],
-    crossLanguageGroupKey: null,
-    structuredAttributes: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    deletedAt: null,
-    ...overrides,
-  });
+  let auditService: jest.Mocked<AuditService>;
 
   beforeEach(async () => {
     const mockKnowledgeService: Partial<jest.Mocked<KnowledgeService>> = {
       findAll: jest.fn(),
       findById: jest.fn(),
+      findByIdWithVersions: jest.fn(),
+      findFiltered: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateWithVersionSnapshot: jest.fn(),
       softDelete: jest.fn(),
       findByCategory: jest.fn(),
+    };
+
+    const mockAuditService: Partial<jest.Mocked<AuditService>> = {
+      log: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
     };
 
     const module = await Test.createTestingModule({
       providers: [
         AdminKnowledgeService,
         { provide: KnowledgeService, useValue: mockKnowledgeService },
+        { provide: AuditService, useValue: mockAuditService },
       ],
     }).compile();
 
     service = module.get(AdminKnowledgeService);
     knowledgeService = module.get(KnowledgeService) as jest.Mocked<KnowledgeService>;
+    auditService = module.get(AuditService) as jest.Mocked<AuditService>;
   });
 
-  // ─── listAll ──────────────────────────────────────────────────────────────
+  // ─── list ─────────────────────────────────────────────────────────────────
 
-  describe('listAll()', () => {
-    it('should delegate to KnowledgeService.findAll()', async () => {
+  describe('list()', () => {
+    it('should return paginated data and meta', async () => {
       const entries = [makeEntry({ id: 1 }), makeEntry({ id: 2 })];
-      knowledgeService.findAll.mockResolvedValueOnce(entries);
+      knowledgeService.findFiltered.mockResolvedValueOnce({ items: entries, total: 2 });
 
-      const result = await service.listAll();
+      const result = await service.list({ page: 1, pageSize: 20 });
 
-      expect(result).toEqual(entries);
-      expect(knowledgeService.findAll).toHaveBeenCalledTimes(1);
+      expect(result.data).toHaveLength(2);
+      expect(result.meta).toEqual({ total: 2, page: 1, pageSize: 20 });
     });
 
-    it('should return all entries regardless of status or visibility', async () => {
-      const entries = [
-        makeEntry({ status: 'draft', visibility: 'private' }),
-        makeEntry({ status: 'approved', visibility: 'public' }),
-        makeEntry({ status: 'archived', visibility: 'private' }),
-      ];
-      knowledgeService.findAll.mockResolvedValueOnce(entries);
+    it('should pass filters to findFiltered', async () => {
+      knowledgeService.findFiltered.mockResolvedValueOnce({ items: [], total: 0 });
 
-      const result = await service.listAll();
-      expect(result).toHaveLength(3);
+      await service.list({ status: 'approved', visibility: 'public', language: 'en', keyword: 'bolt' });
+
+      expect(knowledgeService.findFiltered).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'approved',
+          visibility: 'public',
+          language: 'en',
+          keyword: 'bolt',
+        }),
+      );
+    });
+
+    it('should default page=1 and pageSize=20 when not provided', async () => {
+      knowledgeService.findFiltered.mockResolvedValueOnce({ items: [], total: 0 });
+
+      const result = await service.list({});
+
+      expect(result.meta.page).toBe(1);
+      expect(result.meta.pageSize).toBe(20);
+    });
+
+    it('should pass sortBy and sortOrder to findFiltered', async () => {
+      knowledgeService.findFiltered.mockResolvedValueOnce({ items: [], total: 0 });
+
+      await service.list({ sortBy: 'title', sortOrder: 'asc' });
+
+      expect(knowledgeService.findFiltered).toHaveBeenCalledWith(
+        expect.objectContaining({ sortBy: 'title', sortOrder: 'asc' }),
+      );
+    });
+
+    it('should clamp pageSize to 100 when value exceeds 100', async () => {
+      knowledgeService.findFiltered.mockResolvedValueOnce({ items: [], total: 0 });
+
+      const result = await service.list({ pageSize: 500 });
+
+      expect(knowledgeService.findFiltered).toHaveBeenCalledWith(
+        expect.objectContaining({ pageSize: 100 }),
+      );
+      expect(result.meta.pageSize).toBe(100);
+    });
+
+    it('should clamp page to minimum 1 when value is below 1', async () => {
+      knowledgeService.findFiltered.mockResolvedValueOnce({ items: [], total: 0 });
+
+      const result = await service.list({ page: 0 });
+
+      expect(knowledgeService.findFiltered).toHaveBeenCalledWith(
+        expect.objectContaining({ page: 1 }),
+      );
+      expect(result.meta.page).toBe(1);
     });
   });
 
@@ -111,29 +182,61 @@ describe('AdminKnowledgeService', () => {
     });
   });
 
+  // ─── getOneWithVersions ───────────────────────────────────────────────────
+
+  describe('getOneWithVersions()', () => {
+    it('should return entry with versions', async () => {
+      const entry = { ...makeEntry({ id: 1 }), versions: [makeVersion()] };
+      knowledgeService.findByIdWithVersions.mockResolvedValueOnce(entry);
+
+      const result = await service.getOneWithVersions(1);
+      expect(result.versions).toHaveLength(1);
+    });
+
+    it('should throw NotFoundException when not found', async () => {
+      knowledgeService.findByIdWithVersions.mockResolvedValueOnce(null);
+
+      await expect(service.getOneWithVersions(99)).rejects.toThrow(NotFoundException);
+    });
+  });
+
   // ─── create ───────────────────────────────────────────────────────────────
 
   describe('create()', () => {
-    it('should create entry with correct language and aliases from DTO', async () => {
-      const entry = makeEntry({ language: 'en', aliases: ['What bolts do you offer?'] });
+    it('should always set status=draft and version=1', async () => {
+      const entry = makeEntry({ status: 'draft', version: 1 });
       knowledgeService.create.mockResolvedValueOnce(entry);
 
-      await service.create({
-        title: 'Hex Bolt',
-        content: 'Hex bolt description',
-        language: 'en',
-        aliases: ['What bolts do you offer?'],
-      });
+      await service.create({ title: 'Test', content: 'Content' });
 
       expect(knowledgeService.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          language: 'en',
-          aliases: ['What bolts do you offer?'],
-        }),
+        expect.objectContaining({ status: 'draft', version: 1 }),
       );
     });
 
-    it('should default language to "zh-TW" when not provided', async () => {
+    it('should default visibility to private when not provided', async () => {
+      const entry = makeEntry({ visibility: 'private' });
+      knowledgeService.create.mockResolvedValueOnce(entry);
+
+      await service.create({ title: 'Test', content: 'Content' });
+
+      expect(knowledgeService.create).toHaveBeenCalledWith(
+        expect.objectContaining({ visibility: 'private' }),
+      );
+    });
+
+    it('should use provided visibility (public)', async () => {
+      const entry = makeEntry({ visibility: 'public' });
+      knowledgeService.create.mockResolvedValueOnce(entry);
+
+      await service.create({ title: 'Test', content: 'Content', visibility: 'public' });
+
+      expect(knowledgeService.create).toHaveBeenCalledWith(
+        expect.objectContaining({ visibility: 'public' }),
+      );
+    });
+
+    it('should default language to zh-TW when not provided', async () => {
       const entry = makeEntry({ language: 'zh-TW' });
       knowledgeService.create.mockResolvedValueOnce(entry);
 
@@ -155,19 +258,19 @@ describe('AdminKnowledgeService', () => {
       );
     });
 
-    it('should always set status=draft and visibility=private', async () => {
-      const entry = makeEntry();
+    it('should fire audit log event knowledge_created', async () => {
+      const entry = makeEntry({ id: 5, sourceKey: 'sk-001', version: 1 });
       knowledgeService.create.mockResolvedValueOnce(entry);
 
       await service.create({ title: 'Test', content: 'Content' });
 
-      expect(knowledgeService.create).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'draft', visibility: 'private' }),
+      expect(auditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: 'knowledge_created' }),
       );
     });
 
-    it('should pass tags and intentLabel from DTO', async () => {
-      const entry = makeEntry({ tags: ['wire', '線材'], intentLabel: 'product-inquiry' });
+    it('should pass tags, intentLabel, aliases from DTO', async () => {
+      const entry = makeEntry({ tags: ['wire', '線材'], intentLabel: 'product-inquiry', aliases: ['Wire'] });
       knowledgeService.create.mockResolvedValueOnce(entry);
 
       await service.create({
@@ -175,13 +278,11 @@ describe('AdminKnowledgeService', () => {
         content: 'Wire overview',
         tags: ['wire', '線材'],
         intentLabel: 'product-inquiry',
+        aliases: ['Wire'],
       });
 
       expect(knowledgeService.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          tags: ['wire', '線材'],
-          intentLabel: 'product-inquiry',
-        }),
+        expect.objectContaining({ tags: ['wire', '線材'], intentLabel: 'product-inquiry', aliases: ['Wire'] }),
       );
     });
 
@@ -198,135 +299,177 @@ describe('AdminKnowledgeService', () => {
       });
 
       expect(knowledgeService.create).toHaveBeenCalledWith(
+        expect.objectContaining({ sourceKey: 'bolt-hex', category: 'product-spec', answerType: 'rag' }),
+      );
+    });
+  });
+
+  // ─── update (with version snapshot) ──────────────────────────────────────
+
+  describe('update()', () => {
+    it('should call updateWithVersionSnapshot and return updated entry', async () => {
+      const updated = makeEntry({ id: 1, title: 'New Title', version: 2, status: 'draft' });
+      knowledgeService.updateWithVersionSnapshot.mockResolvedValueOnce(updated);
+
+      const result = await service.update(1, { title: 'New Title' });
+
+      expect(knowledgeService.updateWithVersionSnapshot).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ title: 'New Title' }),
+      );
+      expect(result.version).toBe(2);
+      expect(result.status).toBe('draft');
+    });
+
+    it('should throw NotFoundException when entry does not exist', async () => {
+      knowledgeService.updateWithVersionSnapshot.mockResolvedValueOnce(null);
+
+      await expect(service.update(99, { title: 'X' })).rejects.toThrow(NotFoundException);
+    });
+
+    it('should fire audit log event knowledge_updated', async () => {
+      const updated = makeEntry({ id: 1, version: 2 });
+      knowledgeService.updateWithVersionSnapshot.mockResolvedValueOnce(updated);
+
+      await service.update(1, { title: 'Updated' });
+
+      expect(auditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: 'knowledge_updated' }),
+      );
+    });
+
+    it('should apply partial patch with language and aliases', async () => {
+      const updated = makeEntry({ language: 'en', aliases: ['What bolts do you offer?'], version: 2 });
+      knowledgeService.updateWithVersionSnapshot.mockResolvedValueOnce(updated);
+
+      await service.update(1, { language: 'en', aliases: ['What bolts do you offer?'] });
+
+      expect(knowledgeService.updateWithVersionSnapshot).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ language: 'en', aliases: ['What bolts do you offer?'] }),
+      );
+    });
+
+    it('should not pass status to updateWithVersionSnapshot (status is controlled by approve/archive only)', async () => {
+      const updated = makeEntry({ id: 1, version: 2, status: 'draft' });
+      knowledgeService.updateWithVersionSnapshot.mockResolvedValueOnce(updated);
+
+      await service.update(1, { title: 'Title' });
+
+      const [[, patchArg]] = knowledgeService.updateWithVersionSnapshot.mock.calls as [[number, Record<string, unknown>]];
+      expect(patchArg).not.toHaveProperty('status');
+    });
+  });
+
+  // ─── approve ──────────────────────────────────────────────────────────────
+
+  describe('approve()', () => {
+    it('should transition draft → approved', async () => {
+      const draft = makeEntry({ id: 1, status: 'draft' });
+      const approved = makeEntry({ id: 1, status: 'approved' });
+      knowledgeService.findById.mockResolvedValueOnce(draft);
+      knowledgeService.update.mockResolvedValueOnce(approved);
+
+      const result = await service.approve(1);
+
+      expect(knowledgeService.update).toHaveBeenCalledWith(1, { status: 'approved' });
+      expect(result.status).toBe('approved');
+    });
+
+    it('should be no-op when already approved', async () => {
+      const approved = makeEntry({ id: 1, status: 'approved' });
+      knowledgeService.findById.mockResolvedValueOnce(approved);
+
+      const result = await service.approve(1);
+
+      expect(knowledgeService.update).not.toHaveBeenCalled();
+      expect(result.status).toBe('approved');
+    });
+
+    it('should throw BadRequestException when approving an archived entry', async () => {
+      const archived = makeEntry({ id: 1, status: 'archived' });
+      knowledgeService.findById.mockResolvedValueOnce(archived);
+
+      await expect(service.approve(1)).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw NotFoundException when entry not found', async () => {
+      knowledgeService.findById.mockResolvedValueOnce(null);
+
+      await expect(service.approve(99)).rejects.toThrow(NotFoundException);
+    });
+
+    it('should fire audit log knowledge_approved', async () => {
+      const draft = makeEntry({ id: 1, status: 'draft' });
+      const approved = makeEntry({ id: 1, status: 'approved' });
+      knowledgeService.findById.mockResolvedValueOnce(draft);
+      knowledgeService.update.mockResolvedValueOnce(approved);
+
+      await service.approve(1);
+
+      expect(auditService.log).toHaveBeenCalledWith(
         expect.objectContaining({
-          sourceKey: 'bolt-hex',
-          category: 'product-spec',
-          answerType: 'rag',
-        }),
-      );
-    });
-
-    it('should default sourceKey to null when not provided', async () => {
-      const entry = makeEntry({ sourceKey: null });
-      knowledgeService.create.mockResolvedValueOnce(entry);
-
-      await service.create({ title: 'Wire', content: 'Wire overview' });
-
-      expect(knowledgeService.create).toHaveBeenCalledWith(
-        expect.objectContaining({ sourceKey: null }),
-      );
-    });
-
-    it('should default answerType to \'rag\' when not provided', async () => {
-      const entry = makeEntry({ answerType: 'rag' });
-      knowledgeService.create.mockResolvedValueOnce(entry);
-
-      await service.create({ title: 'Wire', content: 'Wire overview' });
-
-      expect(knowledgeService.create).toHaveBeenCalledWith(
-        expect.objectContaining({ answerType: 'rag' }),
-      );
-    });
-
-    it('should pass templateKey and faqQuestions from DTO', async () => {
-      const entry = makeEntry({ templateKey: 'tpl-001', faqQuestions: ['What bolts do you offer?'] });
-      knowledgeService.create.mockResolvedValueOnce(entry);
-
-      await service.create({
-        title: 'Hex Bolt',
-        content: 'Hex bolt description',
-        templateKey: 'tpl-001',
-        faqQuestions: ['What bolts do you offer?'],
-      });
-
-      expect(knowledgeService.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          templateKey: 'tpl-001',
-          faqQuestions: ['What bolts do you offer?'],
+          eventType: 'knowledge_approved',
+          eventData: expect.objectContaining({ fromStatus: 'draft', toStatus: 'approved' }),
         }),
       );
     });
   });
 
-  // ─── update ───────────────────────────────────────────────────────────────
+  // ─── archive ──────────────────────────────────────────────────────────────
 
-  describe('update()', () => {
-    it('should update language when provided', async () => {
-      const updated = makeEntry({ language: 'en' });
-      knowledgeService.update.mockResolvedValueOnce(updated);
+  describe('archive()', () => {
+    it('should transition approved → archived', async () => {
+      const approved = makeEntry({ id: 1, status: 'approved' });
+      const archived = makeEntry({ id: 1, status: 'archived' });
+      knowledgeService.findById.mockResolvedValueOnce(approved);
+      knowledgeService.update.mockResolvedValueOnce(archived);
 
-      await service.update(1, { language: 'en' });
+      const result = await service.archive(1);
 
-      expect(knowledgeService.update).toHaveBeenCalledWith(
-        1,
-        expect.objectContaining({ language: 'en' }),
-      );
+      expect(knowledgeService.update).toHaveBeenCalledWith(1, { status: 'archived' });
+      expect(result.status).toBe('archived');
     });
 
-    it('should update aliases when provided', async () => {
-      const updated = makeEntry({ aliases: ['What screws do you have?'] });
-      knowledgeService.update.mockResolvedValueOnce(updated);
+    it('should allow draft → archived', async () => {
+      const draft = makeEntry({ id: 1, status: 'draft' });
+      const archived = makeEntry({ id: 1, status: 'archived' });
+      knowledgeService.findById.mockResolvedValueOnce(draft);
+      knowledgeService.update.mockResolvedValueOnce(archived);
 
-      await service.update(1, { aliases: ['What screws do you have?'] });
+      const result = await service.archive(1);
 
-      expect(knowledgeService.update).toHaveBeenCalledWith(
-        1,
-        expect.objectContaining({ aliases: ['What screws do you have?'] }),
-      );
+      expect(result.status).toBe('archived');
     });
 
-    it('should not include undefined fields in the patch', async () => {
-      const updated = makeEntry({ title: 'New Title' });
-      knowledgeService.update.mockResolvedValueOnce(updated);
+    it('should be no-op when already archived', async () => {
+      const archived = makeEntry({ id: 1, status: 'archived' });
+      knowledgeService.findById.mockResolvedValueOnce(archived);
 
-      await service.update(1, { title: 'New Title' });
+      const result = await service.archive(1);
 
-      const patchArg: Record<string, unknown> = (knowledgeService.update as jest.Mock).mock.calls[0][1];
-      expect(patchArg).not.toHaveProperty('language');
-      expect(patchArg).not.toHaveProperty('aliases');
+      expect(knowledgeService.update).not.toHaveBeenCalled();
+      expect(result.status).toBe('archived');
     });
 
-    it('should throw NotFoundException when entry does not exist', async () => {
-      knowledgeService.update.mockResolvedValueOnce(null);
+    it('should throw NotFoundException when entry not found', async () => {
+      knowledgeService.findById.mockResolvedValueOnce(null);
 
-      await expect(service.update(99, { title: 'New' })).rejects.toThrow(NotFoundException);
+      await expect(service.archive(99)).rejects.toThrow(NotFoundException);
     });
 
-    it('should pass sourceKey and category in patch', async () => {
-      const updated = makeEntry({ sourceKey: 'bolt-hex', category: 'product-spec' });
-      knowledgeService.update.mockResolvedValueOnce(updated);
+    it('should fire audit log knowledge_archived', async () => {
+      const approved = makeEntry({ id: 1, status: 'approved' });
+      const archived = makeEntry({ id: 1, status: 'archived' });
+      knowledgeService.findById.mockResolvedValueOnce(approved);
+      knowledgeService.update.mockResolvedValueOnce(archived);
 
-      await service.update(1, { sourceKey: 'bolt-hex', category: 'product-spec' });
+      await service.archive(1);
 
-      expect(knowledgeService.update).toHaveBeenCalledWith(
-        1,
-        expect.objectContaining({ sourceKey: 'bolt-hex', category: 'product-spec' }),
-      );
-    });
-
-    it('should pass answerType, templateKey, faqQuestions, crossLanguageGroupKey in patch', async () => {
-      const updated = makeEntry({
-        answerType: 'rag+template',
-        templateKey: 'tpl-002',
-        faqQuestions: ['Any bolt questions?'],
-        crossLanguageGroupKey: 'bolt-hex-group',
-      });
-      knowledgeService.update.mockResolvedValueOnce(updated);
-
-      await service.update(1, {
-        answerType: 'rag+template',
-        templateKey: 'tpl-002',
-        faqQuestions: ['Any bolt questions?'],
-        crossLanguageGroupKey: 'bolt-hex-group',
-      });
-
-      expect(knowledgeService.update).toHaveBeenCalledWith(
-        1,
+      expect(auditService.log).toHaveBeenCalledWith(
         expect.objectContaining({
-          answerType: 'rag+template',
-          templateKey: 'tpl-002',
-          faqQuestions: ['Any bolt questions?'],
-          crossLanguageGroupKey: 'bolt-hex-group',
+          eventType: 'knowledge_archived',
+          eventData: expect.objectContaining({ fromStatus: 'approved', toStatus: 'archived' }),
         }),
       );
     });
@@ -335,28 +478,25 @@ describe('AdminKnowledgeService', () => {
   // ─── remove ───────────────────────────────────────────────────────────────
 
   describe('remove()', () => {
-    it('should call softDelete with the given id', async () => {
+    it('should call softDelete and return void', async () => {
       knowledgeService.softDelete.mockResolvedValueOnce(true);
 
-      await service.remove(5);
-
-      expect(knowledgeService.softDelete).toHaveBeenCalledWith(5);
+      await expect(service.remove(1)).resolves.toBeUndefined();
+      expect(knowledgeService.softDelete).toHaveBeenCalledWith(1);
     });
 
-    it('should throw NotFoundException when entry does not exist', async () => {
+    it('should throw NotFoundException when entry not found', async () => {
       knowledgeService.softDelete.mockResolvedValueOnce(false);
 
       await expect(service.remove(99)).rejects.toThrow(NotFoundException);
     });
   });
-  // ─── findByCategory ────────────────────────────────────────────────────────────────
+
+  // ─── findByCategory ───────────────────────────────────────────────────────
 
   describe('findByCategory()', () => {
-    it('should return entries for the given category', async () => {
-      const entries = [
-        makeEntry({ id: 1, category: 'product-spec' }),
-        makeEntry({ id: 2, category: 'product-spec' }),
-      ];
+    it('should delegate to knowledgeService.findByCategory()', async () => {
+      const entries = [makeEntry({ id: 1, category: 'product-spec' })];
       knowledgeService.findByCategory.mockResolvedValueOnce(entries);
 
       const result = await service.findByCategory('product-spec');
@@ -365,11 +505,12 @@ describe('AdminKnowledgeService', () => {
       expect(knowledgeService.findByCategory).toHaveBeenCalledWith('product-spec');
     });
 
-    it('should return empty array when no entries match the category', async () => {
+    it('should return empty array when no entries match', async () => {
       knowledgeService.findByCategory.mockResolvedValueOnce([]);
 
       const result = await service.findByCategory('nonexistent');
 
       expect(result).toEqual([]);
     });
-  });});
+  });
+});

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { SystemConfig } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SystemConfigService } from '../../system-config/system-config.service';
+import { AuditService } from '../../audit/audit.service';
 import { UpdateSystemConfigDto } from './dto/system-config-admin.dto';
 
 /**
@@ -15,6 +16,7 @@ export class AdminSystemConfigService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly systemConfig: SystemConfigService,
+    private readonly auditService: AuditService,
   ) {}
 
   /** Return all SystemConfig entries ordered by key. */
@@ -34,25 +36,43 @@ export class AdminSystemConfigService {
   }
 
   /**
-   * Upsert a SystemConfig entry and immediately invalidate the in-memory cache.
+   * Update an existing SystemConfig entry by key.
    *
-   * `update` is a no-op guard on `key` (PK) — the real update targets `value`
-   * and optionally `description`.
+   * @throws NotFoundException when the key does not exist.
+   *
+   * After the write:
+   *  1. The in-memory cache is synchronously invalidated via
+   *     SystemConfigService.invalidateCache().
+   *  2. An audit event system_config_updated is appended fire-and-forget;
+   *     a rejection from the audit write never propagates to the caller.
    */
   async update(key: string, data: UpdateSystemConfigDto): Promise<SystemConfig> {
-    const result = await this.prisma.systemConfig.upsert({
+    const existing = await this.prisma.systemConfig.findUnique({ where: { key } });
+    if (!existing) throw new NotFoundException(`SystemConfig key '${key}' not found`);
+
+    const oldValue = existing.value;
+
+    const result = await this.prisma.systemConfig.update({
       where: { key },
-      update: {
-        value: data.value,
-        ...(data.description !== undefined && { description: data.description }),
-      },
-      create: {
-        key,
+      data: {
         value: data.value,
         ...(data.description !== undefined && { description: data.description }),
       },
     });
+
     await this.systemConfig.invalidateCache();
+
+    void this.auditService
+      .log({
+        eventType: 'system_config_updated',
+        eventData: {
+          key,
+          before: { value: oldValue },
+          after: { value: data.value },
+        },
+      })
+      .catch(() => undefined);
+
     return result;
   }
 }

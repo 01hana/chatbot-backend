@@ -568,17 +568,17 @@ Phase 7（品質補強與驗收準備）
 
 ---
 
-- [ ] **T6-001** `ADMIN` **實作知識庫 Admin API（CRUD + 版本管理）**
+- [X] **T6-001** `ADMIN` **實作知識庫 Admin API（CRUD + 版本管理）**
   - 說明：`POST /api/v1/admin/knowledge`（新增知識條目，`status=draft`）；`PATCH /api/v1/admin/knowledge/:id`（更新：先將舊版本 snapshot 寫入 `KnowledgeVersion`，`version += 1`，`status` 重設為 `draft`）；`GET /api/v1/admin/knowledge`（列表 + 分頁 + filter）；`GET /api/v1/admin/knowledge/:id`（單筆）；所有 DTO 含 `class-validator` 驗證；`KnowledgeAdminService` 封裝業務邏輯
   - 輸出物：`src/admin/knowledge/knowledge-admin.controller.ts`、`src/admin/knowledge/knowledge-admin.service.ts`、`src/admin/knowledge/dto/`
   - 驗收：新增後 `status=draft`；更新後舊版本存入 `KnowledgeVersion`，`version += 1`；列表 API 支援分頁
 
-- [ ] **T6-002** `ADMIN` **實作知識庫審核流程（draft → approved → archived）**
+- [X] **T6-002** `ADMIN` **實作知識庫審核流程（draft → approved → archived）**
   - 說明：`POST /api/v1/admin/knowledge/:id/approve`（`draft → approved`；審核通過後 `findForRetrieval()` 可取得此條目）；`POST /api/v1/admin/knowledge/:id/archive`（`approved → archived`；封存後不再出現在 RAG 結果）；狀態轉換規則（`draft` 可 approve；`approved` 可 archive；`archived` 不可回退）；非法狀態轉換回傳 400
   - 輸出物：`src/admin/knowledge/knowledge-admin.service.ts`（更新）
   - 驗收：`approve` 後 `findForRetrieval()` 可取得；`archive` 後 RAG 不回傳；非法轉換有錯誤訊息
 
-- [ ] **T6-003** `ADMIN` **實作 SystemConfig Admin API**
+- [X] **T6-003** `ADMIN` **實作 SystemConfig Admin API**
   - 說明：`GET /api/v1/admin/system-config`（列出所有 key-value）；`PATCH /api/v1/admin/system-config/:key`（更新 value → `SystemConfigService.invalidateCache()` → 寫入 AuditLog（含 before/after 值 snapshot））；更新 DTO 含 `class-validator` 驗證；`key` 不存在時回傳 404
   - 輸出物：`src/admin/system-config/system-config-admin.controller.ts`、`src/admin/system-config/dto/`
   - 驗收：更新後 cache 重新載入；AuditLog 有 before/after snapshot；runtime 即時生效（不需重啟）
@@ -608,12 +608,12 @@ Phase 7（品質補強與驗收準備）
   - 輸出物：`src/dashboard/dashboard.controller.ts`、`src/dashboard/dto/dashboard-query.dto.ts`
   - 驗收：`GET /api/v1/admin/dashboard?startDate=...&endDate=...` 回傳 200 + 完整 stats；缺少日期參數 400；日期格式錯誤 400
 
-- [ ] **T6-009** `OPS` **文件化後台 API 部署保護設定**
+- [X] **T6-009** `OPS` **文件化後台 API 部署保護設定**
   - 說明：撰寫說明文件（`docs/admin-api-protection.md` 或 README 章節），明確說明：所有 `/api/v1/admin/**` 路由需在反向代理層設定 IP 白名單；本地開發環境或完全封閉環境例外；任何可被外部存取的環境部署前必須完成設定；說明範例 nginx 設定或 ingress 設定方式（OQ-006 保守預設）
   - 輸出物：`docs/admin-api-protection.md`（或 `README.md` 更新）
   - 驗收：文件存在且說明清晰；包含「此為部署前提，不是選項」的說明
 
-- [ ] **T6-010** `TEST` **Phase 6 測試：知識庫版本管理整合測試**
+- [X] **T6-010** `TEST` **Phase 6 測試：知識庫版本管理整合測試**
   - 說明：整合測試：新增 → 審核 → `findForRetrieval()` 可取得；更新 → `KnowledgeVersion` 有舊版本記錄，`version += 1`，`status=draft`；封存 → `findForRetrieval()` 不回傳；非法狀態轉換回傳 400
   - 輸出物：`test/knowledge-admin.integration-spec.ts`
   - 驗收：版本管理與審核流程整合測試通過

@@ -1,9 +1,25 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { KnowledgeEntry } from '../generated/prisma/client';
+import { KnowledgeEntry, KnowledgeVersion } from '../generated/prisma/client';
 import { RetrievalQuery } from './types/retrieval-query.type';
 
 const DEFAULT_RETRIEVAL_LIMIT = 20;
+
+const ALLOWED_SORT_FIELDS = new Set(['createdAt', 'updatedAt', 'title', 'version', 'status']);
+
+/** Parameters for the admin paginated list endpoint. */
+export interface KnowledgeListParams {
+  page?: number;
+  pageSize?: number;
+  keyword?: string;
+  status?: string;
+  visibility?: string;
+  language?: string;
+  intentLabel?: string;
+  sourceKey?: string;
+  sortBy?: string;
+  sortOrder?: string;
+}
 
 /**
  * KnowledgeRepository — data-access layer for knowledge_entries and
@@ -144,5 +160,158 @@ export class KnowledgeRepository {
       where: { category, deletedAt: null },
       orderBy: { updatedAt: 'desc' },
     });
+  }
+
+  // ─── Admin list (paginated + filtered) ────────────────────────────────────
+
+  /**
+   * Paginated, filtered list of non-deleted entries for the admin panel.
+   * Supports keyword search across title and content (case-insensitive).
+   * The sortBy field is restricted to a safe allowlist to prevent injection.
+   */
+  async findFiltered(
+    params: KnowledgeListParams,
+  ): Promise<{ items: KnowledgeEntry[]; total: number }> {
+    const {
+      page = 1,
+      pageSize = 20,
+      keyword,
+      status,
+      visibility,
+      language,
+      intentLabel,
+      sourceKey,
+      sortOrder = 'desc',
+    } = params;
+
+    const safeSortBy = params.sortBy && ALLOWED_SORT_FIELDS.has(params.sortBy) ? params.sortBy : 'updatedAt';
+
+    const where = {
+      deletedAt: null,
+      ...(status ? { status } : {}),
+      ...(visibility ? { visibility } : {}),
+      ...(language ? { language } : {}),
+      ...(intentLabel ? { intentLabel } : {}),
+      ...(sourceKey ? { sourceKey } : {}),
+      ...(keyword
+        ? {
+            OR: [
+              { title: { contains: keyword, mode: 'insensitive' as const } },
+              { content: { contains: keyword, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
+
+    const [items, total] = await Promise.all([
+      this.prisma.knowledgeEntry.findMany({
+        where,
+        orderBy: { [safeSortBy]: sortOrder },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.knowledgeEntry.count({ where }),
+    ]);
+
+    return { items, total };
+  }
+
+  // ─── Detail with versions ─────────────────────────────────────────────────
+
+  /**
+   * Find a single entry by ID including its version history.
+   * Returns null when not found.
+   */
+  async findByIdWithVersions(
+    id: number,
+  ): Promise<(KnowledgeEntry & { versions: KnowledgeVersion[] }) | null> {
+    return this.prisma.knowledgeEntry.findUnique({
+      where: { id },
+      include: { versions: { orderBy: { versionNumber: 'desc' } } },
+    }) as Promise<(KnowledgeEntry & { versions: KnowledgeVersion[] }) | null>;
+  }
+
+  // ─── Version snapshots ────────────────────────────────────────────────────
+
+  /**
+   * Create an immutable version snapshot for a knowledge entry.
+   */
+  async createVersion(data: {
+    knowledgeEntryId: number;
+    versionNumber: number;
+    contentSnapshot: string;
+  }): Promise<KnowledgeVersion> {
+    return this.prisma.knowledgeVersion.create({ data }) as Promise<KnowledgeVersion>;
+  }
+
+  /**
+   * Update a knowledge entry and snapshot the current content as a new version.
+   * Performed atomically in a transaction:
+   *   1. Snapshot current entry content → KnowledgeVersion
+   *   2. Apply new data, increment version, reset status to 'draft'
+   *
+   * Returns the updated entry, or null when the entry does not exist.
+   */
+  async updateWithVersionSnapshot(
+    id: number,
+    data: Partial<
+      Pick<
+        KnowledgeEntry,
+        | 'title'
+        | 'content'
+        | 'intentLabel'
+        | 'tags'
+        | 'aliases'
+        | 'language'
+        | 'visibility'
+        | 'sourceKey'
+        | 'category'
+        | 'answerType'
+        | 'templateKey'
+        | 'faqQuestions'
+        | 'crossLanguageGroupKey'
+      >
+    >,
+  ): Promise<KnowledgeEntry | null> {
+    const current = await this.prisma.knowledgeEntry.findUnique({ where: { id } });
+    if (!current) return null;
+
+    const contentSnapshot = JSON.stringify({
+      title: current.title,
+      content: current.content,
+      intentLabel: current.intentLabel,
+      tags: current.tags,
+      aliases: current.aliases,
+      language: current.language,
+      sourceKey: current.sourceKey,
+      visibility: current.visibility,
+      status: current.status,
+      category: current.category,
+      answerType: current.answerType,
+      templateKey: current.templateKey,
+      faqQuestions: current.faqQuestions,
+      crossLanguageGroupKey: current.crossLanguageGroupKey,
+      structuredAttributes: current.structuredAttributes,
+    });
+
+    const [, updated] = await this.prisma.$transaction([
+      this.prisma.knowledgeVersion.create({
+        data: {
+          knowledgeEntryId: id,
+          versionNumber: current.version,
+          contentSnapshot,
+        },
+      }),
+      this.prisma.knowledgeEntry.update({
+        where: { id },
+        data: {
+          ...data,
+          version: current.version + 1,
+          status: 'draft',
+        },
+      }),
+    ]);
+
+    return updated as KnowledgeEntry;
   }
 }

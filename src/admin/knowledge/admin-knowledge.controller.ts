@@ -6,16 +6,17 @@ import {
   Delete,
   Param,
   Body,
+  Query,
   ParseIntPipe,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { KnowledgeEntry } from '../../generated/prisma/client';
-import { CreateKnowledgeDto, UpdateKnowledgeDto } from './dto/knowledge-admin.dto';
+import { KnowledgeEntry, KnowledgeVersion } from '../../generated/prisma/client';
+import { CreateKnowledgeDto, UpdateKnowledgeDto, ListKnowledgeQueryDto } from './dto/knowledge-admin.dto';
 import { AdminKnowledgeService } from './admin-knowledge.service';
 
 /**
- * AdminKnowledgeController — CRUD routes for /api/v1/admin/knowledge.
+ * AdminKnowledgeController — CRUD + approval routes for /api/v1/admin/knowledge.
  *
  * Note: Auth / RBAC is explicitly deferred per spec.md v1.6.0.
  */
@@ -23,26 +24,33 @@ import { AdminKnowledgeService } from './admin-knowledge.service';
 export class AdminKnowledgeController {
   constructor(private readonly adminKnowledgeService: AdminKnowledgeService) {}
 
-  /** List all knowledge entries (all statuses and visibilities). */
+  /** List knowledge entries with pagination and optional filters. */
   @Get()
-  listAll(): Promise<KnowledgeEntry[]> {
-    return this.adminKnowledgeService.listAll();
+  list(
+    @Query() query: ListKnowledgeQueryDto,
+  ): Promise<{ data: KnowledgeEntry[]; meta: { total: number; page: number; pageSize: number } }> {
+    return this.adminKnowledgeService.list(query);
   }
 
-  /** Get a single knowledge entry by ID. */
+  /** Get a single knowledge entry with its version history. */
   @Get(':id')
-  getOne(@Param('id', ParseIntPipe) id: number): Promise<KnowledgeEntry> {
-    return this.adminKnowledgeService.getOne(id);
+  getOne(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<KnowledgeEntry & { versions: KnowledgeVersion[] }> {
+    return this.adminKnowledgeService.getOneWithVersions(id);
   }
 
-  /** Create a new knowledge entry (status defaults to draft, visibility to private). */
+  /** Create a new knowledge entry (status defaults to draft, visibility defaults to private). */
   @Post()
   @HttpCode(HttpStatus.CREATED)
   create(@Body() dto: CreateKnowledgeDto): Promise<KnowledgeEntry> {
     return this.adminKnowledgeService.create(dto);
   }
 
-  /** Update an existing knowledge entry (partial update). */
+  /**
+   * Update an existing knowledge entry.
+   * Snapshots current content to KnowledgeVersion, increments version, resets status to draft.
+   */
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -56,5 +64,23 @@ export class AdminKnowledgeController {
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
     return this.adminKnowledgeService.remove(id);
+  }
+
+  /**
+   * Approve a knowledge entry (draft → approved).
+   * approved → no-op; archived → 400.
+   */
+  @Post(':id/approve')
+  approve(@Param('id', ParseIntPipe) id: number): Promise<KnowledgeEntry> {
+    return this.adminKnowledgeService.approve(id);
+  }
+
+  /**
+   * Archive a knowledge entry (any → archived).
+   * archived → no-op.
+   */
+  @Post(':id/archive')
+  archive(@Param('id', ParseIntPipe) id: number): Promise<KnowledgeEntry> {
+    return this.adminKnowledgeService.archive(id);
   }
 }

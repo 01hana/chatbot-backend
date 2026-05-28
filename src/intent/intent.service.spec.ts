@@ -3,6 +3,7 @@ import { IntentService } from './intent.service';
 import { IntentRepository } from './intent.repository';
 import { IntentTemplate, GlossaryTerm } from '../generated/prisma/client';
 import type { AnalyzedQuery } from '../query-analysis/types/analyzed-query.type';
+import { SystemConfigService } from '../system-config/system-config.service';
 
 /** Minimal IntentTemplate factory */
 function makeTemplate(overrides: Partial<IntentTemplate> = {}): IntentTemplate {
@@ -55,14 +56,22 @@ function makeAnalyzedQuery(overrides: Partial<AnalyzedQuery> = {}): AnalyzedQuer
 describe('IntentService', () => {
   let service: IntentService;
   let repo: jest.Mocked<IntentRepository>;
+  let mockSystemConfigService: jest.Mocked<Pick<SystemConfigService, 'getNumber'>>;
 
   beforeEach(() => {
     repo = {
       findAllTemplates: jest.fn<() => Promise<IntentTemplate[]>>(),
       findAllGlossary: jest.fn<() => Promise<GlossaryTerm[]>>(),
     } as unknown as jest.Mocked<IntentRepository>;
+    mockSystemConfigService = {
+      getNumber: jest.fn((key: string) => {
+        if (key === 'high_intent_look_back_turns') return 5;
+        if (key === 'high_intent_threshold') return 2;
+        return undefined;
+      }),
+    };
 
-    service = new IntentService(repo);
+    service = new IntentService(repo, mockSystemConfigService as unknown as SystemConfigService);
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -228,6 +237,16 @@ describe('IntentService', () => {
 
       const result = service.detect('test', 'en');
       expect(result.intentLabel).toBeNull();
+    });
+
+    it('treats isActive=undefined as enabled and still matches', async () => {
+      repo.findAllTemplates.mockResolvedValue([
+        makeTemplate({ id: 1, intent: 'legacy-intent', keywords: ['legacy-match'], isActive: undefined }),
+      ]);
+      await service.loadCache();
+
+      const result = service.detect('legacy-match', 'en');
+      expect(result.intentLabel).toBe('legacy-intent');
     });
   });
 
@@ -407,21 +426,56 @@ describe('IntentService', () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // isHighIntent (Phase 1 skeleton — always false)
+  // isHighIntent (T4-005)
   // ──────────────────────────────────────────────────────────────────────────
 
-  describe('isHighIntent() — Phase 1 skeleton', () => {
-    it('returns false regardless of conversation history', () => {
+  describe('isHighIntent() — keyword scoring', () => {
+    it('returns isHighIntent=true for multi-turn quotation signals', () => {
       const history = [
         { role: 'user', content: '請報價，我要買大量' },
         { role: 'assistant', content: '好的，請問您需要什麼規格？' },
         { role: 'user', content: '多少錢？price? quotation? 報價' },
       ];
-      expect(service.isHighIntent(history)).toBe(false);
+
+      const result = service.isHighIntent(history);
+      expect(result.isHighIntent).toBe(true);
+      expect(result.score).toBeGreaterThanOrEqual(2);
+      expect(result.matchedKeywords.length).toBeGreaterThan(0);
     });
 
-    it('returns false for empty history', () => {
-      expect(service.isHighIntent([])).toBe(false);
+    it('returns false when score is below threshold', () => {
+      const history = [
+        { role: 'user', content: '我想看一下產品規格' },
+        { role: 'assistant', content: '請問您需要哪一類產品？' },
+      ];
+
+      const result = service.isHighIntent(history);
+      expect(result.isHighIntent).toBe(false);
+      expect(result.score).toBeLessThan(2);
+    });
+
+    it('respects SystemConfig.high_intent_threshold', () => {
+      mockSystemConfigService.getNumber.mockImplementation((key: string) => {
+        if (key === 'high_intent_look_back_turns') return 5;
+        if (key === 'high_intent_threshold') return 4;
+        return undefined;
+      });
+
+      const history = [
+        { role: 'user', content: '請問多少錢與報價' },
+        { role: 'assistant', content: '可以先提供需求' },
+      ];
+
+      const result = service.isHighIntent(history);
+      expect(result.score).toBeGreaterThanOrEqual(2);
+      expect(result.isHighIntent).toBe(false);
+    });
+
+    it('returns false with score 0 for empty history', () => {
+      const result = service.isHighIntent([]);
+      expect(result.isHighIntent).toBe(false);
+      expect(result.score).toBe(0);
+      expect(result.matchedKeywords).toEqual([]);
     });
   });
 });

@@ -5,7 +5,7 @@ import type { SourceReference } from './source-reference.type.js';
  *
  * SSE wire format (per spec):
  *   event: token\ndata: {"token":"..."}\n\n
- *   event: done\ndata: {messageId, action, intentLabel, sourceReferences, usage}\n\n
+ *   event: done\ndata: {messageId, action, intentLabel, sourceReferences, usage, leadPrompted?}\n\n
  *   event: error\ndata: {code, message}\n\n
  *   event: timeout\ndata: {message}\n\n
  *   event: interrupted\ndata: {message}\n\n
@@ -39,6 +39,7 @@ export interface SseDonePayload {
   intentLabel: string | null;
   sourceReferences: SourceReference[];
   usage: SseUsage;
+  leadPrompted?: boolean;
 }
 
 /** Payload for `event: error`. */

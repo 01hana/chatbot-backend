@@ -13,6 +13,8 @@ import { RETRIEVAL_SERVICE } from '../retrieval/interfaces/retrieval-service.int
 import { LlmTimeoutError } from '../llm/errors/llm-timeout.error';
 import { QueryAnalysisService } from '../query-analysis/query-analysis.service';
 import { AnswerTemplateResolver } from '../template/answer-template-resolver';
+import { DiagnosisFlowService } from './diagnosis-flow.service';
+import { LeadPromptEnricherService } from './lead-prompt-enricher.service';
 import type { KnowledgeEntry } from '../generated/prisma/client';
 import type { RetrievalResult } from '../retrieval/types/retrieval.types';
 import { QueryUnderstandingService } from '../query-understanding/query-understanding.service.js';
@@ -142,7 +144,7 @@ describe('ChatPipelineService', () => {
       tags: [],
       aliases: [],
       language: 'zh-TW',
-      status: 'published',
+      status: 'approved',
       visibility: 'public',
       version: 1,
       createdAt: new Date('2026-01-01'),
@@ -174,6 +176,11 @@ describe('ChatPipelineService', () => {
   };
   const mockIntentService = {
     detect: jest.fn().mockResolvedValue({ label: 'general', score: 0.1, sensitive: false }),
+    isHighIntent: jest.fn().mockReturnValue({
+      isHighIntent: false,
+      score: 0,
+      matchedKeywords: [],
+    }),
   };
   const mockSystemConfigService = {
     get: jest.fn().mockReturnValue(null),
@@ -194,6 +201,10 @@ describe('ChatPipelineService', () => {
   };
   const mockPromptBuilder = {
     build: jest.fn().mockReturnValue({ messages: [], estimatedTokens: 0 }),
+  };
+  const mockDiagnosisFlowService = {
+    canHandle: jest.fn().mockReturnValue(false),
+    handle: jest.fn().mockResolvedValue({ handled: false }),
   };
   const mockLlmProvider = {
     stream: jest.fn(),
@@ -219,7 +230,7 @@ describe('ChatPipelineService', () => {
   const mockTemplateResolver = {
     resolve: jest.fn().mockReturnValue({ strategy: 'rag', reason: 'rag:default' }),
   };
-  // Phase 4-E optional services (registered in all test modules so DI resolves correctly)
+  // Optional QU / Hybrid Retrieval services for the feature-flagged 003 path.
   const mockQUS003 = { understand: jest.fn() };
   const mockHRS003 = { retrieve: jest.fn() };
   const mockRDS003 = {
@@ -238,6 +249,8 @@ describe('ChatPipelineService', () => {
         { provide: ConversationService, useValue: mockConversationService },
         { provide: AiStatusService, useValue: mockAiStatusService },
         { provide: PromptBuilder, useValue: mockPromptBuilder },
+        { provide: DiagnosisFlowService, useValue: mockDiagnosisFlowService },
+        LeadPromptEnricherService,
         { provide: QueryAnalysisService, useValue: mockQueryAnalysisService },
         { provide: AnswerTemplateResolver, useValue: mockTemplateResolver },
         { provide: LLM_PROVIDER, useValue: mockLlmProvider },
@@ -257,6 +270,11 @@ describe('ChatPipelineService', () => {
     mockSafetyService.buildRefusalResponse.mockReturnValue('拒絕');
     mockSafetyService.buildHandoffGuidance.mockReturnValue('請留下聯絡資訊');
     mockIntentService.detect.mockResolvedValue({ label: 'general', score: 0.1, sensitive: false });
+    mockIntentService.isHighIntent.mockReturnValue({
+      isHighIntent: false,
+      score: 0,
+      matchedKeywords: [],
+    });
     mockSystemConfigService.get.mockReturnValue(null);
     mockSystemConfigService.getBoolean.mockReturnValue(null); // feature flag OFF by default
     mockAiStatusService.isDegraded.mockReturnValue(false);
@@ -268,6 +286,8 @@ describe('ChatPipelineService', () => {
     mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({
       sensitiveIntentCount: 1,
     });
+    mockDiagnosisFlowService.canHandle.mockReturnValue(false);
+    mockDiagnosisFlowService.handle.mockResolvedValue({ handled: false });
     mockQueryAnalysisService.analyze.mockResolvedValue({
       rawQuery: '測試',
       normalizedQuery: '測試',
@@ -283,7 +303,7 @@ describe('ChatPipelineService', () => {
     });
     // Default: 'rag' strategy (001 behaviour preserved)
     mockTemplateResolver.resolve.mockReturnValue({ strategy: 'rag', reason: 'rag:default' });
-    // Phase 4-E optional services: all flags OFF by default, so these mocks return safe defaults
+    // Optional QU / Hybrid Retrieval services: all flags OFF by default, so these mocks return safe defaults.
     // but should NOT be called in legacy-path tests (T064-1 verifies this).
     mockQUS003.understand.mockResolvedValue(null);
     mockHRS003.retrieve.mockResolvedValue([]);
@@ -311,6 +331,170 @@ describe('ChatPipelineService', () => {
       // Degraded mode: emits token with fallback text, done with action=fallback
       expect(writtenData).toContain('event: token');
       expect(writtenData).toContain('fallback');
+    });
+  });
+
+  describe('Diagnosis flow delegation', () => {
+    const parseDonePayload = (res: jest.Mocked<Partial<Response>>): Record<string, unknown> | null => {
+      const raw = (res.write as jest.Mock).mock.calls
+        .map((c: unknown[]) => c[0] as string)
+        .join('');
+      const blocks = raw.split('\n\n').filter(Boolean);
+      for (const block of blocks) {
+        const eventLine = block
+          .split('\n')
+          .find((line: string) => line.startsWith('event:') && line.includes('done'));
+        const dataLine = block
+          .split('\n')
+          .find((line: string) => line.startsWith('data:'));
+        if (eventLine && dataLine) {
+          return JSON.parse(dataLine.replace(/^data:\s*/, '')) as Record<string, unknown>;
+        }
+      }
+      return null;
+    };
+
+    it('delegates to DiagnosisFlowService when canHandle=true', async () => {
+      mockIntentService.detect.mockResolvedValue({
+        intentLabel: 'product-diagnosis',
+        confidence: 0.95,
+        language: 'zh-TW',
+      });
+      mockDiagnosisFlowService.canHandle.mockReturnValue(true);
+      mockDiagnosisFlowService.handle.mockResolvedValue({
+        handled: true,
+        reply: '請問您的使用用途是什麼？',
+        donePayload: {
+          messageId: 200,
+          action: 'answer',
+          intentLabel: 'product-diagnosis',
+          sourceReferences: [],
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          leadPrompted: false,
+        },
+      });
+
+      const conversation = makeConversation();
+      conversation.diagnosisContext = null;
+      const res = makeRes();
+
+      await service.run(
+        conversation as never,
+        '我想找產品',
+        'req-dia-1',
+        res as never,
+        new AbortController().signal,
+      );
+
+      expect(mockDiagnosisFlowService.canHandle).toHaveBeenCalledWith('product-diagnosis', null);
+      expect(mockDiagnosisFlowService.handle).toHaveBeenCalled();
+      expect(mockRetrievalService.retrieve).not.toHaveBeenCalled();
+      expect(mockLlmProvider.stream).not.toHaveBeenCalled();
+
+      const written = (res.write as jest.Mock).mock.calls.map((c: unknown[]) => c[0] as string).join('');
+      expect(written).toContain('event: token');
+      expect(written).toContain('event: done');
+      expect(written).toContain('請問您的使用用途是什麼？');
+    });
+
+    it('writes SSE token/done from diagnosis delegate result', async () => {
+      mockIntentService.detect.mockResolvedValue({
+        intentLabel: 'product-diagnosis',
+        confidence: 0.95,
+        language: 'zh-TW',
+      });
+      mockDiagnosisFlowService.canHandle.mockReturnValue(true);
+      mockDiagnosisFlowService.handle.mockResolvedValue({
+        handled: true,
+        reply: '問診回覆',
+        donePayload: {
+          messageId: 301,
+          action: 'answer',
+          intentLabel: 'product-diagnosis',
+          sourceReferences: [],
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          leadPrompted: true,
+        },
+      });
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '我想找產品',
+        'req-dia-2',
+        res as never,
+        new AbortController().signal,
+      );
+
+      const done = parseDonePayload(res);
+      expect(done).not.toBeNull();
+      expect(done!['messageId']).toBe(301);
+      expect(done!['leadPrompted']).toBe(true);
+      expect(done!['intentLabel']).toBe('product-diagnosis');
+    });
+
+    it('delegate path does not run general retrieval or llm', async () => {
+      mockIntentService.detect.mockResolvedValue({
+        intentLabel: 'product-diagnosis',
+        confidence: 0.95,
+        language: 'zh-TW',
+      });
+      mockDiagnosisFlowService.canHandle.mockReturnValue(true);
+      mockDiagnosisFlowService.handle.mockResolvedValue({
+        handled: true,
+        reply: '問診中',
+        donePayload: {
+          messageId: 302,
+          action: 'answer',
+          intentLabel: 'product-diagnosis',
+          sourceReferences: [],
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        },
+      });
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '室外照明',
+        'req-dia-3',
+        res as never,
+        new AbortController().signal,
+      );
+
+      expect(mockRetrievalService.retrieve).not.toHaveBeenCalled();
+      expect(mockLlmProvider.stream).not.toHaveBeenCalled();
+    });
+
+    it('when canHandle=false keeps general RAG flow unchanged', async () => {
+      mockDiagnosisFlowService.canHandle.mockReturnValue(false);
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, { content: '產品資訊' }),
+      ]);
+      async function* mockStream() {
+        yield { token: '一般回答', done: false };
+        yield {
+          token: '',
+          done: true,
+          provider: 'mock',
+          modelUsed: 'mock',
+          fallbackTriggered: false,
+          usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 },
+        };
+      }
+      mockLlmProvider.stream.mockReturnValue(mockStream());
+
+      const res = makeRes();
+      await service.run(
+        makeConversation() as never,
+        '一般問題',
+        'req-dia-4',
+        res as never,
+        new AbortController().signal,
+      );
+
+      expect(mockDiagnosisFlowService.handle).not.toHaveBeenCalled();
+      expect(mockRetrievalService.retrieve).toHaveBeenCalled();
+      expect(mockLlmProvider.stream).toHaveBeenCalled();
     });
   });
 
@@ -1668,7 +1852,7 @@ describe('ChatPipelineService', () => {
     });
 
     beforeEach(() => {
-      // Optional services are now registered in the shared TestingModule (outer beforeEach).
+      // Optional QU / Hybrid Retrieval services are registered in the shared TestingModule (outer beforeEach).
       // Set up 003 mock defaults for Phase 4-E tests.
       mockQUS003.understand.mockResolvedValue(makeQu());
       mockHRS003.retrieve.mockResolvedValue([]);
@@ -1676,7 +1860,7 @@ describe('ChatPipelineService', () => {
       mockRDS003.decideFromRetrievalResults.mockReturnValue(makeGoodDecision());
     });
 
-    it('T064-1: all feature flags false → 002 behaviour unchanged, optional services not called', async () => {
+    it('T064-1: all feature flags false → 002 behaviour unchanged, optional QU / Hybrid Retrieval services not called', async () => {
       mockRetrievalService.retrieve.mockResolvedValue([
         makeRetrievalResult(0.9, { content: '產品資訊' }),
       ]);
@@ -1945,6 +2129,178 @@ describe('ChatPipelineService', () => {
       const eventData = (chatResponseAudit![0] as { eventData: Record<string, unknown> }).eventData;
       expect(eventData['llmCalled']).toBe(false);
       expect(eventData['canAnswer']).toBe(false);
+    });
+  });
+
+  describe('Phase 4-D — T4-005/T4-006 high intent and lead prompt', () => {
+    const parseDonePayload = (res: jest.Mocked<Partial<Response>>): Record<string, unknown> | null => {
+      const raw = (res.write as jest.Mock).mock.calls
+        .map((c: unknown[]) => c[0] as string)
+        .join('');
+      const blocks = raw.split('\n\n').filter(Boolean);
+      for (const block of blocks) {
+        const eventLine = block
+          .split('\n')
+          .find((line: string) => line.startsWith('event:') && line.includes('done'));
+        const dataLine = block
+          .split('\n')
+          .find((line: string) => line.startsWith('data:'));
+        if (eventLine && dataLine) {
+          return JSON.parse(dataLine.replace(/^data:\s*/, '')) as Record<string, unknown>;
+        }
+      }
+      return null;
+    };
+
+    const makeLlmStream = (token: string) =>
+      (async function* () {
+        yield { token, done: false };
+        yield {
+          token: '',
+          done: true,
+          provider: 'mock',
+          modelUsed: 'mock',
+          fallbackTriggered: false,
+          usage: { promptTokens: 5, completionTokens: 7, totalTokens: 12 },
+        };
+      })();
+
+    it('price-inquiry leads to leadPrompted=true even when high-intent score is below threshold', async () => {
+      mockIntentService.detect.mockResolvedValue({
+        intentLabel: 'price-inquiry',
+        confidence: 0.91,
+        language: 'zh-TW',
+      });
+      mockIntentService.isHighIntent.mockReturnValue({
+        isHighIntent: false,
+        score: 0,
+        matchedKeywords: [],
+      });
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, { id: 301, content: '價格資訊', sourceKey: 'KB-301' }),
+      ]);
+      mockLlmProvider.stream.mockReturnValue(makeLlmStream('目前可提供規格與價格資訊。'));
+
+      const conversation = makeConversation();
+      const res = makeRes();
+
+      await service.run(
+        conversation as never,
+        '請問報價多少？',
+        'req-t4d-1',
+        res as never,
+        new AbortController().signal,
+      );
+
+      const done = parseDonePayload(res);
+      expect(done).not.toBeNull();
+      expect(done!['leadPrompted']).toBe(true);
+      expect(done!['action']).toBe('answer');
+
+      expect(mockConversationService.updateConversation).toHaveBeenCalledWith(
+        conversation.sessionId,
+        expect.objectContaining({ highIntentScore: 0 }),
+      );
+
+      const assistantContent = (mockConversationService.addMessage as jest.Mock).mock.calls[1][1]
+        .content as string;
+      expect(assistantContent).toContain('如果您願意，也可以留下姓名、Email、公司與需求');
+
+      const auditCall = (mockAuditService.log as jest.Mock).mock.calls.find(
+        (args: unknown[]) => (args[0] as { eventType: string }).eventType === 'chat_response',
+      );
+      const eventData = (auditCall?.[0] as { eventData: Record<string, unknown> }).eventData;
+      expect(eventData['leadPrompted']).toBe(true);
+      expect(eventData['highIntentScore']).toBe(0);
+
+      const eventTypes = (mockAuditService.log as jest.Mock).mock.calls.map(
+        (args: unknown[]) => (args[0] as { eventType: string }).eventType,
+      );
+      expect(eventTypes).not.toContain('lead_created');
+      expect(eventTypes).not.toContain('ticket_created');
+    });
+
+    it('high intent appends zh-TW lead prompt and records matched keywords', async () => {
+      mockIntentService.detect.mockResolvedValue({
+        intentLabel: 'product-inquiry',
+        confidence: 0.86,
+        language: 'zh-TW',
+      });
+      mockIntentService.isHighIntent.mockReturnValue({
+        isHighIntent: true,
+        score: 3,
+        matchedKeywords: ['報價', '聯絡'],
+      });
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, { id: 302, content: '產品資訊', sourceKey: 'KB-302' }),
+      ]);
+      mockLlmProvider.stream.mockReturnValue(makeLlmStream('這是建議內容。'));
+
+      const conversation = makeConversation();
+      const res = makeRes();
+
+      await service.run(
+        conversation as never,
+        '我想了解可否採購與聯絡業務',
+        'req-t4d-2',
+        res as never,
+        new AbortController().signal,
+      );
+
+      const assistantContent = (mockConversationService.addMessage as jest.Mock).mock.calls[1][1]
+        .content as string;
+      expect(assistantContent).toContain('如果您願意，也可以留下姓名、Email、公司與需求');
+
+      const auditCall = (mockAuditService.log as jest.Mock).mock.calls.find(
+        (args: unknown[]) => (args[0] as { eventType: string }).eventType === 'chat_response',
+      );
+      const eventData = (auditCall?.[0] as { eventData: Record<string, unknown> }).eventData;
+      expect(eventData['leadPrompted']).toBe(true);
+      expect(eventData['highIntentScore']).toBe(3);
+      expect(eventData['matchedHighIntentKeywords']).toEqual(['報價', '聯絡']);
+    });
+
+    it('high intent in English appends en lead prompt text', async () => {
+      mockIntentService.detect.mockResolvedValue({
+        intentLabel: 'general-faq',
+        confidence: 0.8,
+        language: 'en',
+      });
+      mockIntentService.isHighIntent.mockReturnValue({
+        isHighIntent: true,
+        score: 2,
+        matchedKeywords: ['quote', 'contact'],
+      });
+      mockRetrievalService.retrieve.mockResolvedValue([
+        makeRetrievalResult(0.9, {
+          id: 303,
+          content: 'English content',
+          sourceKey: 'KB-303',
+          language: 'en',
+        }),
+      ]);
+      mockLlmProvider.stream.mockReturnValue(makeLlmStream('Here is the recommendation.'));
+
+      const conversation = makeConversation();
+      const res = makeRes();
+
+      await service.run(
+        conversation as never,
+        'Can I get a quote and contact sales?',
+        'req-t4d-3',
+        res as never,
+        new AbortController().signal,
+      );
+
+      const assistantContent = (mockConversationService.addMessage as jest.Mock).mock.calls[1][1]
+        .content as string;
+      expect(assistantContent).toContain(
+        'You may also leave your name, email, company, and requirements so our sales team can help confirm the suitable specifications and quotation.',
+      );
+
+      const done = parseDonePayload(res);
+      expect(done).not.toBeNull();
+      expect(done!['leadPrompted']).toBe(true);
     });
   });
 
@@ -2309,7 +2665,7 @@ describe('ChatPipelineService', () => {
         new AbortController().signal,
       );
 
-      // 003 optional services must NOT be called
+      // 003 optional QU / Hybrid Retrieval services must NOT be called
       expect(mockQUS003.understand).not.toHaveBeenCalled();
       expect(mockHRS003.retrieve).not.toHaveBeenCalled();
 

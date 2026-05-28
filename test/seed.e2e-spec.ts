@@ -25,11 +25,17 @@ import { PrismaClient } from '../src/generated/prisma/client';
 function buildMockPrisma(findFirstResult: unknown = null): jest.Mocked<Pick<PrismaClient, 'knowledgeEntry'>> {
   const create = jest.fn<() => Promise<unknown>>().mockResolvedValue({});
   const findFirst = jest.fn<() => Promise<unknown>>().mockResolvedValue(findFirstResult);
+  const updateMany = jest
+    .fn<() => Promise<{ count: number }>>()
+    .mockResolvedValue({ count: 0 });
+  const upsert = jest.fn<() => Promise<unknown>>().mockResolvedValue({});
 
   return {
     knowledgeEntry: {
       create,
       findFirst,
+      updateMany,
+      upsert,
     },
   } as unknown as jest.Mocked<Pick<PrismaClient, 'knowledgeEntry'>>;
 }
@@ -43,7 +49,7 @@ type FullMockPrisma = {
   blacklistEntry: { upsert: jest.Mock };
   intentTemplate: { upsert: jest.Mock };
   glossaryTerm: { upsert: jest.Mock };
-  knowledgeEntry: { create: jest.Mock; findFirst: jest.Mock };
+  knowledgeEntry: { create: jest.Mock; findFirst: jest.Mock; updateMany: jest.Mock; upsert: jest.Mock };
   systemConfig: { upsert: jest.Mock };
 };
 
@@ -65,6 +71,8 @@ function buildFullMockPrisma(): FullMockPrisma {
     knowledgeEntry: {
       create: jest.fn<() => Promise<unknown>>().mockResolvedValue({}),
       findFirst: jest.fn<() => Promise<unknown>>().mockResolvedValue(null),
+      updateMany: jest.fn<() => Promise<{ count: number }>>().mockResolvedValue({ count: 0 }),
+      upsert: jest.fn<() => Promise<unknown>>().mockResolvedValue({}),
     },
     systemConfig: {
       upsert: jest.fn<() => Promise<unknown>>().mockResolvedValue({}),
@@ -82,10 +90,10 @@ describe('seedKnowledge()', () => {
 
     await seedKnowledge(mock as unknown as PrismaClient);
 
-    expect((mock.knowledgeEntry.create as jest.Mock).mock.calls.length).toBe(5);
+    expect((mock.knowledgeEntry.upsert as jest.Mock).mock.calls.length).toBe(5);
   });
 
-  it('does not duplicate entries that already exist (findFirst returns a row)', async () => {
+  it('always uses upsert to avoid duplicate rows', async () => {
     const existingRow = {
       id: 1,
       title: 'O型環材質選用指南',
@@ -100,12 +108,12 @@ describe('seedKnowledge()', () => {
       deletedAt: null,
     };
 
-    // All findFirst calls return an existing row → nothing should be created
+    // Even when older rows exist, seeding should upsert the canonical source keys.
     const mock = buildMockPrisma(existingRow);
 
     await seedKnowledge(mock as unknown as PrismaClient);
 
-    expect((mock.knowledgeEntry.create as jest.Mock).mock.calls.length).toBe(0);
+    expect((mock.knowledgeEntry.upsert as jest.Mock).mock.calls.length).toBe(5);
   });
 
   it('seeds entries with status="approved" and visibility="public"', async () => {
@@ -113,10 +121,10 @@ describe('seedKnowledge()', () => {
 
     await seedKnowledge(mock as unknown as PrismaClient);
 
-    const createCalls = (mock.knowledgeEntry.create as jest.Mock).mock.calls as [{ data: Record<string, unknown> }][];
-    for (const [callArgs] of createCalls) {
-      expect(callArgs.data.status).toBe('approved');
-      expect(callArgs.data.visibility).toBe('public');
+    const upsertCalls = (mock.knowledgeEntry.upsert as jest.Mock).mock.calls as [{ create: Record<string, unknown> }][];
+    for (const [callArgs] of upsertCalls) {
+      expect(callArgs.create.status).toBe('approved');
+      expect(callArgs.create.visibility).toBe('public');
     }
   });
 
@@ -125,12 +133,12 @@ describe('seedKnowledge()', () => {
 
     await seedKnowledge(mock as unknown as PrismaClient);
 
-    const createCalls = (mock.knowledgeEntry.create as jest.Mock).mock.calls as [{ data: Record<string, unknown> }][];
-    for (const [callArgs] of createCalls) {
-      expect(typeof callArgs.data.title).toBe('string');
-      expect((callArgs.data.title as string).length).toBeGreaterThan(0);
-      expect(typeof callArgs.data.content).toBe('string');
-      expect((callArgs.data.content as string).length).toBeGreaterThan(0);
+    const upsertCalls = (mock.knowledgeEntry.upsert as jest.Mock).mock.calls as [{ create: Record<string, unknown> }][];
+    for (const [callArgs] of upsertCalls) {
+      expect(typeof callArgs.create.title).toBe('string');
+      expect((callArgs.create.title as string).length).toBeGreaterThan(0);
+      expect(typeof callArgs.create.content).toBe('string');
+      expect((callArgs.create.content as string).length).toBeGreaterThan(0);
     }
   });
 
@@ -139,10 +147,10 @@ describe('seedKnowledge()', () => {
 
     await seedKnowledge(mock as unknown as PrismaClient);
 
-    const createCalls = (mock.knowledgeEntry.create as jest.Mock).mock.calls as [{ data: Record<string, unknown> }][];
-    for (const [callArgs] of createCalls) {
-      expect(typeof callArgs.data.intentLabel).toBe('string');
-      expect((callArgs.data.intentLabel as string).length).toBeGreaterThan(0);
+    const upsertCalls = (mock.knowledgeEntry.upsert as jest.Mock).mock.calls as [{ create: Record<string, unknown> }][];
+    for (const [callArgs] of upsertCalls) {
+      expect(typeof callArgs.create.intentLabel).toBe('string');
+      expect((callArgs.create.intentLabel as string).length).toBeGreaterThan(0);
     }
   });
 });
@@ -193,7 +201,7 @@ describe('NODE_ENV conditional gate for seedKnowledge()', () => {
     );
 
     expect(knowledgeSeeded).toBe(true);
-    expect((mock.knowledgeEntry.create as jest.Mock).mock.calls.length).toBeGreaterThan(0);
+    expect((mock.knowledgeEntry.upsert as jest.Mock).mock.calls.length).toBeGreaterThan(0);
   });
 
   it('executes seedKnowledge when NODE_ENV=test', async () => {
@@ -218,7 +226,7 @@ describe('NODE_ENV conditional gate for seedKnowledge()', () => {
     );
 
     expect(knowledgeSeeded).toBe(false);
-    expect((mock.knowledgeEntry.create as jest.Mock).mock.calls.length).toBe(0);
+    expect((mock.knowledgeEntry.upsert as jest.Mock).mock.calls.length).toBe(0);
   });
 
   it('returns knowledgeSeeded: false and calls create 0 times for production', async () => {
@@ -230,7 +238,7 @@ describe('NODE_ENV conditional gate for seedKnowledge()', () => {
     );
 
     expect(knowledgeSeeded).toBe(false);
-    expect((mock.knowledgeEntry.create as jest.Mock).mock.calls.length).toBe(0);
+    expect((mock.knowledgeEntry.upsert as jest.Mock).mock.calls.length).toBe(0);
   });
 });
 
@@ -479,6 +487,6 @@ describe('Phase 1 seed orchestration', () => {
     expect((mock.blacklistEntry.upsert as jest.Mock).mock.calls.length).toBeGreaterThan(0);
     expect((mock.intentTemplate.upsert as jest.Mock).mock.calls.length).toBeGreaterThan(0);
     expect((mock.glossaryTerm.upsert as jest.Mock).mock.calls.length).toBeGreaterThan(0);
-    expect((mock.knowledgeEntry.create as jest.Mock).mock.calls.length).toBeGreaterThan(0);
+    expect((mock.knowledgeEntry.upsert as jest.Mock).mock.calls.length).toBeGreaterThan(0);
   });
 });

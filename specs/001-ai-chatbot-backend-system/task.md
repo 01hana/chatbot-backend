@@ -425,47 +425,47 @@ Phase 7（品質補強與驗收準備）
 
 ---
 
-- [ ] **T4-001** `DATA` **確認 Conversation.diagnosisContext JSONB 欄位存在**
+- [X] **T4-001** `DATA` **確認 Conversation.diagnosisContext JSONB 欄位存在**
   - 說明：確認 `Conversation` model 的 `diagnosisContext` 欄位（JSONB，nullable）已在 T2-001 migration 中建立；若尚未建立，補充 migration；定義 `DiagnosisContext` TypeScript 型別（`stage: 'idle' | 'collecting' | 'complete' | 'recommended'`、`collectedFields: Partial<DiagnosisFields>`、`requiredFields: string[]`）
   - 輸出物：`prisma/schema.prisma`（確認）、`src/chat/types/diagnosis-context.type.ts`
   - 驗收：migration 中 `diagnosisContext` 欄位為 JSON 型別；TypeScript 型別有 `stage` 狀態定義
 
-- [ ] **T4-002** `CORE` **實作 DiagnosisService（問診四欄位固定順序流程）**
+- [X] **T4-002** `CORE` **實作 DiagnosisService（問診四欄位固定順序流程）**
   - 說明：`DiagnosisService.initContext(): DiagnosisContext`（初始化 context，`stage='idle'`，`requiredFields=['purpose','material','length','environment']`）；`DiagnosisService.processAnswer(context, field, value): DiagnosisContext`（填入欄位、移至下一個缺少的 field）；`DiagnosisService.getNextQuestion(context, language): string`（從 `IntentTemplate` DB 取得對應欄位的追問文字，不可硬編碼；OQ-003 保守預設：先用通用文字）；`DiagnosisService.isComplete(context): boolean`；追問順序強制為 `purpose → material → length → environment`，不可由 LLM 決定
   - 輸出物：`src/chat/diagnosis.service.ts`
   - 驗收：四欄位依序追問；欄位已填不重複追問；`stage` 狀態機轉換正確
 
-- [ ] **T4-003** `CORE` **整合問診流程至 ChatPipeline**
+- [X] **T4-003** `CORE` **整合問診流程至 ChatPipeline**
   - 說明：在 Pipeline 的 `detectIntent()` 步驟後，當 intent 為 `product-diagnosis` 時啟動 / 繼續問診流程；`diagnosisContext` 從 Conversation DB 讀取（有則繼續，無則初始化）；問診中每輪回覆為追問訊息，不觸發 RAG / LLM 推薦（直至 `stage=complete`）；問診完成後觸發規格比對；所有 `diagnosisContext` 變更即時寫回 `Conversation`
   - 輸出物：`src/chat/chat-pipeline.service.ts`（更新）
   - 驗收：問診途中回覆為追問文字；完成後進入比對；中途切換話題時 context 正確保留
 
-- [ ] **T4-004** `CORE` **實作規格比對邏輯**
+- [X] **T4-004** `CORE` **實作規格比對邏輯**
   - 說明：問診完成後，以 `intent_label='product-spec'` + `tags` array filter（`purpose`、`material`、`length`、`environment`）呼叫 `KnowledgeRepository.findForRetrieval()`；取得符合條目後呼叫 LLM 生成自然語言推薦摘要（LLM 只負責文字摘要，不決定規格匹配）；推薦結果寫入 `Conversation.diagnosisContext.stage='recommended'`；`sourceReferences` 含比對到的知識條目 ID
   - 輸出物：`src/chat/chat-pipeline.service.ts`（更新）、`src/knowledge/knowledge.repository.ts`（確認 filter 支援）
   - 驗收：規格比對結果為 approved+public 的知識條目；LLM 摘要結果包含推薦理由；無符合條目時有 fallback 回覆
 
-- [ ] **T4-005** `CORE` **實作高意向偵測（IntentService.isHighIntent）**
+- [X] **T4-005** `CORE` **實作高意向偵測（IntentService.isHighIntent）**
   - 說明：`IntentService.isHighIntent(history: ConversationMessage[]): boolean`（rule-based，分析近 N 輪歷史，N 來自 `SystemConfig.high_intent_look_back_turns`，預設 5）；高意向關鍵字（詢價類：「報價」、「多少錢」、「price」、「quotation」等）在 `IntentTemplate` DB 中維護；`highIntentScore` 累計計算；達 `SystemConfig.high_intent_threshold`（預設 2）時回傳 `true`；`Conversation.highIntentScore` 即時更新
   - 輸出物：`src/intent/intent.service.ts`（更新）
   - 驗收：多輪詢價語句觸發 `isHighIntent=true`；閾值可透過 SystemConfig 調整
 
-- [ ] **T4-006** `CORE` **實作留資引導附加邏輯**
+- [X] **T4-006** `CORE` **實作留資引導附加邏輯**
   - 說明：在 Pipeline 的 `writeAndReturn()` 步驟，當 `isHighIntent=true` 或 intent 為 `price-inquiry` 時，在回覆末尾附加留資引導文字（來自 `SystemConfig.lead_prompt_text_zh` / `lead_prompt_text_en`）；`leadPrompted=true` 在 Response DTO 中標記；此步驟不建立 Lead（Lead 建立在 Phase 5 的明確 API 觸發）
   - 輸出物：`src/chat/chat-pipeline.service.ts`（更新）
   - 驗收：高意向觸發時 Response DTO `leadPrompted=true`；引導文字語言與輸入語言一致；未觸發時 `leadPrompted=false`
 
-- [ ] **T4-007** `CORE` **建立 SummaryService（LLM 生成 + template fallback）**
+- [X] **T4-007** `CORE` **建立 SummaryService（LLM 生成 + template fallback）**
   - 說明：`SummaryService.generate(messages: ConversationMessage[], language: string): Promise<string>`；優先呼叫 LLM（`ILlmProvider.chat()`，使用精簡 prompt 生成對話摘要）；LLM 失敗（timeout / error）時 fallback 至模板（取最後 N 筆訊息的 `content` 拼接 + 格式化）；摘要生成的 LLM 呼叫亦寫入 AuditLog（token observability）
   - 輸出物：`src/chat/summary.service.ts`
   - 驗收：LLM 成功時回傳摘要文字；LLM 失敗時回傳 template fallback，不拋出例外；AuditLog 有摘要生成的 LLM token 記錄
 
-- [ ] **T4-008** `TEST` **Phase 4 測試：DiagnosisService 問診流程單元測試**
+- [X] **T4-008** `TEST` **Phase 4 測試：DiagnosisService 問診流程單元測試**
   - 說明：單元測試（mock IntentTemplate DB）：四欄位依序追問；已填欄位不重複追問；`stage=complete` 後 `isComplete()=true`；中途提供非預期值時正確處理
   - 輸出物：`src/chat/diagnosis.service.spec.ts`
   - 驗收：所有欄位狀態機測試通過；邊界案例有覆蓋
 
-- [ ] **T4-009** `TEST` **Phase 4 測試：高意向偵測整合測試 + 摘要 fallback 測試**
+- [X] **T4-009** `TEST` **Phase 4 測試：高意向偵測整合測試 + 摘要 fallback 測試**
   - 說明：整合測試：多輪詢價語句觸發 `leadPrompted=true`；閾值邊界測試；`SummaryService` fallback 測試：mock LLM 失敗，驗證 template fallback 回傳非空字串，不拋出例外
   - 輸出物：`src/intent/intent.service.spec.ts`（更新）、`src/chat/summary.service.spec.ts`
   - 驗收：高意向測試與摘要 fallback 測試通過

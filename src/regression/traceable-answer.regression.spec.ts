@@ -32,6 +32,10 @@ import { AuditService } from '../audit/audit.service';
 import { ConversationService } from '../conversation/conversation.service';
 import { AiStatusService } from '../health/ai-status.service';
 import { PromptBuilder } from '../chat/prompt-builder';
+import { DiagnosisService } from '../chat/diagnosis.service';
+import { DiagnosisFlowService } from '../chat/diagnosis-flow.service';
+import { LeadPromptEnricherService } from '../chat/lead-prompt-enricher.service';
+import { DiagnosisRecommendationService } from '../chat/diagnosis-recommendation.service';
 import { LLM_PROVIDER } from '../llm/interfaces/llm-provider.interface';
 import { RETRIEVAL_SERVICE } from '../retrieval/interfaces/retrieval-service.interface';
 import { QueryAnalysisService } from '../query-analysis/query-analysis.service';
@@ -79,7 +83,7 @@ const makeKnowledgeEntry = (overrides: Partial<KnowledgeEntry> = {}): KnowledgeE
     tags: [],
     aliases: [],
     language: 'zh-TW',
-    status: 'published',
+    status: 'approved',
     visibility: 'public',
     version: 1,
     createdAt: new Date('2026-01-01'),
@@ -195,6 +199,11 @@ describe('Traceable Answer Regression (Phase 6-C — T081)', () => {
   };
   const mockIntentService = {
     detect: jest.fn().mockResolvedValue({ label: 'general', score: 0.1, sensitive: false }),
+    isHighIntent: jest.fn().mockReturnValue({
+      isHighIntent: false,
+      score: 0,
+      matchedKeywords: [],
+    }),
   };
   const mockSystemConfigService = {
     get: jest.fn().mockReturnValue(null),
@@ -215,6 +224,15 @@ describe('Traceable Answer Regression (Phase 6-C — T081)', () => {
   };
   const mockPromptBuilder = {
     build: jest.fn().mockReturnValue({ messages: [], estimatedTokens: 0 }),
+  };
+  const mockDiagnosisService = {
+    startOrContinue: jest.fn(),
+    processAnswer: jest.fn(),
+    getNextQuestion: jest.fn(),
+  };
+  const mockDiagnosisFlowService = {
+    canHandle: jest.fn().mockReturnValue(false),
+    handle: jest.fn().mockResolvedValue({ handled: false }),
   };
   const mockLlmProvider = { stream: jest.fn() };
   const mockRetrievalService = { retrieve: jest.fn().mockResolvedValue([]) };
@@ -254,6 +272,10 @@ describe('Traceable Answer Regression (Phase 6-C — T081)', () => {
         { provide: ConversationService, useValue: mockConversationService },
         { provide: AiStatusService, useValue: mockAiStatusService },
         { provide: PromptBuilder, useValue: mockPromptBuilder },
+        { provide: DiagnosisService, useValue: mockDiagnosisService },
+        { provide: DiagnosisFlowService, useValue: mockDiagnosisFlowService },
+        LeadPromptEnricherService,
+        DiagnosisRecommendationService,
         { provide: QueryAnalysisService, useValue: mockQueryAnalysisService },
         { provide: AnswerTemplateResolver, useValue: mockTemplateResolver },
         { provide: LLM_PROVIDER, useValue: mockLlmProvider },
@@ -284,6 +306,18 @@ describe('Traceable Answer Regression (Phase 6-C — T081)', () => {
     mockConversationService.incrementSensitiveIntentCount.mockResolvedValue({
       sensitiveIntentCount: 1,
     });
+    mockDiagnosisService.startOrContinue.mockImplementation((context: unknown) =>
+      context ?? {
+        stage: 'collecting',
+        collectedFields: {},
+        requiredFields: ['purpose', 'material', 'length', 'environment'],
+        currentField: 'purpose',
+      },
+    );
+    mockDiagnosisService.processAnswer.mockImplementation((context: unknown) => context);
+    mockDiagnosisService.getNextQuestion.mockReturnValue('請問您的使用用途是什麼？');
+    mockDiagnosisFlowService.canHandle.mockReturnValue(false);
+    mockDiagnosisFlowService.handle.mockResolvedValue({ handled: false });
     mockQueryAnalysisService.analyze.mockResolvedValue({
       rawQuery: '測試',
       normalizedQuery: '測試',

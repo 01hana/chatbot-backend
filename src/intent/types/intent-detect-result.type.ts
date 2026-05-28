@@ -23,3 +23,12 @@ export interface ConversationMessageLike {
   role: string;
   content: string;
 }
+
+/**
+ * High-intent scoring result used by ChatPipeline lead-prompt logic.
+ */
+export interface HighIntentResult {
+  isHighIntent: boolean;
+  score: number;
+  matchedKeywords: string[];
+}

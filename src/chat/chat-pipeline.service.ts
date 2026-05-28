@@ -5,6 +5,7 @@ import { Conversation, ConversationMessage } from '../generated/prisma/client';
 import type { KnowledgeEntry } from '../generated/prisma/client';
 import { SafetyService } from '../safety/safety.service';
 import { IntentService } from '../intent/intent.service';
+import type { HighIntentResult } from '../intent/types/intent-detect-result.type';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { AuditService } from '../audit/audit.service';
 import type {
@@ -34,6 +35,7 @@ import { QueryAnalysisService } from '../query-analysis/query-analysis.service';
 import type { AnalyzedQuery } from '../query-analysis/types/analyzed-query.type';
 import { AnswerTemplateResolver } from '../template/answer-template-resolver';
 import type { TemplateResolution } from '../template/types/template-resolution.type';
+import type { DiagnosisContext } from './types/diagnosis-context.type';
 import type { QueryUnderstandingResult } from '../query-understanding/types/query-understanding-result.type.js';
 import type { RetrievalDecision } from '../hybrid-retrieval/types/retrieval-decision.type.js';
 import type { ChunkResult } from '../hybrid-retrieval/types/chunk-result.type.js';
@@ -44,6 +46,8 @@ import type { AnswerTrace } from './types/answer-trace.type.js';
 import { QueryUnderstandingService } from '../query-understanding/query-understanding.service.js';
 import { HybridRetrievalService } from '../hybrid-retrieval/hybrid-retrieval.service.js';
 import { RetrievalDecisionService } from '../hybrid-retrieval/gate/retrieval-decision.service.js';
+import { LeadPromptEnricherService } from './lead-prompt-enricher.service';
+import { DiagnosisFlowService } from './diagnosis-flow.service';
 
 /** Internal state threaded through the pipeline steps. */
 interface PipelineContext {
@@ -88,6 +92,8 @@ interface PipelineContext {
    * Used by buildSourceReferences() to populate GeneratedAnswer.sourceReferences.
    */
   retrievedChunks?: ChunkResult[];
+  highIntentResult?: HighIntentResult;
+  leadPrompted?: boolean;
 }
 
 /**
@@ -104,13 +110,22 @@ interface PipelineContext {
  *  3. runPromptGuard       — SafetyService.scanPrompt()
  *  4. checkConfidentiality — SafetyService.checkConfidentiality()
  *  5. detectIntent         — IntentService.detect() [passes analyzedQuery when available]
+ *  5.5 diagnosis flow      — product-diagnosis short-circuit; collecting context
+ *                            continues across turns; complete context enters
+ *                            deterministic diagnosis recommendation.
  *  6. retrieveKnowledge    — RetrievalService.retrieve() [passes rankingProfile/expandedTerms when available]
  *  7. evaluateConfidence   — dual threshold: minimum score vs answer threshold
  *  8. buildPrompt          — PromptBuilder.build() with confidenceLevel (skipped for template/rag+template)
  *  9. resolveTemplate      — AnswerTemplateResolver.resolve() [TM-002]
  *                            → template/rag+template: write resolvedContent, done, return (no LLM)
  *                            → rag/llm: continue to LLM stream
- * 10. callLlmStream        — ILlmProvider.stream()
+ *                            → diagnosis recommendation: match product-spec
+ *                              entries deterministically, then use LLM only for
+ *                              recommendation summary; fallback template when
+ *                              LLM fails.
+ * 10. callLlmStream        — ILlmProvider.stream() [final assistant reply]
+ *                            → high-intent / price-inquiry flows may append lead
+ *                              prompt text, but never auto-create Lead/Ticket.
  * 11. writeAndReturn       — persist messages + write AuditLog
  */
 @Injectable()
@@ -127,6 +142,8 @@ export class ChatPipelineService {
     private readonly conversationService: ConversationService,
     private readonly aiStatusService: AiStatusService,
     private readonly promptBuilder: PromptBuilder,
+    private readonly diagnosisFlowService: DiagnosisFlowService,
+    private readonly leadPromptEnricher: LeadPromptEnricherService,
     private readonly queryAnalysisService: QueryAnalysisService,
     private readonly templateResolver: AnswerTemplateResolver,
     @Inject(LLM_PROVIDER) llmProvider: unknown,
@@ -283,7 +300,7 @@ export class ChatPipelineService {
           usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
         } satisfies SseDonePayload);
 
-        void userMsg; // used above
+        void userMsg;
         return;
       }
 
@@ -361,7 +378,32 @@ export class ChatPipelineService {
       // ── Step 5: Intent detection ─────────────────────────────────────────
       ctx.history = await this.conversationService.getHistoryByToken(conversation.session_token);
       const intentResult = await this.detectIntent(userMessage, ctx.language, ctx.analyzedQuery);
-      ctx.intentLabel = intentResult.intentLabel;
+      ctx.intentLabel = this.extractIntentLabel(intentResult);
+
+      // ── Step 5.5: Diagnosis flow (T4-003) ───────────────────────────────
+      const persistedDiagnosisContext =
+        (conversation.diagnosisContext as DiagnosisContext | null) ?? null;
+
+      if (this.diagnosisFlowService.canHandle(ctx.intentLabel, persistedDiagnosisContext)) {
+        const diagnosisResult = await this.diagnosisFlowService.handle({
+          conversation,
+          userMessage,
+          requestId,
+          language: ctx.language,
+          history: ctx.history,
+          intentLabel: ctx.intentLabel,
+          abortSignal,
+          startMs,
+        });
+
+        if (diagnosisResult.handled && diagnosisResult.reply && diagnosisResult.donePayload) {
+          res.write(
+            formatSseEvent('token', { token: diagnosisResult.reply } satisfies SseTokenPayload),
+          );
+          this.writeSseAndEnd(res, 'done', diagnosisResult.donePayload);
+          return;
+        }
+      }
 
       // ── Step 6: RAG retrieval ─────────────────────────────────────────────
       const hybridEnabled =
@@ -450,13 +492,24 @@ export class ChatPipelineService {
             ? "I couldn't find relevant information in our knowledge base. Please leave your contact details and our team will follow up."
             : '抱歉，我在知識庫中找不到相關資訊。請留下您的聯絡資料，我們的業務人員將儘速與您聯繫。';
 
+        const enrichedFallback = await this.leadPromptEnricher.enrich({
+          conversation,
+          history: ctx.history,
+          userMessage,
+          assistantContent: fallback,
+          language: ctx.language,
+          intentLabel: ctx.intentLabel,
+        });
+        ctx.highIntentResult = enrichedFallback.highIntentResult;
+        ctx.leadPrompted = enrichedFallback.leadPrompted;
+
         const userMsg = await this.conversationService.addMessage(conversation.id, {
           role: 'user',
           content: userMessage,
         });
         const assistantMsg = await this.conversationService.addMessage(conversation.id, {
           role: 'assistant',
-          content: fallback,
+          content: enrichedFallback.content,
         });
 
         // await this.auditService.log({
@@ -486,6 +539,9 @@ export class ChatPipelineService {
               matchedQueryRules: ctx.analyzedQuery.matchedRules,
               queryAnalysisMs: ctx.analyzedQuery.debugMeta.processingMs,
             }),
+            leadPrompted: enrichedFallback.leadPrompted,
+            highIntentScore: enrichedFallback.highIntentResult.score,
+            matchedHighIntentKeywords: enrichedFallback.highIntentResult.matchedKeywords,
           },
           ragConfidence: topScore,
           durationMs: Date.now() - startMs,
@@ -506,13 +562,16 @@ export class ChatPipelineService {
           trace: this.buildAnswerTrace(ctx, startMs),
         });
 
-        res.write(formatSseEvent('token', { token: fallback } satisfies SseTokenPayload));
+        res.write(
+          formatSseEvent('token', { token: enrichedFallback.content } satisfies SseTokenPayload),
+        );
         this.writeSseAndEnd(res, 'done', {
           messageId: assistantMsg.id,
           action: 'fallback',
           intentLabel: ctx.intentLabel,
           sourceReferences: [],
           usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          leadPrompted: enrichedFallback.leadPrompted,
         } satisfies SseDonePayload);
 
         void userMsg;
@@ -544,11 +603,21 @@ export class ChatPipelineService {
         });
 
         const templateContent = ctx.templateResolution.resolvedContent!;
+        const enrichedTemplate = await this.leadPromptEnricher.enrich({
+          conversation,
+          history: ctx.history,
+          userMessage,
+          assistantContent: templateContent,
+          language: ctx.language,
+          intentLabel: ctx.intentLabel,
+        });
+        ctx.highIntentResult = enrichedTemplate.highIntentResult;
+        ctx.leadPrompted = enrichedTemplate.leadPrompted;
 
         // Persist assistant message (deterministic, no LLM)
         const assistantMsg = await this.conversationService.addMessage(conversation.id, {
           role: 'assistant',
-          content: templateContent,
+          content: enrichedTemplate.content,
         });
 
         const sourceRefs = ctx.ragResults.map(r => r.entry.id);
@@ -573,6 +642,9 @@ export class ChatPipelineService {
               matchedQueryRules: ctx.analyzedQuery.matchedRules,
               queryAnalysisMs: ctx.analyzedQuery.debugMeta.processingMs,
             }),
+            leadPrompted: enrichedTemplate.leadPrompted,
+            highIntentScore: enrichedTemplate.highIntentResult.score,
+            matchedHighIntentKeywords: enrichedTemplate.highIntentResult.matchedKeywords,
           },
           knowledgeRefs: sourceRefs.map(String),
           ragConfidence: ctx.ragConfidence,
@@ -603,13 +675,16 @@ export class ChatPipelineService {
         });
 
         // Write SSE token then done — LLM is NOT called
-        res.write(formatSseEvent('token', { token: templateContent } satisfies SseTokenPayload));
+        res.write(
+          formatSseEvent('token', { token: enrichedTemplate.content } satisfies SseTokenPayload),
+        );
         this.writeSseAndEnd(res, 'done', {
           messageId: assistantMsg.id,
           action: 'answer' satisfies ChatAction,
           intentLabel: ctx.intentLabel,
           sourceReferences: sourceReferences,
           usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          leadPrompted: enrichedTemplate.leadPrompted,
         } satisfies SseDonePayload);
 
         void userMsg;
@@ -629,9 +704,19 @@ export class ChatPipelineService {
       // this guard provides defence-in-depth for edge cases.
       if (gateEnabled && ctx.retrievalDecision?.canAnswer !== true) {
         const gateFallbackContent = this.buildGateFallbackContent(ctx.language);
+        const enrichedGateFallback = await this.leadPromptEnricher.enrich({
+          conversation,
+          history: ctx.history,
+          userMessage,
+          assistantContent: gateFallbackContent,
+          language: ctx.language,
+          intentLabel: ctx.intentLabel,
+        });
+        ctx.highIntentResult = enrichedGateFallback.highIntentResult;
+        ctx.leadPrompted = enrichedGateFallback.leadPrompted;
         const assistantMsg = await this.conversationService.addMessage(conversation.id, {
           role: 'assistant',
-          content: gateFallbackContent,
+          content: enrichedGateFallback.content,
         });
         await this.auditService.log({
           requestId,
@@ -643,6 +728,9 @@ export class ChatPipelineService {
             canAnswer: false,
             llmCalled: false,
             intentLabel: ctx.intentLabel,
+            leadPrompted: enrichedGateFallback.leadPrompted,
+            highIntentScore: enrichedGateFallback.highIntentResult.score,
+            matchedHighIntentKeywords: enrichedGateFallback.highIntentResult.matchedKeywords,
           },
           ragConfidence: ctx.ragConfidence,
           durationMs: Date.now() - startMs,
@@ -659,7 +747,7 @@ export class ChatPipelineService {
           trace: this.buildAnswerTrace(ctx, startMs),
         });
         res.write(
-          formatSseEvent('token', { token: gateFallbackContent } satisfies SseTokenPayload),
+          formatSseEvent('token', { token: enrichedGateFallback.content } satisfies SseTokenPayload),
         );
         this.writeSseAndEnd(res, 'done', {
           messageId: assistantMsg.id,
@@ -667,6 +755,7 @@ export class ChatPipelineService {
           intentLabel: ctx.intentLabel,
           sourceReferences: [],
           usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          leadPrompted: enrichedGateFallback.leadPrompted,
         } satisfies SseDonePayload);
         void userMsg;
         return;
@@ -763,6 +852,26 @@ export class ChatPipelineService {
 
       // ── Step 10: Persist + close stream ──────────────────────────────────
       const llmDurationMs = Date.now() - llmStartMs;
+      const rawLlmContent = fullContent;
+      const enrichedLlmAnswer = await this.leadPromptEnricher.enrich({
+        conversation,
+        history: ctx.history,
+        userMessage,
+        assistantContent: fullContent,
+        language: ctx.language,
+        intentLabel: ctx.intentLabel,
+      });
+      fullContent = enrichedLlmAnswer.content;
+      ctx.highIntentResult = enrichedLlmAnswer.highIntentResult;
+      ctx.leadPrompted = enrichedLlmAnswer.leadPrompted;
+
+      if (fullContent !== rawLlmContent) {
+        const appended = fullContent.slice(rawLlmContent.length);
+        if (appended.trim() !== '') {
+          res.write(formatSseEvent('token', { token: appended } satisfies SseTokenPayload));
+        }
+      }
+
       const assistantMsg = await this.conversationService.addMessage(conversation.id, {
         role: 'assistant',
         content: fullContent,
@@ -792,6 +901,9 @@ export class ChatPipelineService {
             matchedQueryRules: ctx.analyzedQuery.matchedRules,
             queryAnalysisMs: ctx.analyzedQuery.debugMeta.processingMs,
           }),
+          leadPrompted: enrichedLlmAnswer.leadPrompted,
+          highIntentScore: enrichedLlmAnswer.highIntentResult.score,
+          matchedHighIntentKeywords: enrichedLlmAnswer.highIntentResult.matchedKeywords,
         },
         knowledgeRefs: sourceRefs.map(String),
         ragConfidence: ctx.ragConfidence,
@@ -829,6 +941,7 @@ export class ChatPipelineService {
         intentLabel: ctx.intentLabel,
         sourceReferences: sourceReferences,
         usage,
+        leadPrompted: enrichedLlmAnswer.leadPrompted,
       } satisfies SseDonePayload);
     } catch (err) {
       this.logger.error(
@@ -909,6 +1022,16 @@ export class ChatPipelineService {
 
   async detectIntent(input: string, language: string, analyzedQuery?: AnalyzedQuery) {
     return this.intentService.detect(input, language, analyzedQuery);
+  }
+
+  private extractIntentLabel(intentResult: unknown): string | null {
+    if (!intentResult || typeof intentResult !== 'object') return null;
+    const asRecord = intentResult as Record<string, unknown>;
+    const intentLabel = asRecord['intentLabel'];
+    if (typeof intentLabel === 'string') return intentLabel;
+    const legacyLabel = asRecord['label'];
+    if (typeof legacyLabel === 'string') return legacyLabel;
+    return null;
   }
 
   /**
@@ -1099,6 +1222,16 @@ export class ChatPipelineService {
     startMs: number,
   ): Promise<void> {
     const fallbackContent = this.buildGateFallbackContent(ctx.language);
+    const enrichedGateFallback = await this.leadPromptEnricher.enrich({
+      conversation,
+      history: ctx.history,
+      userMessage,
+      assistantContent: fallbackContent,
+      language: ctx.language,
+      intentLabel: ctx.intentLabel,
+    });
+    ctx.highIntentResult = enrichedGateFallback.highIntentResult;
+    ctx.leadPrompted = enrichedGateFallback.leadPrompted;
 
     const userMsg = await this.conversationService.addMessage(conversation.id, {
       role: 'user',
@@ -1106,7 +1239,7 @@ export class ChatPipelineService {
     });
     const assistantMsg = await this.conversationService.addMessage(conversation.id, {
       role: 'assistant',
-      content: fallbackContent,
+      content: enrichedGateFallback.content,
     });
 
     await this.auditService.log({
@@ -1119,6 +1252,9 @@ export class ChatPipelineService {
         canAnswer: false,
         llmCalled: false,
         intentLabel: ctx.intentLabel,
+        leadPrompted: enrichedGateFallback.leadPrompted,
+        highIntentScore: enrichedGateFallback.highIntentResult.score,
+        matchedHighIntentKeywords: enrichedGateFallback.highIntentResult.matchedKeywords,
       },
       ragConfidence: ctx.ragConfidence,
       durationMs: Date.now() - startMs,
@@ -1141,13 +1277,16 @@ export class ChatPipelineService {
       trace: this.buildAnswerTrace(ctx, startMs),
     });
 
-    res.write(formatSseEvent('token', { token: fallbackContent } satisfies SseTokenPayload));
+    res.write(
+      formatSseEvent('token', { token: enrichedGateFallback.content } satisfies SseTokenPayload),
+    );
     this.writeSseAndEnd(res, 'done', {
       messageId: assistantMsg.id,
       action: 'fallback' satisfies ChatAction,
       intentLabel: ctx.intentLabel,
       sourceReferences: [],
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      leadPrompted: enrichedGateFallback.leadPrompted,
     } satisfies SseDonePayload);
 
     void userMsg;

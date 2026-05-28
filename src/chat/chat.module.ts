@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ChatController } from './chat.controller';
 import { ChatPipelineService } from './chat-pipeline.service';
+import { DiagnosisService } from './diagnosis.service';
 import { PromptBuilder } from './prompt-builder';
 import { ConversationModule } from '../conversation/conversation.module';
 import { LlmModule } from '../llm/llm.module';
@@ -14,6 +15,10 @@ import { QueryUnderstandingModule } from '../query-understanding/query-understan
 import { HybridRetrievalModule } from '../hybrid-retrieval/hybrid-retrieval.module';
 import { LeadModule } from '../lead/lead.module';
 import { FeedbackModule } from '../feedback/feedback.module';
+import { SummaryService } from './summary.service';
+import { LeadPromptEnricherService } from './lead-prompt-enricher.service';
+import { DiagnosisRecommendationService } from './diagnosis-recommendation.service';
+import { DiagnosisFlowService } from './diagnosis-flow.service';
 
 /**
  * ChatModule — wires together the complete chat pipeline and HTTP endpoints.
@@ -50,6 +55,15 @@ import { FeedbackModule } from '../feedback/feedback.module';
     FeedbackModule,
   ],
   controllers: [ChatController],
-  providers: [ChatPipelineService, PromptBuilder],
+  providers: [
+    ChatPipelineService,
+    PromptBuilder,
+    DiagnosisService,
+    SummaryService,
+    LeadPromptEnricherService,
+    DiagnosisRecommendationService,
+    DiagnosisFlowService,
+  ],
+  exports: [SummaryService],
 })
 export class ChatModule {}

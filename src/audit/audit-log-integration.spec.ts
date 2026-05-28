@@ -12,6 +12,10 @@ import { AuditService } from './audit.service';
 import { ConversationService } from '../conversation/conversation.service';
 import { AiStatusService } from '../health/ai-status.service';
 import { PromptBuilder } from '../chat/prompt-builder';
+import { DiagnosisService } from '../chat/diagnosis.service';
+import { DiagnosisFlowService } from '../chat/diagnosis-flow.service';
+import { LeadPromptEnricherService } from '../chat/lead-prompt-enricher.service';
+import { DiagnosisRecommendationService } from '../chat/diagnosis-recommendation.service';
 import { LLM_PROVIDER } from '../llm/interfaces/llm-provider.interface';
 import { RETRIEVAL_SERVICE } from '../retrieval/interfaces/retrieval-service.interface';
 import type { LlmStreamChunk } from '../llm/types/llm.types';
@@ -82,6 +86,11 @@ describe('T2-013 AuditLog Integration (mock LLM)', () => {
   };
   const mockIntentService = {
     detect: jest.fn().mockResolvedValue({ label: 'product', score: 0.9, sensitive: false }),
+    isHighIntent: jest.fn().mockReturnValue({
+      isHighIntent: false,
+      score: 0,
+      matchedKeywords: [],
+    }),
   };
   const mockSystemConfigService = {
     get: jest.fn().mockReturnValue(null),
@@ -102,6 +111,15 @@ describe('T2-013 AuditLog Integration (mock LLM)', () => {
   const mockPromptBuilder = {
     build: jest.fn().mockReturnValue({ messages: [{ role: 'user', content: 'hello' }], estimatedTokens: 5 }),
   };
+  const mockDiagnosisService = {
+    startOrContinue: jest.fn(),
+    processAnswer: jest.fn(),
+    getNextQuestion: jest.fn(),
+  };
+  const mockDiagnosisFlowService = {
+    canHandle: jest.fn().mockReturnValue(false),
+    handle: jest.fn().mockResolvedValue({ handled: false }),
+  };
   const mockLlmProvider = { stream: jest.fn() };
 
   const makeKnowledgeEntry = (overrides: Partial<KnowledgeEntry> = {}): KnowledgeEntry =>
@@ -113,7 +131,7 @@ describe('T2-013 AuditLog Integration (mock LLM)', () => {
       tags: [],
       aliases: [],
       language: 'zh-TW',
-      status: 'published',
+      status: 'approved',
       visibility: 'public',
       version: 1,
       createdAt: new Date('2026-01-01'),
@@ -156,6 +174,18 @@ describe('T2-013 AuditLog Integration (mock LLM)', () => {
     mockConversationService.addMessage.mockResolvedValue({ id: 42 });
     mockConversationService.updateConversation.mockResolvedValue({});
     mockConversationService.getHistoryByToken.mockResolvedValue([]);
+    mockDiagnosisService.startOrContinue.mockImplementation((context: unknown) =>
+      context ?? {
+        stage: 'collecting',
+        collectedFields: {},
+        requiredFields: ['purpose', 'material', 'length', 'environment'],
+        currentField: 'purpose',
+      },
+    );
+    mockDiagnosisService.processAnswer.mockImplementation((context: unknown) => context);
+    mockDiagnosisService.getNextQuestion.mockReturnValue('請問您的使用用途是什麼？');
+    mockDiagnosisFlowService.canHandle.mockReturnValue(false);
+    mockDiagnosisFlowService.handle.mockResolvedValue({ handled: false });
     mockAiStatusService.isDegraded.mockReturnValue(false);
     mockPromptBuilder.build.mockReturnValue({ messages: [{ role: 'user', content: 'hello' }], estimatedTokens: 5 });
     mockRetrievalService.retrieve.mockResolvedValue([makeRetrievalResult()]);
@@ -173,6 +203,10 @@ describe('T2-013 AuditLog Integration (mock LLM)', () => {
         { provide: ConversationService, useValue: mockConversationService },
         { provide: AiStatusService, useValue: mockAiStatusService },
         { provide: PromptBuilder, useValue: mockPromptBuilder },
+        { provide: DiagnosisService, useValue: mockDiagnosisService },
+        { provide: DiagnosisFlowService, useValue: mockDiagnosisFlowService },
+        LeadPromptEnricherService,
+        DiagnosisRecommendationService,
         { provide: LLM_PROVIDER, useValue: mockLlmProvider },
         { provide: RETRIEVAL_SERVICE, useValue: mockRetrievalService },
       ],

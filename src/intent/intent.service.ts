@@ -1,11 +1,13 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { IntentTemplate, GlossaryTerm } from '../generated/prisma/client';
 import { IntentRepository } from './intent.repository';
 import {
   IntentDetectResult,
   ConversationMessageLike,
+  HighIntentResult,
 } from './types/intent-detect-result.type';
 import type { AnalyzedQuery } from '../query-analysis/types/analyzed-query.type';
+import { SystemConfigService } from '../system-config/system-config.service';
 
 /**
  * IntentService — loads intent templates and glossary on startup; exposes
@@ -32,7 +34,11 @@ export class IntentService implements OnModuleInit {
   /** In-memory copy of all glossary terms. */
   private glossary: GlossaryTerm[] = [];
 
-  constructor(private readonly intentRepository: IntentRepository) {}
+  constructor(
+    private readonly intentRepository: IntentRepository,
+    @Optional()
+    private readonly systemConfigService?: SystemConfigService,
+  ) {}
 
   // ─── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -98,8 +104,9 @@ export class IntentService implements OnModuleInit {
    *   search string.  When `analyzedQuery` is omitted (backward-compat path),
    *   falls back to the internal `expandWithGlossary()` helper that reads
    *   directly from the in-memory glossary cache.
-   *   Active templates (isActive=true) are evaluated in priority-descending
-   *   order; the first keyword match wins.
+  *   Only explicitly disabled templates (`isActive === false`) are skipped.
+  *   Legacy rows without `isActive` remain eligible. Matching templates are
+  *   evaluated in priority-descending order; the first keyword match wins.
    *
    * **Layer 3 — No match**:
    *   Returns `{ intentLabel: null, confidence: 0 }`.
@@ -134,8 +141,9 @@ export class IntentService implements OnModuleInit {
         : this.expandWithGlossary(lowerInput);
 
     for (const template of this.templates) {
-      // Skip templates that have been administratively disabled (IG-002).
-      if (!template.isActive) continue;
+      // Skip templates only when they are explicitly disabled.
+      // Legacy rows without `isActive` stay eligible for matching.
+      if (template.isActive === false) continue;
 
       const matched = template.keywords.some((kw) =>
         expandedText.includes(kw.toLowerCase()),
@@ -155,19 +163,45 @@ export class IntentService implements OnModuleInit {
   }
 
   /**
-   * Determine whether the conversation exhibits high-purchase-intent signals.
+   * Determine whether recent conversation turns show high purchase intent.
    *
-   * **Phase 1 skeleton** — always returns false.
-   * Phase 4 (T4-005) will implement sliding-window keyword scoring using
-   * `SystemConfig.high_intent_look_back_turns` and
-   * `SystemConfig.high_intent_threshold`.
-   *
-   * @param _history - Recent conversation messages (user + assistant turns).
+   * Scoring rules:
+   * - Inspect recent N user turns (`high_intent_look_back_turns`, default 5)
+   * - Match high-intent keywords and add +1 per unique keyword per turn
+   * - `score >= high_intent_threshold` (default 2) => isHighIntent=true
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  isHighIntent(_history: ConversationMessageLike[]): boolean {
-    // TODO(Phase 4 / T4-005): Implement rule-based high-intent scoring.
-    return false;
+  isHighIntent(history: ConversationMessageLike[]): HighIntentResult {
+    const lookBackTurns = this.systemConfigService?.getNumber('high_intent_look_back_turns') ?? 5;
+    const threshold = this.systemConfigService?.getNumber('high_intent_threshold') ?? 2;
+
+    const userMessages = history
+      .filter(message => message.role === 'user')
+      .slice(-Math.max(1, lookBackTurns));
+
+    const keywords = this.collectHighIntentKeywords();
+
+    let score = 0;
+    const matchedKeywords = new Set<string>();
+
+    for (const message of userMessages) {
+      const text = message.content.toLowerCase();
+      const perTurnMatched = new Set<string>();
+
+      for (const keyword of keywords) {
+        if (text.includes(keyword)) {
+          perTurnMatched.add(keyword);
+        }
+      }
+
+      score += perTurnMatched.size;
+      for (const keyword of perTurnMatched) matchedKeywords.add(keyword);
+    }
+
+    return {
+      isHighIntent: score >= Math.max(1, threshold),
+      score,
+      matchedKeywords: Array.from(matchedKeywords),
+    };
   }
 
   // ─── Private Helpers ──────────────────────────────────────────────────────
@@ -199,5 +233,50 @@ export class IntentService implements OnModuleInit {
     }
 
     return expanded;
+  }
+
+  private collectHighIntentKeywords(): string[] {
+    const intentSignals = ['price', 'quotation', 'quote', 'sales', 'contact', 'purchase', 'order'];
+
+    const templateKeywords = this.templates
+      .filter(template => {
+        const intentText = `${template.intent} ${template.label}`.toLowerCase();
+        return intentSignals.some(signal => intentText.includes(signal));
+      })
+      .flatMap(template => template.keywords)
+      .map(keyword => keyword.toLowerCase().trim())
+      .filter(keyword => keyword.length > 0);
+
+    const glossaryKeywords = this.glossary
+      .filter(term => {
+        const label = (term.intentLabel ?? '').toLowerCase();
+        return intentSignals.some(signal => label.includes(signal));
+      })
+      .flatMap(term => [term.term, ...term.synonyms])
+      .map(keyword => keyword.toLowerCase().trim())
+      .filter(keyword => keyword.length > 0);
+
+    // TODO(T4-005): replace fallback list with dedicated high-intent keyword config table.
+    const fallbackKeywords = [
+      '報價',
+      '多少錢',
+      '價格',
+      '詢價',
+      '下單',
+      '採購',
+      '業務',
+      '聯絡',
+      'price',
+      'quotation',
+      'quote',
+      'order',
+      'purchase',
+      'sales',
+      'contact',
+    ];
+
+    return Array.from(
+      new Set([...templateKeywords, ...glossaryKeywords, ...fallbackKeywords]),
+    );
   }
 }

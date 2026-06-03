@@ -144,7 +144,7 @@ describe('ChatPipelineService', () => {
       tags: [],
       aliases: [],
       language: 'zh-TW',
-      status: 'approved',
+      status: 'published',
       visibility: 'public',
       version: 1,
       createdAt: new Date('2026-01-01'),

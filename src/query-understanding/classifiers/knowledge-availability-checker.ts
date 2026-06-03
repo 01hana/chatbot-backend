@@ -183,10 +183,10 @@ const CONTENT_HINTS: Partial<Record<QueryType, ContentHint>> = {
  * content relevant to a given (queryType, language) pair.
  *
  * Dual-source strategy:
- *   ① `KnowledgeEntry` (legacy table): `status='approved'`, `visibility='public'`,
+ *   ① `KnowledgeEntry` (legacy table): `status='published'`, `visibility='public'`,
  *      `deletedAt IS NULL`, plus queryType-specific OR conditions on category /
  *      intentLabel / tags / aliases / sourceKey / title / content.
- *   ② `KnowledgeDocument` + `KnowledgeChunk` (V2 tables): `status='approved'`,
+ *   ② `KnowledgeDocument` + `KnowledgeChunk` (V2 tables): `status='published'`,
  *      `visibility='public'`, `deletedAt IS NULL`, plus queryType-specific OR
  *      conditions on docType / sourceKey / title.
  *
@@ -202,7 +202,7 @@ export class KnowledgeAvailabilityChecker {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Returns `true` if the KB contains approved, public content relevant to the
+   * Returns `true` if the KB contains published, public content relevant to the
    * given (queryType, language) pair.
    *
    * Defensive early-returns (no DB query):
@@ -260,9 +260,9 @@ export class KnowledgeAvailabilityChecker {
   }
 
   /**
-   * Count approved, public, non-deleted KnowledgeEntry rows that satisfy the
+   * Count published, public, non-deleted KnowledgeEntry rows that satisfy the
    * queryType content hint OR conditions.
-   * When hint is null (Unknown queryType), any approved/public row qualifies.
+   * When hint is null (Unknown queryType), any published/public row qualifies.
    */
   private async countKnowledgeEntries(
     hint: ContentHint | null,
@@ -271,8 +271,8 @@ export class KnowledgeAvailabilityChecker {
     const orClauses = hint ? this.buildEntryOrClauses(hint) : [];
     return this.prisma.knowledgeEntry.count({
       where: {
-        // SECURITY INVARIANT: always enforce approved + public + not deleted
-        status: 'approved',
+        // SECURITY INVARIANT: always enforce published + public + not deleted
+        status: 'published',
         visibility: 'public',
         deletedAt: null,
         ...(language !== undefined ? { language } : {}),
@@ -282,7 +282,7 @@ export class KnowledgeAvailabilityChecker {
   }
 
   /**
-   * Count KnowledgeChunk rows whose parent KnowledgeDocument is approved,
+   * Count KnowledgeChunk rows whose parent KnowledgeDocument is published,
    * public, and non-deleted, and that satisfy queryType-specific OR conditions
    * on either chunk.content (text keywords) or the parent document metadata
    * (docType, sourceKey, title).
@@ -292,7 +292,7 @@ export class KnowledgeAvailabilityChecker {
    * conditions.
    *
    * When hint is null (QueryType.Unsupported / fallback), any chunk under an
-   * approved/public document qualifies — but callers should normally short-
+   * published/public document qualifies — but callers should normally short-
    * circuit before reaching this path for null hints.
    */
   private async countKnowledgeChunks(
@@ -305,7 +305,7 @@ export class KnowledgeAvailabilityChecker {
         ...(language !== undefined ? { language } : {}),
         // Security invariants — always AND, never overridable
         document: {
-          status: 'approved',
+          status: 'published',
           visibility: 'public',
           deletedAt: null,
         },

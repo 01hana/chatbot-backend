@@ -1123,7 +1123,7 @@ export class ChatPipelineService {
       sourceKey: chunk.sourceKey || null,
       answerType: null,
       title: '',
-      status: 'approved',
+      status: 'published',
       visibility: 'public',
       version: 1,
       intentLabel: null,

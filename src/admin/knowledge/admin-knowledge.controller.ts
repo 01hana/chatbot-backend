@@ -16,7 +16,7 @@ import { CreateKnowledgeDto, UpdateKnowledgeDto, ListKnowledgeQueryDto } from '.
 import { AdminKnowledgeService } from './admin-knowledge.service';
 
 /**
- * AdminKnowledgeController — CRUD + approval routes for /api/v1/admin/knowledge.
+ * AdminKnowledgeController — CRUD + publishing routes for /api/v1/admin/knowledge.
  *
  * Note: Auth / RBAC is explicitly deferred per spec.md v1.6.0.
  */
@@ -67,12 +67,12 @@ export class AdminKnowledgeController {
   }
 
   /**
-   * Approve a knowledge entry (draft → approved).
-   * approved → no-op; archived → 400.
+   * Publish a knowledge entry (draft/archived → published).
+   * published → no-op.
    */
-  @Post(':id/approve')
-  approve(@Param('id', ParseIntPipe) id: number): Promise<KnowledgeEntry> {
-    return this.adminKnowledgeService.approve(id);
+  @Post(':id/publish')
+  publish(@Param('id', ParseIntPipe) id: number): Promise<KnowledgeEntry> {
+    return this.adminKnowledgeService.publish(id);
   }
 
   /**

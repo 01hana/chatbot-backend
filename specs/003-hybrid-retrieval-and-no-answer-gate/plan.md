@@ -213,7 +213,7 @@ src/query-understanding/
 
 **`KnowledgeAvailabilityChecker`**
 - 非同步，查詢 `KnowledgeEntry`（V1）及 `KnowledgeDocument`（V2）
-- 篩選條件：`status='approved'`, `visibility='public'`, `deletedAt IS NULL`，`language` fallback
+- 篩選條件：`status='published'`, `visibility='public'`, `deletedAt IS NULL`，`language` fallback
 - 實作 per-queryType TTL 快取（60s），減少重複 DB 查詢
 - 簽名：`hasContentFor(queryType: QueryType, language: string): Promise<boolean>`
 

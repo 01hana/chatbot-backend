@@ -73,7 +73,7 @@
 - **Feedback API**：訪客對 AI 回覆的評分收集
 - **Dashboard 聚合 API**：`GET /api/v1/admin/dashboard`（對話量、Lead 數、Feedback、Ticket 等）
 - **Widget Config API**：`GET /api/v1/widget/config`（從 SystemConfig 讀取 Widget 初始化設定）
-- 知識庫後台 CRUD API（含版本管理 / 審核流程）
+- 知識庫後台 CRUD API（含版本管理 / 發布流程）
 - 對話 / Lead / Ticket / Feedback / AuditLog 查詢 API
 - SystemConfig 管理（業務閾值與文案，含 Widget Config keys）
 - 稽核日誌（append-only，含 LLM token 觀測欄位）
@@ -228,7 +228,7 @@ Phase 7：品質補強與驗收準備
 | `knowledge.seed.ts` | 開發 / 測試用示範知識條目；`seed.ts` 依 `NODE_ENV !== 'production'` 決定是否執行 |
 | `SafetyModule` 骨架 | `SafetyService`（規則從 DB 載入至 in-memory cache，含 `invalidateCache()`）、`SafetyRepository` |
 | `IntentModule` 骨架 | `IntentService`（意圖模板與詞彙從 DB 載入至 in-memory cache，含 `invalidateCache()`）、`IntentRepository` |
-| `KnowledgeModule` 骨架 | `KnowledgeService`（CRUD + visibility 過濾）、`KnowledgeRepository`（`findForRetrieval()` 強制 `status=approved AND visibility=public`）|
+| `KnowledgeModule` 骨架 | `KnowledgeService`（CRUD + visibility 過濾）、`KnowledgeRepository`（`findForRetrieval()` 強制 `status=published AND visibility=public`）|
 | `pg_trgm` migration | 在 migration 中執行 `CREATE EXTENSION IF NOT EXISTS pg_trgm`；若環境不支援，標記使用 ILIKE fallback |
 | `content_tsv` 欄位 | `KnowledgeEntry` 中建立 `tsvector` 欄位與 DB trigger（可選優化，Phase 1 先建立結構）|
 | Admin API 路由骨架 | `/api/v1/admin/knowledge/`、`/api/v1/admin/system-config/` 路由骨架（DTO + Controller 骨架，Service 後補）|
@@ -251,7 +251,7 @@ Phase 7：品質補強與驗收準備
 - [ ] `npx prisma db seed` 完整執行（含 NODE_ENV 條件分支測試）
 - [ ] `SafetyService` 單元測試：規則從 DB 正確載入；`invalidateCache()` 可觸發重新載入
 - [ ] `IntentService` 單元測試：意圖模板與詞彙從 DB 正確載入
-- [ ] `KnowledgeRepository` 單元測試：`findForRetrieval()` 無論如何傳入參數，不回傳 `visibility != 'public'` 或 `status != 'approved'` 的條目
+- [ ] `KnowledgeRepository` 單元測試：`findForRetrieval()` 無論如何傳入參數，不回傳 `visibility != 'public'` 或 `status != 'published'` 的條目
 - [ ] Seed 資料在開發環境 DB 中可查詢確認
 
 #### 對應 spec / design 章節
@@ -356,7 +356,7 @@ Phase 7：品質補強與驗收準備
 | 敏感意圖累積記錄 | `Conversation.sensitive_intent_count += 1`；達 `sensitive_intent_alert_threshold` 時寫入 AuditLog alert 事件 |
 | confidential 標記 | `Conversation.type = 'confidential'`、`Conversation.risk_level = 'high'`、`ConversationMessage.type`、`ConversationMessage.risk_level` 正確寫入 |
 | 固定拒答模板 | `SafetyService.buildRefusalResponse()`；拒答文字不透過 LLM 生成，由固定模板產生 |
-| RAG 層知識隔離強化 | `KnowledgeRepository.findForRetrieval()` 強制 `WHERE status='approved' AND visibility='public'` 確認（可能已在 Phase 1 實作）|
+| RAG 層知識隔離強化 | `KnowledgeRepository.findForRetrieval()` 強制 `WHERE status='published' AND visibility='public'` 確認（可能已在 Phase 1 實作）|
 | 安全稽核事件 | `prompt_guard_blocked` / `confidential_refused` / `sensitive_intent_alert` 事件完整寫入 AuditLog |
 | Admin API：規則管理 | `POST/PATCH/DELETE /api/v1/admin/safety-rules`、`/admin/blacklist` 可維護規則；更新後呼叫 `invalidateCache()` |
 | Prompt Guard 測試集 | 10 種以上攻擊模式的單元 / 整合測試 |
@@ -503,15 +503,15 @@ Phase 7：品質補強與驗收準備
 ### Phase 6：知識庫後台 / 查詢 API / Dashboard
 
 #### 目標
-完整實作知識庫管理後台 API（CRUD、版本管理、審核流程）與各查詢 API；實作 Dashboard 聚合 API；確認後台 API 的部署保護前提。
+完整實作知識庫管理後台 API（CRUD、版本管理、發布流程）與各查詢 API；實作 Dashboard 聚合 API；確認後台 API 的部署保護前提。
 
 #### 本階段納入範圍
 
 | 項目 | 說明 |
 |------|------|
-| `KnowledgeModule` Admin API | `POST /api/v1/admin/knowledge`（新增）、`PATCH /api/v1/admin/knowledge/:id`（更新 → 新版本）、`POST /api/v1/admin/knowledge/:id/approve`（審核）、`POST /api/v1/admin/knowledge/:id/archive`（封存）|
+| `KnowledgeModule` Admin API | `POST /api/v1/admin/knowledge`（新增）、`PATCH /api/v1/admin/knowledge/:id`（更新 → 新版本）、`POST /api/v1/admin/knowledge/:id/publish`（發布）、`POST /api/v1/admin/knowledge/:id/archive`（封存）|
 | `KnowledgeVersion` 版本管理 | 更新時舊版本 snapshot 寫入 `KnowledgeVersion`；`KnowledgeEntry.version += 1`；`status` 重設為 `draft` |
-| `draft → approved → archived` 流程 | 狀態轉換規則實作；審核通過後 RAG 可用 |
+| `draft / archived → published；any → archived` 流程 | 狀態轉換規則實作；發布後 RAG 可用 |
 | 對話查詢 Admin API | `GET /api/v1/admin/conversations`（含 sessionToken / 日期範圍 / 意圖標籤 filter）|
 | AuditLog 查詢 API | `GET /api/v1/admin/audit-logs`（含 requestId / 日期範圍 / 事件類型 filter）|
 | Lead 查詢 Admin API | `GET /api/v1/admin/leads`（含狀態 / 日期範圍 filter）、`PATCH /api/v1/admin/leads/:id/status`（更新 Lead 狀態）|
@@ -530,7 +530,7 @@ Phase 7：品質補強與驗收準備
 
 #### 主要產出物
 
-- 知識庫後台 CRUD + 版本管理 + 審核流程 API 全部可用
+- 知識庫後台 CRUD + 版本管理 + 發布流程 API 全部可用
 - 對話 / AuditLog / Lead / Ticket / Feedback 查詢 API 可用（含分頁）
 - `GET /api/v1/admin/dashboard` 回傳完整聚合指標
 - SystemConfig 更新 API 可用（含 AuditLog 記錄 config 前後值）
@@ -540,8 +540,8 @@ Phase 7：品質補強與驗收準備
 
 #### 完成條件
 
-- [ ] 知識庫 Admin API 整合測試：新增 → 審核 → 可被 RAG 查詢；更新 → `KnowledgeVersion` 記錄舊版本；封存 → `status=archived` 不再出現在 RAG 結果
-- [ ] `draft → approved` 後 `findForRetrieval()` 可取得該條目
+- [ ] 知識庫 Admin API 整合測試：新增 → 發布 → 可被 RAG 查詢；更新 → `KnowledgeVersion` 記錄舊版本；封存 → `status=archived` 不再出現在 RAG 結果；封存後重新發布 → 可再次被 RAG 查詢
+- [ ] `draft → published` 後 `findForRetrieval()` 可取得該條目
 - [ ] AuditLog 查詢 API：可依 `requestId` 查詢單筆、可依日期範圍 + 事件類型過濾
 - [ ] Ticket 查詢 API：可依狀態 / 日期範圍過濾，回傳分頁結果
 - [ ] Feedback 查詢 API：可依 session / value（up/down）過濾，回傳分頁結果
@@ -704,7 +704,7 @@ DashboardModule ← Phase 6（讀 Lead/Ticket/Feedback/AuditLog）
 |---------|---------|--------|------|---------|
 | **R-001** | LLM provider API latency 不穩定，P90 超過 3s | 中 | 高 | 設定 `LLM_TIMEOUT_MS`（預設 10s）+ retry（最多 2 次）；雙層 fallback 策略（主模型失敗 → `gpt-5.4-nano` → 固定訊息）確保不超時；SSE `event: timeout` 讓前端感知並顯示失效提示 |
 | **R-002** | `pg_trgm` 在目標部署環境不可用 | 低〜中 | 中 | ILIKE fallback 策略已實作（design.md §14.1）；調低 `rag_confidence_threshold`（如 0.4）；不阻擋 MVP 開發 |
-| **R-003** | 知識庫內容品質不足，RAG 命中率低 | 中 | 高 | Phase 1 先確保核心 FAQ 與產品規格知識條目存在且已審核；知識品質問題屬運營問題，不是技術問題 |
+| **R-003** | 知識庫內容品質不足，RAG 命中率低 | 中 | 高 | Phase 1 先確保核心 FAQ 與產品規格知識條目存在且已發布；知識品質問題屬運營問題，不是技術問題 |
 | **R-004** | Prompt Injection 新型攻擊未覆蓋 | 低〜中 | 高 | BlacklistEntry / SafetyRule 設計為可動態更新（後台 API）；不依賴靜態 hardcode 規則 |
 | **R-005** | RAG 閾值設定不當導致大量拒答或低信心生成 | 中 | 中 | `rag_confidence_threshold` 來自 SystemConfig（runtime 可調整）；Phase 2 完成後以測試集驗證並調整閾值 |
 | **R-006** | 甲方機密關鍵字清單遲遲無法確認 | 中 | 中 | **保守預設**：seed 先提供常見機密觸發詞樣本；後台 API 支援隨時補充；Phase 3 先以樣本測試通過，等甲方補充後再跑完整 50 題 |
@@ -848,7 +848,7 @@ NODE_ENV=production：
 | P3 | Prompt Injection ≥ 95% + 機密樣本 100% 攔截 |
 | P4 | 問診四欄位流程跑通 + 高意向觸發留資引導 |
 | P5 | Lead 建立 + Webhook 推送 + Cron Worker 重試運作 |
-| P6 | 知識庫後台 API + 審核流程 + 查詢 API 可用 |
+| P6 | 知識庫後台 API + 發布流程 + 查詢 API 可用 |
 | P7 | AC-001 ~ AC-019 全覆蓋 + 效能驗證記錄 |
 
 ---

@@ -16,7 +16,7 @@ export class KnowledgeService {
 
   /**
    * Return knowledge entries eligible for RAG retrieval.
-   * The repository enforces `status='approved'` and `visibility='public'`.
+   * The repository enforces `status='published'` and `visibility='public'`.
    */
   async findForRetrieval(query: RetrievalQuery = {}): Promise<KnowledgeEntry[]> {
     return this.knowledgeRepository.findForRetrieval(query);

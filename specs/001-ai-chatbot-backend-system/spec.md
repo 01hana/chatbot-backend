@@ -94,7 +94,7 @@
 | G6 | 系統可降級：AI 失效時留資與聯絡方式功能仍可運作 | P0 |
 | G7 | 所有關鍵對話行為可追溯（稽核日誌） | P0 |
 | G8 | 支援繁體中文與英文雙語對話 | P1 |
-| G9 | 提供後台知識庫管理 API（知識上傳、審核、版本） | P1 |
+| G9 | 提供後台知識庫管理 API（知識上傳、發布、版本） | P1 |
 | G10 | 提供對話紀錄與稽核資料查詢 API | P1 |
 
 ---
@@ -136,7 +136,7 @@
 - 多語系後端支援（語言偵測、繁中 / 英文回覆）
 - 稽核日誌（每輪對話完整記錄）
 - 降級模式（AI 失效時的 fallback 機制）
-- 知識庫後台 CRUD API（新增、更新版本、審核狀態管理）
+- 知識庫後台 CRUD API（新增、更新版本、發布狀態管理）
 - 對話紀錄查詢 API
 - 詞彙表 / 意圖模板資料維護 API
 - **Widget Config API**（`GET /api/v1/widget/config`，提供前端初始化配置）
@@ -171,7 +171,7 @@
 | 角色 | 描述 | 本期互動方式 |
 |------|------|-------------|
 | 外部訪客 | 震南官網的不特定訪客 | 透過前端呼叫聊天 API（後端不限制身份） |
-| 後台管理者 | 負責維護知識庫、審核知識條目、查看對話紀錄 | 透過後台 API（本期無應用層 Auth，需基礎設施保護） |
+| 後台管理者 | 負責維護知識庫、發布知識條目、查看對話紀錄 | 透過後台 API（本期無應用層 Auth，需基礎設施保護） |
 | 業務 / 客服人員 | 接收轉人工通知、處理 Lead | 透過 Webhook 接收（本期主要方式）；Email 通知本期不做 |
 | 外部 LLM Provider | 外部 AI 生成服務（本期預設整合 OpenAI，provider 可替換）| 由後端統一呼叫，對外不可見；provider 需可替換 |
 | Webhook 接收端 | 接收 Lead / 轉人工通知的外部系統 | 後端主動推送 |
@@ -183,7 +183,7 @@
 ### SC-01：訪客詢問產品規格
 
 **主流程：**
-訪客發送問題 → 後端以 `sessionToken` 識別匿名訪客會話（映射至內部 `sessionId`）→ 偵測語言 → 意圖識別 → 知識庫檢索（public 分級、approved 狀態）→ 信心分數判斷 → 達閾值則組裝 context 送外部 LLM → 透過 **SSE / streaming** 逐 token 串流回覆至前端 → 附上來源參考 → 寫入稽核日誌
+訪客發送問題 → 後端以 `sessionToken` 識別匿名訪客會話（映射至內部 `sessionId`）→ 偵測語言 → 意圖識別 → 知識庫檢索（public 分級、published 狀態）→ 信心分數判斷 → 達閾值則組裝 context 送外部 LLM → 透過 **SSE / streaming** 逐 token 串流回覆至前端 → 附上來源參考 → 寫入稽核日誌
 
 **例外流程：**
 - 信心分數低於閾值 → 返回「追問」回應，請訪客補充資訊
@@ -258,7 +258,7 @@
 
 ### SC-07：知識庫管理（後台）
 
-後台管理者上傳新知識條目 → 設定 visibility 分級、意圖標籤、tags → 狀態預設為 `draft` → 審核通過後更新為 `approved` → 版本遞增 → 舊版本保留為 `archived` → 可供 RAG 檢索使用
+後台管理者上傳新知識條目 → 設定 visibility 分級、意圖標籤、tags → 狀態預設為 `draft` → 發布後更新為 `published` → 版本遞增 → 可封存為 `archived` → 可從 archived 回溯發布 → published 條目可供 RAG 檢索使用
 
 ---
 
@@ -283,7 +283,7 @@
 
 | ID | 需求描述 | 優先級 |
 |----|----------|--------|
-| FR-010 | 系統可依據訊息內容在知識庫中進行檢索，僅搜尋 `status=approved AND visibility=public` 的條目；具體檢索方案由 `design.md` 定義 | P0 |
+| FR-010 | 系統可依據訊息內容在知識庫中進行檢索，僅搜尋 `status=published AND visibility=public` 的條目；具體檢索方案由 `design.md` 定義 | P0 |
 | FR-011 | 系統可計算知識條目與訊息的相關性信心分數（0–1） | P0 |
 | FR-012 | 當信心分數低於可配置閾值時，系統**不得**觸發 LLM 生成，應返回追問或拒答狀態；閾值需可透過設定調整，不可硬編碼 | P0 |
 | FR-013 | 當信心分數達閾值時，系統可將相關知識條目組裝為 context，送往外部 LLM 生成回覆 | P0 |
@@ -359,8 +359,8 @@
 |----|----------|--------|
 | FR-070 | 系統提供知識條目新增 API（含 visibility、tags、意圖標籤設定）| P1 |
 | FR-071 | 知識條目更新時需建立新版本（version + 1），舊版本保留為 `archived` | P1 |
-| FR-072 | 系統提供審核狀態管理 API（draft → approved / archived）| P1 |
-| FR-073 | 只有 `status=approved AND visibility=public` 的條目可被 RAG 檢索使用 | P0 |
+| FR-072 | 系統提供發布狀態管理 API（draft / archived → published；any → archived）| P1 |
+| FR-073 | 只有 `status=published AND visibility=public` 的條目可被 RAG 檢索使用 | P0 |
 | FR-074 | 系統提供對話紀錄查詢 API，可依 sessionId / 日期範圍 / 意圖標籤查詢 | P1 |
 | FR-075 | 系統提供稽核日誌查詢 API，可依 requestId / 日期範圍 / 事件類型查詢 | P1 |
 | FR-076 | 系統接收訪客對 AI 回覆的評分（讚 / 倒讚）與可選原因標記，並與訊息 / 對話關聯；後台可查詢與聚合 | P1 |
@@ -452,12 +452,12 @@
 | content | 條目正文 | ✓ |
 | intent_label | 關聯意圖標籤（可多值）| ✓ |
 | visibility | `public` / `internal` / `confidential` | ✓ |
-| status | `draft` / `approved` / `archived` | ✓ |
+| status | `draft` / `published` / `archived` | ✓ |
 | version | 版本號（整數遞增）| ✓ |
 | source_id | 來源參考 ID（若有）| — |
 | tags | 標籤陣列 | — |
 | owner | 建立 / 負責人識別碼 | — |
-| approved_at | 審核通過時間 | — |
+| published_at | 發布時間 | — |
 | created_at | 建立時間 | ✓ |
 | updated_at | 最後更新時間 | ✓ |
 
@@ -659,7 +659,7 @@
 | 風險 | 影響 | 因應方向 |
 |------|------|----------|
 | R-001：外部 LLM 服務 latency 不穩定 | 回應時間超標，服務體驗差 | 設定超時 + fallback；前端需自行處理等待體驗 |
-| R-002：知識庫內容品質不足 | RAG 命中率低，大量追問或拒答 | 先確保核心 FAQ 與產品規格入庫並審核通過 |
+| R-002：知識庫內容品質不足 | RAG 命中率低，大量追問或拒答 | 先確保核心 FAQ 與產品規格入庫並發布 |
 | R-003：Prompt Injection 未知攻擊模式 | 攔截率未達標 | 建立可動態更新的 blacklist + pattern list |
 | R-004：PII 資料未妥善脫敏 | 隱私合規風險 | 對話訊息落地前執行 PII redaction |
 | R-005：RAG 閾值設定不當 | 閾值過高 → 大量拒答；閾值過低 → 低信心內容仍生成 | 以測試集驗證閾值，並確保閾值可動態調整並納入稽核 |

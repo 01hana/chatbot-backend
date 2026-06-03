@@ -90,7 +90,7 @@ model KnowledgeEntry {
   aliases     String[]          @default([])
   /// ISO language tag for this entry — used for language-aware retrieval. zh-TW | en
   language    String            @default("zh-TW")
-  status      String            @default("draft") /// draft | approved | archived
+  status      String            @default("draft") /// draft | published | archived
   visibility  String            @default("private") /// public | private
   version     Int               @default(1)
   createdAt   DateTime          @default(now())
@@ -271,7 +271,7 @@ model KnowledgeDocument {
   title       String
   docType     KnowledgeDocType
   language    String               @default("zh-TW")
-  status      String               @default("draft")  /// draft | approved | archived
+  status      String               @default("draft")  /// draft | published | archived
   visibility  String               @default("private") /// public | private
   metadata    Json?
   deletedAt   DateTime?

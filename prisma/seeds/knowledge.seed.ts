@@ -95,7 +95,7 @@ export async function seedKnowledge(prisma: PrismaClient): Promise<void> {
         category: entry.category,
         answerType: 'rag',
         aliases: [],
-        status: 'approved',
+        status: 'published',
         visibility: 'public',
         version: 1,
         language,

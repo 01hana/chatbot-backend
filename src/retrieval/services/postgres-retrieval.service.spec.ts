@@ -30,7 +30,7 @@ describe('PostgresRetrievalService', () => {
     id,
     content: overrides.content ?? `Content for entry ${id}`,
     title: overrides.title ?? `Entry ${id}`,
-    status: 'approved',
+    status: 'published',
     visibility: 'public',
     deletedAt: null,
     intentLabel: null,
@@ -271,8 +271,8 @@ describe('PostgresRetrievalService', () => {
       expect(prisma.$queryRawUnsafe).toHaveBeenCalledTimes(1);
     });
 
-    it('cross-language fallback results should still have status=approved and visibility=public enforced by SQL', async () => {
-      // The second call (cross-language) is still the same SQL with approved+public conditions;
+    it('cross-language fallback results should still have status=published and visibility=public enforced by SQL', async () => {
+      // The second call (cross-language) is still the same SQL with published+public conditions;
       // we verify the SQL string contains both clauses.
       (prisma.$queryRawUnsafe as jest.Mock)
         .mockResolvedValueOnce([])
@@ -284,7 +284,7 @@ describe('PostgresRetrievalService', () => {
       const calls = (prisma.$queryRawUnsafe as jest.Mock).mock.calls;
       for (const call of calls) {
         const sql: string = call[0] as string;
-        expect(sql).toContain("ke.status = 'approved'");
+        expect(sql).toContain("ke.status = 'published'");
         expect(sql).toContain("ke.visibility = 'public'");
       }
     });

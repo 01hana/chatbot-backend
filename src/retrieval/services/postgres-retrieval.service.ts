@@ -17,7 +17,7 @@ const DEFAULT_LIMIT = 5;
  *  - `PG_TRGM_ENABLED=true`  → uses `pg_trgm` similarity query (preferred)
  *  - `PG_TRGM_ENABLED=false` → falls back to `ILIKE` substring matching
  *
- * In both cases only `status='approved' AND visibility='public'` entries are
+ * In both cases only `status='published' AND visibility='public'` entries are
  * returned (enforced at the SQL level).
  *
  * Both strategies search across `title`, `aliases`, `content`, and `tags`.
@@ -150,7 +150,7 @@ export class PostgresRetrievalService implements IRetrievalService {
               END
           ) AS similarity
         FROM knowledge_entries ke
-        WHERE ke.status = 'approved'
+        WHERE ke.status = 'published'
           AND ke.visibility = 'public'
           AND ke."deletedAt" IS NULL
           AND (
@@ -231,7 +231,7 @@ export class PostgresRetrievalService implements IRetrievalService {
           ELSE 0.0
         END AS score
       FROM knowledge_entries ke
-      WHERE ke.status = 'approved'
+      WHERE ke.status = 'published'
         AND ke.visibility = 'public'
         AND ke."deletedAt" IS NULL
         AND (

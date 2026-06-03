@@ -61,7 +61,7 @@ describe('KnowledgeAvailabilityChecker', () => {
   // ── Dual-source strategy ─────────────────────────────────────────────────
 
   describe('KnowledgeEntry as primary source', () => {
-    it('KnowledgeEntry has approved/public/not-deleted match → true', async () => {
+    it('KnowledgeEntry has published/public/not-deleted match → true', async () => {
       // entryCount > 0 → immediately true, no chunk check needed
       const prisma = makePrismaMock(3, 0);
       const checker = new KnowledgeAvailabilityChecker(prisma);
@@ -146,7 +146,7 @@ describe('KnowledgeAvailabilityChecker', () => {
   // ── Security invariants ──────────────────────────────────────────────────
 
   describe('security invariants in DB query', () => {
-    it('always passes status=approved to knowledgeEntry.count', async () => {
+    it('always passes status=published to knowledgeEntry.count', async () => {
       const prisma = makePrismaMock(0, 0);
       const checker = new KnowledgeAvailabilityChecker(prisma);
 
@@ -155,9 +155,9 @@ describe('KnowledgeAvailabilityChecker', () => {
       const calls = (prisma.knowledgeEntry.count as jest.Mock).mock.calls;
       // At least one call (exact language match)
       expect(calls.length).toBeGreaterThan(0);
-      // Every call must enforce approved status
+      // Every call must enforce published status
       for (const [args] of calls) {
-        expect(args?.where?.status).toBe('approved');
+        expect(args?.where?.status).toBe('published');
       }
     });
 
@@ -185,7 +185,7 @@ describe('KnowledgeAvailabilityChecker', () => {
       }
     });
 
-    it('passes document.status=approved to knowledgeChunk.count', async () => {
+    it('passes document.status=published to knowledgeChunk.count', async () => {
       const prisma = makePrismaMock(0, 0);
       const checker = new KnowledgeAvailabilityChecker(prisma);
 
@@ -194,7 +194,7 @@ describe('KnowledgeAvailabilityChecker', () => {
       const calls = (prisma.knowledgeChunk.count as jest.Mock).mock.calls;
       expect(calls.length).toBeGreaterThan(0);
       for (const [args] of calls) {
-        expect(args?.where?.document?.status).toBe('approved');
+        expect(args?.where?.document?.status).toBe('published');
       }
     });
 

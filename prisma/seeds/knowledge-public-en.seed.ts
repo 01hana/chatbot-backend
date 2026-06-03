@@ -850,7 +850,7 @@ export async function seedKnowledgePublicEn(prisma: PrismaClient): Promise<void>
         aliases: entry.aliases ?? [],
         category: entry.category,
         answerType: 'rag',
-        status: 'approved',
+        status: 'published',
         visibility: 'public',
         version: 1,
         language,

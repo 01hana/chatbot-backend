@@ -222,7 +222,7 @@ handoff 觸發時，後端建立 Lead 與 Ticket，回傳 `action=handoff`；前
 |------|------|---------|
 | `ChatModule` | 建立 session（回傳 sessionToken）、SSE 串流訊息發送、取得對話歷史、Pipeline 編排入口 | ✅ 本期 |
 | `ConversationModule` | Conversation / ConversationMessage 的持久化與查詢；sessionToken → sessionId 映射 | ✅ 本期 |
-| `KnowledgeModule` | 知識條目 CRUD、版本管理、審核狀態管理 | ✅ 本期 |
+| `KnowledgeModule` | 知識條目 CRUD、版本管理、發布狀態管理 | ✅ 本期 |
 | `RetrievalModule` | 知識檢索（`pg_trgm + metadata filter + intent/glossary boost`）、信心分數計算；FTS 為可選優化 | ✅ 本期 |
 | `SafetyModule` | Prompt Guard、Blacklist 管理、機密判斷、敏感意圖累積記錄 | ✅ 本期 |
 | `IntentModule` | 意圖識別、意圖模板管理、GlossaryTerm 管理 | ✅ 本期 |
@@ -306,7 +306,7 @@ flowchart TD
     L -- 是 --> LEAD[直接觸發留資流程]
     L -- 否 --> M{意圖=推薦?}
     M -- 是 --> DIAG[進入問診流程]
-    M -- 否 --> N[KnowledgeRetrieval\npg_trgm + metadata filter\n+ intent/glossary boost\n只取 public + approved]
+    M -- 否 --> N[KnowledgeRetrieval\npg_trgm + metadata filter\n+ intent/glossary boost\n只取 public + published]
     N --> O{RAG 信心分數\n>= 閾值?}
     O -- 否 (無命中) --> P[SSE event: done\n返回無法確認\n引導留資]
     O -- 否 (低信心) --> Q[SSE event: done\n返回追問\n請補充資訊]
@@ -356,7 +356,7 @@ flowchart TD
 - 高優先意圖直接路由（詢價 → Lead；推薦 → Diagnosis）
 
 #### 步驟 6：KnowledgeRetrieval
-- 僅查詢 `status=approved AND visibility=public`
+- 僅查詢 `status=published AND visibility=public`
 - **主方案**：`pg_trgm` trigram 相似度 + metadata filter（`intent_labels`、`tags`）+ GlossaryTerm 詞彙 boost，返回 Top-K 結果（K = `SystemConfig.retrieval_top_k`，預設 5）
 - **Fallback**（pg_trgm 不可用時）：ILIKE 關鍵字比對 + metadata filter（詳見 §14.1）
 - FTS（`tsvector` / `ts_rank`）可作為可選追加得分項，不作為必要路徑
@@ -584,7 +584,7 @@ flowchart TD
 2. PromptGuard（pattern / blacklist / injection）← 最先執行
 3. ConfidentialityCheck（意圖 + 知識分級）← 第二執行
 4. [其他業務邏輯]
-5. RAG 過濾（只拿 public + approved）← LLM 呼叫前最後一道
+5. RAG 過濾（只拿 public + published）← LLM 呼叫前最後一道
 ```
 
 ### 10.2 Prompt Guard 規則來源
@@ -635,7 +635,7 @@ prisma/
 |------|-----------|-----------|
 | `SafetyModule` / `SafetyService` | 從 `BlacklistEntry` + `SafetyRule` 載入規則至 in-memory 快取 | 每次請求以快取比對；後台 API 更新規則後呼叫 `invalidateCache()` 強制重新載入 |
 | `IntentModule` / `IntentService` | 從 `IntentTemplate` + `GlossaryTerm` 載入意圖模板與詞彙至 in-memory 快取 | 同上；快取命中率高，避免每次請求查 DB |
-| `KnowledgeModule` / `RetrievalModule` | 不快取規則；每次 RAG 查詢時以 `visibility` + `status` 條件過濾 | `KnowledgeRepository.findForRetrieval()` 強制加 `WHERE status='approved' AND visibility='public'`（不可由呼叫端覆蓋）|
+| `KnowledgeModule` / `RetrievalModule` | 不快取規則；每次 RAG 查詢時以 `visibility` + `status` 條件過濾 | `KnowledgeRepository.findForRetrieval()` 強制加 `WHERE status='published' AND visibility='public'`（不可由呼叫端覆蓋）|
 | `ConfigModule` / `ConfigService` | 從 `SystemConfig` 表載入業務閾值至 in-memory | `SystemConfig` 更新後呼叫 `invalidateCache()` 重新載入；閾值變更寫入 AuditLog |
 
 **DB 為唯一權威來源原則（補充）：**
@@ -672,7 +672,7 @@ prisma/
 
 - Repository 層的 `KnowledgeRepository.findForRetrieval()` 強制加上 WHERE 條件：
   ```sql
-  WHERE status = 'approved' AND visibility = 'public'
+  WHERE status = 'published' AND visibility = 'public'
   ```
 - 此條件不可由呼叫端覆蓋，為 Repository 內建的硬性限制
 
@@ -930,12 +930,12 @@ SystemConfig (key-value 設定表，業務閾值與文案唯一來源；包含 W
 | `content_tsv` | tsvector | FTS 向量（由 DB trigger 自動更新） |
 | `intent_labels` | string[] | 關聯意圖標籤（PostgreSQL array） |
 | `visibility` | enum | `public` / `internal` / `confidential` |
-| `status` | enum | `draft` / `approved` / `archived` |
+| `status` | enum | `draft` / `published` / `archived` |
 | `version` | int | 當前版本號 |
 | `source_id` | string? | 來源參考 |
 | `tags` | string[] | 標籤（用於 metadata filter） |
 | `owner` | string? | 建立者 |
-| `approved_at` | datetime? | 審核時間 |
+| `published_at` | datetime? | 發布時間 |
 | `created_at` / `updated_at` | datetime | — |
 
 ### 13.5 KnowledgeVersion（版本歷史）
@@ -951,7 +951,7 @@ SystemConfig (key-value 設定表，業務閾值與文案唯一來源；包含 W
 | `status` | enum | 當時狀態（通常為 `archived`） |
 | `created_at` | datetime | 版本建立時間 |
 
-> 版本規則：KnowledgeEntry 被更新時，舊版本資料 snapshot 寫入 `KnowledgeVersion`，`KnowledgeEntry.version += 1`，`KnowledgeEntry.status` 若原為 `approved` 則重設為 `draft`，待重新審核。
+> 版本規則：KnowledgeEntry 被更新時，舊版本資料 snapshot 寫入 `KnowledgeVersion`，`KnowledgeEntry.version += 1`，`KnowledgeEntry.status` 若原為 `published` 則重設為 `draft`，待重新發布。
 
 ### 13.6 Lead
 
@@ -1132,7 +1132,7 @@ SELECT id, title, content, version, intent_labels, tags,
   1.0 AS rag_score
 FROM knowledge_entries
 WHERE
-  status = 'approved'
+  status = 'published'
   AND visibility = 'public'
   AND (content ILIKE '%' || $1 || '%' OR title ILIKE '%' || $1 || '%')
 ORDER BY updated_at DESC
@@ -1165,7 +1165,7 @@ SELECT
   ) AS rag_score
 FROM knowledge_entries
 WHERE
-  status = 'approved'
+  status = 'published'
   AND visibility = 'public'
   AND similarity(content, $1) > 0.1
 ORDER BY rag_score DESC
@@ -1436,7 +1436,7 @@ Log 分類：
 | `human_handoff` | 轉人工觸發 |
 | `notification_failed` | 通知發送最終失敗 |
 | `system_config_update` | SystemConfig 變更 |
-| `knowledge_approved` | 知識條目審核通過 |
+| `knowledge_published` | 知識條目發布 |
 | `sensitive_intent_alert` | 敏感意圖累積達門檻 |
 
 ### 16.4 LLM 呼叫成本與可觀測性
@@ -1837,7 +1837,7 @@ Log 分類：
 | `human_handoff` | 轉人工觸發 |
 | `notification_failed` | 通知發送最終失敗 |
 | `system_config_update` | SystemConfig 變更 |
-| `knowledge_approved` | 知識條目審核通過 |
+| `knowledge_published` | 知識條目發布 |
 | `sensitive_intent_alert` | 敏感意圖累積達門檻 |
 
 ### 16.4 LLM 呼叫成本與可觀測性

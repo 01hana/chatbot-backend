@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { KnowledgeEntry, KnowledgeVersion } from '../../generated/prisma/client';
 import { KnowledgeService } from '../../knowledge/knowledge.service';
 import { KnowledgeListParams } from '../../knowledge/knowledge.repository';
@@ -6,16 +6,16 @@ import { AuditService } from '../../audit/audit.service';
 import { CreateKnowledgeDto, UpdateKnowledgeDto, ListKnowledgeQueryDto } from './dto/knowledge-admin.dto';
 
 /**
- * AdminKnowledgeService — admin CRUD + approval workflow for knowledge entries.
+ * AdminKnowledgeService — admin CRUD + publishing workflow for knowledge entries.
  *
  * Delegates persistence to KnowledgeService (and in turn KnowledgeRepository).
  * All DB access is strictly through the service layer — no direct Prisma calls here.
  *
- * Approval flow:
- *  - draft    → approve → approved  (normal path)
- *  - approved → approve → approved  (no-op; already approved)
- *  - archived → approve → 400        (cannot approve archived)
- *  - any      → archive → archived   (always succeeds; archived→archived is no-op)
+ * Publishing flow:
+ *  - draft     → publish → published (normal path)
+ *  - published → publish → published (no-op; already published)
+ *  - archived  → publish → published (restore / republish)
+ *  - any       → archive → archived  (always succeeds; archived→archived is no-op)
  *
  * Note: Auth / RBAC is explicitly deferred per spec.md v1.6.0.
  */
@@ -164,36 +164,32 @@ export class AdminKnowledgeService {
     }
   }
 
-  // ─── Approval flow ────────────────────────────────────────────────────────
+  // ─── Publishing flow ──────────────────────────────────────────────────────
 
   /**
-   * Approve a knowledge entry (draft → approved).
-   *  - approved → no-op (returns current entry unchanged)
-   *  - archived → 400 (cannot approve archived)
+   * Publish a knowledge entry (draft/archived → published).
+   *  - published → no-op (returns current entry unchanged)
    * Throws 404 when not found.
    */
-  async approve(id: number): Promise<KnowledgeEntry> {
+  async publish(id: number): Promise<KnowledgeEntry> {
     const entry = await this.knowledgeService.findById(id);
     if (!entry) {
       throw new NotFoundException(`Knowledge entry #${id} not found`);
     }
-    if (entry.status === 'archived') {
-      throw new BadRequestException('Cannot approve an archived knowledge entry');
-    }
-    if (entry.status === 'approved') {
+    if (entry.status === 'published') {
       return entry; // no-op
     }
 
-    const updated = await this.knowledgeService.update(id, { status: 'approved' });
+    const updated = await this.knowledgeService.update(id, { status: 'published' });
 
     this.auditService
       .log({
-        eventType: 'knowledge_approved',
+        eventType: 'knowledge_published',
         eventData: {
           id,
           sourceKey: entry.sourceKey,
           fromStatus: entry.status,
-          toStatus: 'approved',
+          toStatus: 'published',
           version: entry.version,
         },
       })
@@ -204,7 +200,7 @@ export class AdminKnowledgeService {
 
   /**
    * Archive a knowledge entry.
-   *  - any status → archived (allowed: draft or approved → archived)
+   *  - any status → archived (allowed: draft or published → archived)
    *  - archived   → no-op (returns current entry unchanged)
    * Throws 404 when not found.
    */
@@ -249,4 +245,3 @@ export class AdminKnowledgeService {
     return this.knowledgeService.findAll();
   }
 }
-

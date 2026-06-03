@@ -202,7 +202,7 @@ Phase 7（品質補強與驗收準備）
   - 驗收：執行 seed 後 `IntentTemplate` 有 4 種以上意圖；`GlossaryTerm` 有至少 10 筆
 
 - [X] **T1-005** `DATA` **實作 `knowledge.seed.ts`（開發 / 測試用）**
-  - 說明：建立至少 5 筆示範知識條目（含不同 `intentLabel`、`tags`、`status=approved`、`visibility=public`）；在 `seed.ts` 主進入點以 `NODE_ENV !== 'production'` 條件決定是否執行此 seed
+  - 說明：建立至少 5 筆示範知識條目（含不同 `intentLabel`、`tags`、`status=published`、`visibility=public`）；在 `seed.ts` 主進入點以 `NODE_ENV !== 'production'` 條件決定是否執行此 seed
   - 輸出物：`prisma/seeds/knowledge.seed.ts`、`prisma/seed.ts`（更新 NODE_ENV 條件）
   - 驗收：`NODE_ENV=development` 時執行 seed 後知識條目存在；`NODE_ENV=production` 時此 seed 跳過不執行
 
@@ -222,9 +222,9 @@ Phase 7（品質補強與驗收準備）
   - 驗收：應用啟動時 `IntentService` 從 DB 載入意圖模板；`detect()` 可接受 input 並回傳結構化結果
 
 - [X] **T1-009** `CORE` **建立 KnowledgeModule 骨架（KnowledgeService + KnowledgeRepository）**
-  - 說明：建立 `KnowledgeModule`；`KnowledgeRepository`（`findForRetrieval(query: RetrievalQuery): KnowledgeEntry[]` — 強制帶入 `WHERE status = 'approved' AND visibility = 'public'`，呼叫端無法繞過；`findById()`；`create()`；`update()`）；`KnowledgeService`（封裝 Repository，提供 CRUD 介面）
+  - 說明：建立 `KnowledgeModule`；`KnowledgeRepository`（`findForRetrieval(query: RetrievalQuery): KnowledgeEntry[]` — 強制帶入 `WHERE status = 'published' AND visibility = 'public'`，呼叫端無法繞過；`findById()`；`create()`；`update()`）；`KnowledgeService`（封裝 Repository，提供 CRUD 介面）
   - 輸出物：`src/knowledge/knowledge.module.ts`、`src/knowledge/knowledge.service.ts`、`src/knowledge/knowledge.repository.ts`
-  - 驗收：`KnowledgeRepository.findForRetrieval()` 無論傳入任何 filter 參數，SQL 查詢一律附帶 `status='approved' AND visibility='public'`
+  - 驗收：`KnowledgeRepository.findForRetrieval()` 無論傳入任何 filter 參數，SQL 查詢一律附帶 `status='published' AND visibility='public'`
 
 - [X] **T1-010** `CORE` **建立 Admin 路由骨架（Knowledge + SystemConfig）**
   - 說明：建立 `/api/v1/admin/knowledge/` 路由骨架（Controller + DTO + 空實作的 Service 方法）；建立 `/api/v1/admin/system-config/` 路由骨架（Controller + DTO + 空實作）；路由存在但回傳 501 Not Implemented 佔位回應
@@ -232,7 +232,7 @@ Phase 7（品質補強與驗收準備）
   - 驗收：`GET /api/v1/admin/knowledge` 回傳 501（骨架存在）；路由結構正確，後續 Phase 填充實作
 
 - [X] **T1-011** `TEST` **Phase 1 測試：SafetyService、IntentService、KnowledgeRepository 單元測試**
-  - 說明：`SafetyService` 單元測試（mock PrismaService；驗證規則從 DB 正確載入至 cache；`invalidateCache()` 觸發重新載入）；`IntentService` 單元測試（mock；意圖模板正確載入）；`KnowledgeRepository` 單元測試（`findForRetrieval()` 不論傳入參數，不回傳 `visibility != 'public'` 或 `status != 'approved'` 的條目）
+  - 說明：`SafetyService` 單元測試（mock PrismaService；驗證規則從 DB 正確載入至 cache；`invalidateCache()` 觸發重新載入）；`IntentService` 單元測試（mock；意圖模板正確載入）；`KnowledgeRepository` 單元測試（`findForRetrieval()` 不論傳入參數，不回傳 `visibility != 'public'` 或 `status != 'published'` 的條目）
   - 輸出物：`src/safety/safety.service.spec.ts`、`src/intent/intent.service.spec.ts`、`src/knowledge/knowledge.repository.spec.ts`
   - 驗收：所有單元測試通過；`findForRetrieval()` 可見性過濾有測試案例覆蓋
 
@@ -386,7 +386,7 @@ Phase 7（品質補強與驗收準備）
   - 驗收：累積 3 次後 AuditLog 有 alert 事件；不超出閾值時無 alert；`sensitiveIntentCount` 在 DB 正確更新
 
 - [X] **T3-004** `SAFE` **確保 RAG 層知識隔離不洩露機密**
-  - 說明：確認 `KnowledgeRepository.findForRetrieval()` 的 `WHERE status='approved' AND visibility='public'` 無法被呼叫端繞過（已在 T1-009 實作，此任務為安全驗收確認）；在 Phase 3 的攔截分類完成後，補充確認：機密拒答路徑不會觸發 `findForRetrieval()`（被短路跳過）
+  - 說明：確認 `KnowledgeRepository.findForRetrieval()` 的 `WHERE status='published' AND visibility='public'` 無法被呼叫端繞過（已在 T1-009 實作，此任務為安全驗收確認）；在 Phase 3 的攔截分類完成後，補充確認：機密拒答路徑不會觸發 `findForRetrieval()`（被短路跳過）
   - 輸出物：測試案例（確認攔截短路後不呼叫 retrieval）
   - 驗收：攔截後的 Pipeline 不執行 KnowledgeRetrieval 步驟；knowledge isolation 測試通過
 
@@ -443,7 +443,7 @@ Phase 7（品質補強與驗收準備）
 - [X] **T4-004** `CORE` **實作規格比對邏輯**
   - 說明：問診完成後，以 `intent_label='product-spec'` + `tags` array filter（`purpose`、`material`、`length`、`environment`）呼叫 `KnowledgeRepository.findForRetrieval()`；取得符合條目後呼叫 LLM 生成自然語言推薦摘要（LLM 只負責文字摘要，不決定規格匹配）；推薦結果寫入 `Conversation.diagnosisContext.stage='recommended'`；`sourceReferences` 含比對到的知識條目 ID
   - 輸出物：`src/chat/chat-pipeline.service.ts`（更新）、`src/knowledge/knowledge.repository.ts`（確認 filter 支援）
-  - 驗收：規格比對結果為 approved+public 的知識條目；LLM 摘要結果包含推薦理由；無符合條目時有 fallback 回覆
+  - 驗收：規格比對結果為 published+public 的知識條目；LLM 摘要結果包含推薦理由；無符合條目時有 fallback 回覆
 
 - [X] **T4-005** `CORE` **實作高意向偵測（IntentService.isHighIntent）**
   - 說明：`IntentService.isHighIntent(history: ConversationMessage[]): boolean`（rule-based，分析近 N 輪歷史，N 來自 `SystemConfig.high_intent_look_back_turns`，預設 5）；高意向關鍵字（詢價類：「報價」、「多少錢」、「price」、「quotation」等）在 `IntentTemplate` DB 中維護；`highIntentScore` 累計計算；達 `SystemConfig.high_intent_threshold`（預設 2）時回傳 `true`；`Conversation.highIntentScore` 即時更新
@@ -561,7 +561,7 @@ Phase 7（品質補強與驗收準備）
 
 ## Phase 6：知識庫後台 / 查詢 API / Dashboard
 
-> **目標**：完整知識庫後台 CRUD、版本管理、審核流程；對話 / Lead / Ticket / Feedback / AuditLog 查詢 API；Dashboard 聚合統計 API  
+> **目標**：完整知識庫後台 CRUD、版本管理、發布流程；對話 / Lead / Ticket / Feedback / AuditLog 查詢 API；Dashboard 聚合統計 API  
 > **里程碑**：M6 — 後台查詢可用；Dashboard API 可用  
 > **前置依賴**：Phase 1（KnowledgeModule 骨架）、Phase 2（AuditModule）、Phase 5（LeadModule、TicketModule、FeedbackModule、NotificationModule）  
 > **OQ-006**：任何可被外部存取的環境，均不得在未加反向代理 + IP 白名單前暴露 `/api/v1/admin/**`
@@ -573,10 +573,10 @@ Phase 7（品質補強與驗收準備）
   - 輸出物：`src/admin/knowledge/knowledge-admin.controller.ts`、`src/admin/knowledge/knowledge-admin.service.ts`、`src/admin/knowledge/dto/`
   - 驗收：新增後 `status=draft`；更新後舊版本存入 `KnowledgeVersion`，`version += 1`；列表 API 支援分頁
 
-- [X] **T6-002** `ADMIN` **實作知識庫審核流程（draft → approved → archived）**
-  - 說明：`POST /api/v1/admin/knowledge/:id/approve`（`draft → approved`；審核通過後 `findForRetrieval()` 可取得此條目）；`POST /api/v1/admin/knowledge/:id/archive`（`approved → archived`；封存後不再出現在 RAG 結果）；狀態轉換規則（`draft` 可 approve；`approved` 可 archive；`archived` 不可回退）；非法狀態轉換回傳 400
+- [X] **T6-002** `ADMIN` **實作知識庫發布流程（draft / archived → published；any → archived）**
+  - 說明：`POST /api/v1/admin/knowledge/:id/publish`（`draft` 或 `archived` → `published`；發布後 `findForRetrieval()` 可取得此條目）；`POST /api/v1/admin/knowledge/:id/archive`（任意狀態 → `archived`；封存後不再出現在 RAG 結果）；狀態轉換規則（`published` 重複 publish 為 no-op；`archived` 可回溯發布）
   - 輸出物：`src/admin/knowledge/knowledge-admin.service.ts`（更新）
-  - 驗收：`approve` 後 `findForRetrieval()` 可取得；`archive` 後 RAG 不回傳；非法轉換有錯誤訊息
+  - 驗收：`publish` 後 `findForRetrieval()` 可取得；`archive` 後 RAG 不回傳；封存後重新發布可再次被 RAG 取得
 
 - [X] **T6-003** `ADMIN` **實作 SystemConfig Admin API**
   - 說明：`GET /api/v1/admin/system-config`（列出所有 key-value）；`PATCH /api/v1/admin/system-config/:key`（更新 value → `SystemConfigService.invalidateCache()` → 寫入 AuditLog（含 before/after 值 snapshot））；更新 DTO 含 `class-validator` 驗證；`key` 不存在時回傳 404
@@ -614,9 +614,9 @@ Phase 7（品質補強與驗收準備）
   - 驗收：文件存在且說明清晰；包含「此為部署前提，不是選項」的說明
 
 - [X] **T6-010** `TEST` **Phase 6 測試：知識庫版本管理整合測試**
-  - 說明：整合測試：新增 → 審核 → `findForRetrieval()` 可取得；更新 → `KnowledgeVersion` 有舊版本記錄，`version += 1`，`status=draft`；封存 → `findForRetrieval()` 不回傳；非法狀態轉換回傳 400
+  - 說明：整合測試：新增 → 發布 → `findForRetrieval()` 可取得；更新 → `KnowledgeVersion` 有舊版本記錄，`version += 1`，`status=draft`；封存 → `findForRetrieval()` 不回傳；封存後重新發布 → RAG 可重新取得
   - 輸出物：`test/knowledge-admin.integration-spec.ts`
-  - 驗收：版本管理與審核流程整合測試通過
+  - 驗收：版本管理與發布流程整合測試通過
 
 - [X] **T6-011** `TEST` **Phase 6 測試：Dashboard API 測試 + 查詢 API E2E 測試**
   - 說明：`DashboardService` 單元測試（mock DB）：`getStats()` 回傳所有欄位（含 `feedbackSummary: {totalCount, upCount, downCount, upRate}`）；日期範圍 filter 正確；E2E 測試（supertest）：`GET /api/v1/admin/dashboard` 含日期參數回傳 200；缺少日期 400；`GET /api/v1/admin/conversations` filter 組合查詢；`GET /api/v1/admin/audit-logs?requestId=xxx` 單筆查詢；`GET /api/v1/admin/leads` 分頁查詢；SystemConfig 更新 API AuditLog 記錄 before/after；`GET /api/v1/admin/tickets` filter + 分頁；`GET /api/v1/admin/feedback` filter + 分頁
@@ -709,7 +709,7 @@ Phase 7（品質補強與驗收準備）
 | T5-014 | Lead + Ticket 同步建立（handoff 閉環）；交接欄位正確 | AC-005, AC-006 |
 | T5-015 | Feedback 評分 API 測試通過 | AC-019（擴充） |
 | T5-007 ~ T5-009 | Lead 建立 + Webhook payload 完整 + Cron Worker 重試 | AC-005, AC-006 |
-| T6-010 | 知識庫審核流程：draft → approved → RAG 可用 → archive → RAG 不回傳 | AC-016 |
+| T6-010 | 知識庫發布流程：draft/archived → published → RAG 可用；archive → RAG 不回傳 | AC-016 |
 | T6-011 | Dashboard API 回傳正確聚合統計；查詢 API E2E 測試通過 | AC-020（擴充） |
 | T7-003 | ≥ 30 題 Injection 攔截率 ≥ 95%（記錄留存）| AC-004 |
 | T7-002 | 機密題庫 100% 攔截（10 題保守預設或 50 題完整版）| AC-003 |

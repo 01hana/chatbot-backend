@@ -5,7 +5,7 @@ import { Type } from 'class-transformer';
 const SUPPORTED_LANGUAGES = ['zh-TW', 'en'] as const;
 
 /** Valid status values for knowledge entries. */
-export const KNOWLEDGE_STATUSES = ['draft', 'approved', 'archived'] as const;
+export const KNOWLEDGE_STATUSES = ['draft', 'published', 'archived'] as const;
 
 /** Valid visibility values for knowledge entries. */
 export const KNOWLEDGE_VISIBILITIES = ['public', 'private', 'internal', 'confidential'] as const;

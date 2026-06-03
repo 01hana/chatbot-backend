@@ -448,7 +448,7 @@ export class SupportabilityClassifier {
 所有查詢必須套用以下條件，避免草稿或已下架內容影響支援判斷：
 
 ```
-status = 'approved'
+status = 'published'
 visibility = 'public'
 deletedAt IS NULL（若 model 有軟刪除欄位）
 language = 使用者語言（允許 fallback 至其他語言）
@@ -489,7 +489,7 @@ export class KnowledgeAvailabilityChecker {
     const entryCount = await this.prisma.knowledgeEntry.count({
       where: {
         category: { in: categories },
-        status: 'approved',
+        status: 'published',
         visibility: 'public',
         deletedAt: null,
         // language fallback：優先 exact match，允許語言寬鬆匹配
@@ -501,7 +501,7 @@ export class KnowledgeAvailabilityChecker {
     const docCount = await this.prisma.knowledgeDocument.count({
       where: {
         docType: { in: this.getDocTypesForQueryType(queryType) },
-        status: 'approved',
+        status: 'published',
         visibility: 'public',
         deletedAt: null,
         // language fallback：優先 exact match，允許語言寬鬆匹配

@@ -1,5 +1,5 @@
 import { describe, beforeEach, it, expect, jest } from '@jest/globals';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AdminKnowledgeService } from './admin-knowledge.service';
 import { KnowledgeService } from '../../knowledge/knowledge.service';
@@ -15,8 +15,8 @@ import { KnowledgeEntry, KnowledgeVersion } from '../../generated/prisma/client'
  *  - getOneWithVersions: found with versions / not found
  *  - create: defaults (status=draft, version=1, visibility=private), provided visibility, audit event
  *  - update: calls updateWithVersionSnapshot, 404 when missing, audit event
- *  - approve: draft→approved, approved no-op, archived→400, 404, audit event
- *  - archive: approved→archived, draft→archived, archived no-op, 404, audit event
+ *  - publish: draft→published, published no-op, archived→published, 404, audit event
+ *  - archive: published→archived, draft→archived, archived no-op, 404, audit event
  *  - remove: softDelete / 404
  *  - findByCategory: delegates correctly
  */
@@ -109,11 +109,11 @@ describe('AdminKnowledgeService', () => {
     it('should pass filters to findFiltered', async () => {
       knowledgeService.findFiltered.mockResolvedValueOnce({ items: [], total: 0 });
 
-      await service.list({ status: 'approved', visibility: 'public', language: 'en', keyword: 'bolt' });
+      await service.list({ status: 'published', visibility: 'public', language: 'en', keyword: 'bolt' });
 
       expect(knowledgeService.findFiltered).toHaveBeenCalledWith(
         expect.objectContaining({
-          status: 'approved',
+          status: 'published',
           visibility: 'public',
           language: 'en',
           keyword: 'bolt',
@@ -350,7 +350,7 @@ describe('AdminKnowledgeService', () => {
       );
     });
 
-    it('should not pass status to updateWithVersionSnapshot (status is controlled by approve/archive only)', async () => {
+    it('should not pass status to updateWithVersionSnapshot (status is controlled by publish/archive only)', async () => {
       const updated = makeEntry({ id: 1, version: 2, status: 'draft' });
       knowledgeService.updateWithVersionSnapshot.mockResolvedValueOnce(updated);
 
@@ -361,56 +361,61 @@ describe('AdminKnowledgeService', () => {
     });
   });
 
-  // ─── approve ──────────────────────────────────────────────────────────────
+  // ─── publish ──────────────────────────────────────────────────────────────
 
-  describe('approve()', () => {
-    it('should transition draft → approved', async () => {
+  describe('publish()', () => {
+    it('should transition draft → published', async () => {
       const draft = makeEntry({ id: 1, status: 'draft' });
-      const approved = makeEntry({ id: 1, status: 'approved' });
+      const published = makeEntry({ id: 1, status: 'published' });
       knowledgeService.findById.mockResolvedValueOnce(draft);
-      knowledgeService.update.mockResolvedValueOnce(approved);
+      knowledgeService.update.mockResolvedValueOnce(published);
 
-      const result = await service.approve(1);
+      const result = await service.publish(1);
 
-      expect(knowledgeService.update).toHaveBeenCalledWith(1, { status: 'approved' });
-      expect(result.status).toBe('approved');
+      expect(knowledgeService.update).toHaveBeenCalledWith(1, { status: 'published' });
+      expect(result.status).toBe('published');
     });
 
-    it('should be no-op when already approved', async () => {
-      const approved = makeEntry({ id: 1, status: 'approved' });
-      knowledgeService.findById.mockResolvedValueOnce(approved);
+    it('should be no-op when already published', async () => {
+      const published = makeEntry({ id: 1, status: 'published' });
+      knowledgeService.findById.mockResolvedValueOnce(published);
 
-      const result = await service.approve(1);
+      const result = await service.publish(1);
 
       expect(knowledgeService.update).not.toHaveBeenCalled();
-      expect(result.status).toBe('approved');
+      expect(result.status).toBe('published');
     });
 
-    it('should throw BadRequestException when approving an archived entry', async () => {
+    it('should transition archived → published', async () => {
       const archived = makeEntry({ id: 1, status: 'archived' });
+      const published = makeEntry({ id: 1, status: 'published' });
       knowledgeService.findById.mockResolvedValueOnce(archived);
+      knowledgeService.update.mockResolvedValueOnce(published);
 
-      await expect(service.approve(1)).rejects.toThrow(BadRequestException);
+      const result = await service.publish(1);
+
+      expect(knowledgeService.update).toHaveBeenCalledWith(1, { status: 'published' });
+      expect(result.status).toBe('published');
     });
 
     it('should throw NotFoundException when entry not found', async () => {
       knowledgeService.findById.mockResolvedValueOnce(null);
 
-      await expect(service.approve(99)).rejects.toThrow(NotFoundException);
+      await expect(service.publish(99)).rejects.toThrow(NotFoundException);
     });
 
-    it('should fire audit log knowledge_approved', async () => {
+    it('should fire audit log knowledge_published', async () => {
       const draft = makeEntry({ id: 1, status: 'draft' });
-      const approved = makeEntry({ id: 1, status: 'approved' });
+      const published = makeEntry({ id: 1, status: 'published' });
       knowledgeService.findById.mockResolvedValueOnce(draft);
-      knowledgeService.update.mockResolvedValueOnce(approved);
+      knowledgeService.update.mockResolvedValueOnce(published);
 
-      await service.approve(1);
+      await service.publish(1);
 
       expect(auditService.log).toHaveBeenCalledWith(
         expect.objectContaining({
-          eventType: 'knowledge_approved',
-          eventData: expect.objectContaining({ fromStatus: 'draft', toStatus: 'approved' }),
+          eventType: 'knowledge_published',
+          eventData: expect.objectContaining({ fromStatus: 'draft', toStatus: 'published' }),
         }),
       );
     });
@@ -419,10 +424,10 @@ describe('AdminKnowledgeService', () => {
   // ─── archive ──────────────────────────────────────────────────────────────
 
   describe('archive()', () => {
-    it('should transition approved → archived', async () => {
-      const approved = makeEntry({ id: 1, status: 'approved' });
+    it('should transition published → archived', async () => {
+      const published = makeEntry({ id: 1, status: 'published' });
       const archived = makeEntry({ id: 1, status: 'archived' });
-      knowledgeService.findById.mockResolvedValueOnce(approved);
+      knowledgeService.findById.mockResolvedValueOnce(published);
       knowledgeService.update.mockResolvedValueOnce(archived);
 
       const result = await service.archive(1);
@@ -459,9 +464,9 @@ describe('AdminKnowledgeService', () => {
     });
 
     it('should fire audit log knowledge_archived', async () => {
-      const approved = makeEntry({ id: 1, status: 'approved' });
+      const published = makeEntry({ id: 1, status: 'published' });
       const archived = makeEntry({ id: 1, status: 'archived' });
-      knowledgeService.findById.mockResolvedValueOnce(approved);
+      knowledgeService.findById.mockResolvedValueOnce(published);
       knowledgeService.update.mockResolvedValueOnce(archived);
 
       await service.archive(1);
@@ -469,7 +474,7 @@ describe('AdminKnowledgeService', () => {
       expect(auditService.log).toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: 'knowledge_archived',
-          eventData: expect.objectContaining({ fromStatus: 'approved', toStatus: 'archived' }),
+          eventData: expect.objectContaining({ fromStatus: 'published', toStatus: 'archived' }),
         }),
       );
     });

@@ -12,7 +12,7 @@ describe('DiagnosisRecommendationService', () => {
       content: '規格內容',
       intentLabel: 'product-spec',
       tags: ['室外', '線材'],
-      status: 'approved',
+      status: 'published',
       visibility: 'public',
       version: 1,
       language: 'zh-TW',

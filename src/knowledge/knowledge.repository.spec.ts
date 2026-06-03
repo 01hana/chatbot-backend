@@ -13,7 +13,7 @@ function makeEntry(overrides: Partial<KnowledgeEntry> = {}): KnowledgeEntry {
     tags: ['o-ring', 'material'],
     aliases: [],
     language: 'zh-TW',
-    status: 'approved',
+    status: 'published',
     visibility: 'public',
     version: 1,
     createdAt: new Date(),
@@ -60,14 +60,14 @@ describe('KnowledgeRepository', () => {
   // ──────────────────────────────────────────────────────────────────────────
 
   describe('findForRetrieval() — enforced security filters', () => {
-    it('always passes status="approved" to Prisma regardless of caller input', async () => {
+    it('always passes status="published" to Prisma regardless of caller input', async () => {
       mockFindMany.mockResolvedValue([makeEntry()]);
 
       await repository.findForRetrieval({});
 
       const [callArgs] = (mockFindMany as jest.Mock).mock.calls;
       const whereClause = (callArgs as [{ where: Record<string, unknown> }])[0].where;
-      expect(whereClause.status).toBe('approved');
+      expect(whereClause.status).toBe('published');
     });
 
     it('always passes visibility="public" to Prisma regardless of caller input', async () => {
@@ -90,14 +90,14 @@ describe('KnowledgeRepository', () => {
       expect(whereClause.deletedAt).toBeNull();
     });
 
-    it('still enforces status=approved when intentLabel filter is provided', async () => {
+    it('still enforces status=published when intentLabel filter is provided', async () => {
       mockFindMany.mockResolvedValue([makeEntry()]);
 
       await repository.findForRetrieval({ intentLabel: 'price-inquiry' });
 
       const [callArgs] = (mockFindMany as jest.Mock).mock.calls;
       const whereClause = (callArgs as [{ where: Record<string, unknown> }])[0].where;
-      expect(whereClause.status).toBe('approved');
+      expect(whereClause.status).toBe('published');
       expect(whereClause.visibility).toBe('public');
     });
 
@@ -108,7 +108,7 @@ describe('KnowledgeRepository', () => {
 
       const [callArgs] = (mockFindMany as jest.Mock).mock.calls;
       const whereClause = (callArgs as [{ where: Record<string, unknown> }])[0].where;
-      expect(whereClause.status).toBe('approved');
+      expect(whereClause.status).toBe('published');
       expect(whereClause.visibility).toBe('public');
     });
 

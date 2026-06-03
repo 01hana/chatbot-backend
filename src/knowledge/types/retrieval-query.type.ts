@@ -2,7 +2,7 @@
  * Query parameters for KnowledgeRepository.findForRetrieval().
  *
  * Note: `status` and `visibility` are intentionally excluded — they are always
- * forced to `approved` and `public` respectively by the repository and cannot
+ * forced to `published` and `public` respectively by the repository and cannot
  * be overridden by callers.
  */
 export interface RetrievalQuery {

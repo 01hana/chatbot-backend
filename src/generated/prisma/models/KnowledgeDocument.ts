@@ -649,7 +649,7 @@ export type $KnowledgeDocumentPayload<ExtArgs extends runtime.Types.Extensions.I
     docType: $Enums.KnowledgeDocType
     language: string
     /**
-     * draft | approved | archived
+     * draft | published | archived
      */
     status: string
     /**

@@ -26,7 +26,7 @@ export interface KnowledgeListParams {
  * knowledge_versions tables.
  *
  * Security contract:
- *  `findForRetrieval()` ALWAYS enforces `status = 'approved'` AND
+ *  `findForRetrieval()` ALWAYS enforces `status = 'published'` AND
  *  `visibility = 'public'`. These filters are part of the method signature
  *  and cannot be removed or bypassed by callers. Any relaxation requires a
  *  deliberate change to this method (protected by code review).
@@ -41,7 +41,7 @@ export class KnowledgeRepository {
    * Find knowledge entries eligible for RAG retrieval.
    *
    * Enforced invariants (never overridable by callers):
-   *  - `status  = 'approved'`
+   *  - `status  = 'published'`
    *  - `visibility = 'public'`
    *  - `deletedAt IS NULL` (soft-delete excluded)
    *
@@ -57,7 +57,7 @@ export class KnowledgeRepository {
     return this.prisma.knowledgeEntry.findMany({
       where: {
         // ─ SECURITY INVARIANT — DO NOT REMOVE ─────────────────────────────
-        status: 'approved',
+        status: 'published',
         visibility: 'public',
         // ──────────────────────────────────────────────────────────────────
         deletedAt: null,

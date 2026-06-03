@@ -82,7 +82,7 @@
 ### Classifiers
 
 - [x] T019 [US1] 實作 `src/query-understanding/classifiers/query-type.classifier.ts`（`QueryTypeClassifier.classify(tokens, normalizedQuery)`；判斷順序：1. hasContact 2. isBusinessHoursQuery **3. hasBusiness+isCatalogQuery** 4. hasBusiness 5. hasProduct+isComparisonQuery 6. hasProduct||hasMaterial 7. onlyNoise 8. Unknown）
-- [x] T020 [P] [US2] 實作 `src/query-understanding/classifiers/knowledge-availability-checker.ts`（`KnowledgeAvailabilityChecker.hasContentFor(queryType, language)`；**雙來源查詢**：①先查 `KnowledgeEntry`（`status='approved'`、`visibility='public'`、`deletedAt IS NULL`、`language` 完全匹配）②再查 `KnowledgeDocument`（`visibility='public'`、`deletedAt IS NULL`、`language` 完全匹配）下的 `KnowledgeChunk`；兩邊均套用 language 優先完全匹配，無結果時 fallback 至語言無關內容（不帶 language 條件重查）；任一來源有結果即回傳 `true`；per-queryType TTL 快取 60s）
+- [x] T020 [P] [US2] 實作 `src/query-understanding/classifiers/knowledge-availability-checker.ts`（`KnowledgeAvailabilityChecker.hasContentFor(queryType, language)`；**雙來源查詢**：①先查 `KnowledgeEntry`（`status='published'`、`visibility='public'`、`deletedAt IS NULL`、`language` 完全匹配）②再查 `KnowledgeDocument`（`visibility='public'`、`deletedAt IS NULL`、`language` 完全匹配）下的 `KnowledgeChunk`；兩邊均套用 language 優先完全匹配，無結果時 fallback 至語言無關內容（不帶 language 條件重查）；任一來源有結果即回傳 `true`；per-queryType TTL 快取 60s）
 - [x] T021 [US2] 實作 `src/query-understanding/classifiers/supportability.classifier.ts`（`SupportabilityClassifier.classify(queryType, tokens, language)`；all-noise → unsupported；queryType=Unsupported → unsupported；呼叫 `KnowledgeAvailabilityChecker.hasContentFor(queryType, language)`）
 
 ### Builders

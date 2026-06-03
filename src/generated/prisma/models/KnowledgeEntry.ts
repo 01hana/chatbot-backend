@@ -981,7 +981,7 @@ export type $KnowledgeEntryPayload<ExtArgs extends runtime.Types.Extensions.Inte
      */
     language: string
     /**
-     * draft | approved | archived
+     * draft | published | archived
      */
     status: string
     /**

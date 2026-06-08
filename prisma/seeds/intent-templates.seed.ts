@@ -8,7 +8,7 @@
 import { PrismaClient } from '../../src/generated/prisma/client';
 
 const INTENT_TEMPLATES: {
-  intent: string;
+  title: string;
   label: string;
   keywords: string[];
   templateZh: string;
@@ -16,7 +16,7 @@ const INTENT_TEMPLATES: {
   priority: number;
 }[] = [
   {
-    intent: 'product-inquiry',
+    title: 'product-inquiry',
     label: '產品詢問',
     keywords: ['產品', '型號', '規格', '尺寸', '材質', 'product', 'model', 'spec', 'size'],
     templateZh: '您好！請問您想了解哪項產品？可以提供型號或用途，我會為您查詢詳細資訊。',
@@ -24,7 +24,7 @@ const INTENT_TEMPLATES: {
     priority: 10,
   },
   {
-    intent: 'product-diagnosis',
+    title: 'product-diagnosis',
     label: '產品問診',
     keywords: ['問題', '故障', '異常', '壞掉', '不正常', '修', 'issue', 'broken', 'fault', 'problem', 'repair'],
     templateZh: '了解您遇到的狀況。為了幫您精準判斷，請問：\n1. 使用的產品型號是？\n2. 問題是什麼時候開始出現的？\n3. 使用環境（溫度、濕度）大約是？',
@@ -32,7 +32,7 @@ const INTENT_TEMPLATES: {
     priority: 20,
   },
   {
-    intent: 'price-inquiry',
+    title: 'price-inquiry',
     label: '價格詢問',
     keywords: ['價格', '報價', '多少錢', '費用', '優惠', 'price', 'quote', 'cost', 'discount', 'how much'],
     templateZh: '感謝您的詢價。請問您需要報價的產品型號與數量是？我會協助您取得最新報價。',
@@ -40,7 +40,7 @@ const INTENT_TEMPLATES: {
     priority: 15,
   },
   {
-    intent: 'general-faq',
+    title: 'general-faq',
     label: '常見問題',
     keywords: ['如何', '怎麼', '什麼是', '說明', 'FAQ', 'how to', 'what is', 'explain', 'help'],
     templateZh: '您好！請問有什麼我可以協助您的嗎？',
@@ -55,7 +55,7 @@ export async function seedIntentTemplates(prisma: PrismaClient): Promise<void> {
 
   for (const template of INTENT_TEMPLATES) {
     await prisma.intentTemplate.upsert({
-      where: { intent: template.intent },
+      where: { title: template.title },
       update: {
         label: template.label,
         keywords: template.keywords,

@@ -151,7 +151,7 @@ export class IntentService implements OnModuleInit {
 
       if (matched) {
         return {
-          intentLabel: template.intent,
+          intentLabel: template.title,
           confidence: 1,
           language,
         };
@@ -240,7 +240,7 @@ export class IntentService implements OnModuleInit {
 
     const templateKeywords = this.templates
       .filter(template => {
-        const intentText = `${template.intent} ${template.label}`.toLowerCase();
+        const intentText = `${template.title} ${template.label}`.toLowerCase();
         return intentSignals.some(signal => intentText.includes(signal));
       })
       .flatMap(template => template.keywords)

@@ -15,7 +15,7 @@ import { Type } from 'class-transformer';
 const INTENT_SORT_FIELDS = [
   'createdAt',
   'updatedAt',
-  'intent',
+  'title',
   'label',
   'priority',
   'category',
@@ -24,10 +24,10 @@ const INTENT_SORT_FIELDS = [
 
 /** DTO for creating an IntentTemplate via the admin API. */
 export class CreateIntentTemplateDto {
-  /** Unique machine-readable intent key (e.g. "product-inquiry"). */
+  /** Unique machine-readable title key (e.g. "product-inquiry"). */
   @IsString()
   @IsNotEmpty()
-  intent!: string;
+  title!: string;
 
   /** Human-readable display label. */
   @IsString()

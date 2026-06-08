@@ -116,14 +116,14 @@ describe('seedKnowledge()', () => {
     expect((mock.knowledgeEntry.upsert as jest.Mock).mock.calls.length).toBe(5);
   });
 
-  it('seeds entries with status="approved" and visibility="public"', async () => {
+  it('seeds entries with status="published" and visibility="public"', async () => {
     const mock = buildMockPrisma(null);
 
     await seedKnowledge(mock as unknown as PrismaClient);
 
     const upsertCalls = (mock.knowledgeEntry.upsert as jest.Mock).mock.calls as [{ create: Record<string, unknown> }][];
     for (const [callArgs] of upsertCalls) {
-      expect(callArgs.create.status).toBe('approved');
+      expect(callArgs.create.status).toBe('published');
       expect(callArgs.create.visibility).toBe('public');
     }
   });
@@ -340,18 +340,18 @@ describe('seedIntentTemplates()', () => {
     expect((mock.intentTemplate.upsert as jest.Mock).mock.calls.length).toBe(4);
   });
 
-  it('includes all 4 required intent slugs', async () => {
+  it('includes all 4 required title slugs', async () => {
     const mock = buildFullMockPrisma();
 
     await seedIntentTemplates(mock as unknown as PrismaClient);
 
     const calls = (mock.intentTemplate.upsert as jest.Mock).mock.calls as [{ create: Record<string, unknown> }][];
-    const intents = calls.map(([args]) => args.create.intent as string);
+    const titles = calls.map(([args]) => args.create.title as string);
 
-    expect(intents).toContain('product-inquiry');
-    expect(intents).toContain('product-diagnosis');
-    expect(intents).toContain('price-inquiry');
-    expect(intents).toContain('general-faq');
+    expect(titles).toContain('product-inquiry');
+    expect(titles).toContain('product-diagnosis');
+    expect(titles).toContain('price-inquiry');
+    expect(titles).toContain('general-faq');
   });
 
   it('seeds every entry with non-empty templateZh and templateEn', async () => {

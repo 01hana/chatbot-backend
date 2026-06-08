@@ -1827,7 +1827,7 @@ export type BlacklistEntryScalarFieldEnum = (typeof BlacklistEntryScalarFieldEnu
 
 export const IntentTemplateScalarFieldEnum = {
   id: 'id',
-  intent: 'intent',
+  title: 'title',
   label: 'label',
   keywords: 'keywords',
   templateZh: 'templateZh',

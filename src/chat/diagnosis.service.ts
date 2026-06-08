@@ -11,11 +11,11 @@ import { DiagnosisContext, DiagnosisFields } from './types/diagnosis-context.typ
  * The LLM is never consulted to decide the next question.
  *
  * Question text is resolved in this priority order:
- *   1. IntentTemplate row whose `intent` matches `diagnosis.<field>` (zh or en).
+ *   1. IntentTemplate row whose `title` matches `diagnosis.<field>` (zh or en).
  *   2. Built-in fallback strings (hardcoded below).
  *
  * The hardcoded strings are intentional fallback text only. Production deployments
- * should seed corresponding IntentTemplate rows (intent = "diagnosis.purpose" etc.)
+ * should seed corresponding IntentTemplate rows (title = "diagnosis.purpose" etc.)
  * so that question copy can be updated via the admin API without a code deploy.
  */
 @Injectable()
@@ -164,7 +164,7 @@ export class DiagnosisService {
    * Resolve the question text for the next missing field.
    *
    * Lookup order:
-   *   1. IntentTemplate row with `intent = "diagnosis.<field>"` (templateZh / templateEn).
+   *   1. IntentTemplate row with `title = "diagnosis.<field>"` (templateZh / templateEn).
    *   2. Built-in fallback strings.
    *
    * Returns an empty string when the context is already complete (no pending field).
@@ -176,10 +176,10 @@ export class DiagnosisService {
     const field = this.getNextMissingField(context);
     if (!field) return '';
 
-    const intentKey = `diagnosis.${field}`;
+    const titleKey = `diagnosis.${field}`;
     const templates = this.intentService.getCachedTemplates();
     // isActive === false means explicitly disabled; undefined / true means active.
-    const template = templates.find(t => t.intent === intentKey && t.isActive !== false);
+    const template = templates.find(t => t.title === titleKey && t.isActive !== false);
 
     const isZh = language.startsWith('zh');
 
@@ -187,7 +187,7 @@ export class DiagnosisService {
       return isZh ? template.templateZh : template.templateEn;
     }
 
-    // Fallback copy — used when no seed data exists for the intent key.
+    // Fallback copy — used when no seed data exists for the title key.
     return isZh ? DiagnosisService.FALLBACK_ZH[field] : DiagnosisService.FALLBACK_EN[field];
   }
 }

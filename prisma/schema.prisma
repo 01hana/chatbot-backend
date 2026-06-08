@@ -49,7 +49,7 @@ model BlacklistEntry {
 /// Intent classification templates including follow-up question templates.
 model IntentTemplate {
   id          Int      @id @default(autoincrement())
-  intent      String   @unique /// e.g. "product-inquiry"
+  title       String   @unique /// e.g. "product-inquiry"
   label       String   /// human-readable label
   keywords    String[] /// keyword hints used for detection
   templateZh  String   /// follow-up question template (zh-TW)

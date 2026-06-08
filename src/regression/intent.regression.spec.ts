@@ -33,7 +33,7 @@ import { INTENT_FIXTURES } from './fixtures/intent.fixtures';
 const SEEDED_TEMPLATES: IntentTemplate[] = [
   {
     id: 1,
-    intent: 'product-inquiry',
+    title: 'product-inquiry',
     label: '產品詢問',
     keywords: ['產品', '型號', '規格', '尺寸', '材質', 'product', 'model', 'spec', 'size'],
     templateZh: '您好！請問您想了解哪項產品？',
@@ -46,7 +46,7 @@ const SEEDED_TEMPLATES: IntentTemplate[] = [
   },
   {
     id: 2,
-    intent: 'product-diagnosis',
+    title: 'product-diagnosis',
     label: '產品問診',
     keywords: ['問題', '故障', '異常', '壞掉', '不正常', '修', 'issue', 'broken', 'fault', 'problem', 'repair'],
     templateZh: '了解您遇到的狀況。',
@@ -59,7 +59,7 @@ const SEEDED_TEMPLATES: IntentTemplate[] = [
   },
   {
     id: 3,
-    intent: 'price-inquiry',
+    title: 'price-inquiry',
     label: '價格詢問',
     keywords: ['價格', '報價', '多少錢', '費用', '優惠', 'price', 'quote', 'cost', 'discount', 'how much'],
     templateZh: '感謝您的詢價。',
@@ -72,7 +72,7 @@ const SEEDED_TEMPLATES: IntentTemplate[] = [
   },
   {
     id: 4,
-    intent: 'general-faq',
+    title: 'general-faq',
     label: '常見問題',
     keywords: ['如何', '怎麼', '什麼是', '說明', 'FAQ', 'how to', 'what is', 'explain', 'help'],
     templateZh: '您好！請問有什麼我可以協助您的嗎？',
@@ -139,7 +139,7 @@ describe('Intent regression — IntentService.detect() accuracy', () => {
       ...SEEDED_TEMPLATES,
       {
         id: 99,
-        intent: 'disabled-intent',
+        title: 'disabled-intent',
         label: 'Disabled',
         keywords: ['螺絲'],       // would otherwise match many queries
         templateZh: '',

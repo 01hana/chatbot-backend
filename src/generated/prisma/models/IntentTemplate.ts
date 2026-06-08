@@ -38,7 +38,7 @@ export type IntentTemplateSumAggregateOutputType = {
 
 export type IntentTemplateMinAggregateOutputType = {
   id: number | null
-  intent: string | null
+  title: string | null
   label: string | null
   templateZh: string | null
   templateEn: string | null
@@ -51,7 +51,7 @@ export type IntentTemplateMinAggregateOutputType = {
 
 export type IntentTemplateMaxAggregateOutputType = {
   id: number | null
-  intent: string | null
+  title: string | null
   label: string | null
   templateZh: string | null
   templateEn: string | null
@@ -64,7 +64,7 @@ export type IntentTemplateMaxAggregateOutputType = {
 
 export type IntentTemplateCountAggregateOutputType = {
   id: number
-  intent: number
+  title: number
   label: number
   keywords: number
   templateZh: number
@@ -90,7 +90,7 @@ export type IntentTemplateSumAggregateInputType = {
 
 export type IntentTemplateMinAggregateInputType = {
   id?: true
-  intent?: true
+  title?: true
   label?: true
   templateZh?: true
   templateEn?: true
@@ -103,7 +103,7 @@ export type IntentTemplateMinAggregateInputType = {
 
 export type IntentTemplateMaxAggregateInputType = {
   id?: true
-  intent?: true
+  title?: true
   label?: true
   templateZh?: true
   templateEn?: true
@@ -116,7 +116,7 @@ export type IntentTemplateMaxAggregateInputType = {
 
 export type IntentTemplateCountAggregateInputType = {
   id?: true
-  intent?: true
+  title?: true
   label?: true
   keywords?: true
   templateZh?: true
@@ -217,7 +217,7 @@ export type IntentTemplateGroupByArgs<ExtArgs extends runtime.Types.Extensions.I
 
 export type IntentTemplateGroupByOutputType = {
   id: number
-  intent: string
+  title: string
   label: string
   keywords: string[]
   templateZh: string
@@ -254,7 +254,7 @@ export type IntentTemplateWhereInput = {
   OR?: Prisma.IntentTemplateWhereInput[]
   NOT?: Prisma.IntentTemplateWhereInput | Prisma.IntentTemplateWhereInput[]
   id?: Prisma.IntFilter<"IntentTemplate"> | number
-  intent?: Prisma.StringFilter<"IntentTemplate"> | string
+  title?: Prisma.StringFilter<"IntentTemplate"> | string
   label?: Prisma.StringFilter<"IntentTemplate"> | string
   keywords?: Prisma.StringNullableListFilter<"IntentTemplate">
   templateZh?: Prisma.StringFilter<"IntentTemplate"> | string
@@ -268,7 +268,7 @@ export type IntentTemplateWhereInput = {
 
 export type IntentTemplateOrderByWithRelationInput = {
   id?: Prisma.SortOrder
-  intent?: Prisma.SortOrder
+  title?: Prisma.SortOrder
   label?: Prisma.SortOrder
   keywords?: Prisma.SortOrder
   templateZh?: Prisma.SortOrder
@@ -282,7 +282,7 @@ export type IntentTemplateOrderByWithRelationInput = {
 
 export type IntentTemplateWhereUniqueInput = Prisma.AtLeast<{
   id?: number
-  intent?: string
+  title?: string
   AND?: Prisma.IntentTemplateWhereInput | Prisma.IntentTemplateWhereInput[]
   OR?: Prisma.IntentTemplateWhereInput[]
   NOT?: Prisma.IntentTemplateWhereInput | Prisma.IntentTemplateWhereInput[]
@@ -295,11 +295,11 @@ export type IntentTemplateWhereUniqueInput = Prisma.AtLeast<{
   category?: Prisma.StringNullableFilter<"IntentTemplate"> | string | null
   createdAt?: Prisma.DateTimeFilter<"IntentTemplate"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"IntentTemplate"> | Date | string
-}, "id" | "intent">
+}, "id" | "title">
 
 export type IntentTemplateOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
-  intent?: Prisma.SortOrder
+  title?: Prisma.SortOrder
   label?: Prisma.SortOrder
   keywords?: Prisma.SortOrder
   templateZh?: Prisma.SortOrder
@@ -321,7 +321,7 @@ export type IntentTemplateScalarWhereWithAggregatesInput = {
   OR?: Prisma.IntentTemplateScalarWhereWithAggregatesInput[]
   NOT?: Prisma.IntentTemplateScalarWhereWithAggregatesInput | Prisma.IntentTemplateScalarWhereWithAggregatesInput[]
   id?: Prisma.IntWithAggregatesFilter<"IntentTemplate"> | number
-  intent?: Prisma.StringWithAggregatesFilter<"IntentTemplate"> | string
+  title?: Prisma.StringWithAggregatesFilter<"IntentTemplate"> | string
   label?: Prisma.StringWithAggregatesFilter<"IntentTemplate"> | string
   keywords?: Prisma.StringNullableListFilter<"IntentTemplate">
   templateZh?: Prisma.StringWithAggregatesFilter<"IntentTemplate"> | string
@@ -334,7 +334,7 @@ export type IntentTemplateScalarWhereWithAggregatesInput = {
 }
 
 export type IntentTemplateCreateInput = {
-  intent: string
+  title: string
   label: string
   keywords?: Prisma.IntentTemplateCreatekeywordsInput | string[]
   templateZh: string
@@ -348,7 +348,7 @@ export type IntentTemplateCreateInput = {
 
 export type IntentTemplateUncheckedCreateInput = {
   id?: number
-  intent: string
+  title: string
   label: string
   keywords?: Prisma.IntentTemplateCreatekeywordsInput | string[]
   templateZh: string
@@ -361,7 +361,7 @@ export type IntentTemplateUncheckedCreateInput = {
 }
 
 export type IntentTemplateUpdateInput = {
-  intent?: Prisma.StringFieldUpdateOperationsInput | string
+  title?: Prisma.StringFieldUpdateOperationsInput | string
   label?: Prisma.StringFieldUpdateOperationsInput | string
   keywords?: Prisma.IntentTemplateUpdatekeywordsInput | string[]
   templateZh?: Prisma.StringFieldUpdateOperationsInput | string
@@ -375,7 +375,7 @@ export type IntentTemplateUpdateInput = {
 
 export type IntentTemplateUncheckedUpdateInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
-  intent?: Prisma.StringFieldUpdateOperationsInput | string
+  title?: Prisma.StringFieldUpdateOperationsInput | string
   label?: Prisma.StringFieldUpdateOperationsInput | string
   keywords?: Prisma.IntentTemplateUpdatekeywordsInput | string[]
   templateZh?: Prisma.StringFieldUpdateOperationsInput | string
@@ -389,7 +389,7 @@ export type IntentTemplateUncheckedUpdateInput = {
 
 export type IntentTemplateCreateManyInput = {
   id?: number
-  intent: string
+  title: string
   label: string
   keywords?: Prisma.IntentTemplateCreatekeywordsInput | string[]
   templateZh: string
@@ -402,7 +402,7 @@ export type IntentTemplateCreateManyInput = {
 }
 
 export type IntentTemplateUpdateManyMutationInput = {
-  intent?: Prisma.StringFieldUpdateOperationsInput | string
+  title?: Prisma.StringFieldUpdateOperationsInput | string
   label?: Prisma.StringFieldUpdateOperationsInput | string
   keywords?: Prisma.IntentTemplateUpdatekeywordsInput | string[]
   templateZh?: Prisma.StringFieldUpdateOperationsInput | string
@@ -416,7 +416,7 @@ export type IntentTemplateUpdateManyMutationInput = {
 
 export type IntentTemplateUncheckedUpdateManyInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
-  intent?: Prisma.StringFieldUpdateOperationsInput | string
+  title?: Prisma.StringFieldUpdateOperationsInput | string
   label?: Prisma.StringFieldUpdateOperationsInput | string
   keywords?: Prisma.IntentTemplateUpdatekeywordsInput | string[]
   templateZh?: Prisma.StringFieldUpdateOperationsInput | string
@@ -438,7 +438,7 @@ export type StringNullableListFilter<$PrismaModel = never> = {
 
 export type IntentTemplateCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
-  intent?: Prisma.SortOrder
+  title?: Prisma.SortOrder
   label?: Prisma.SortOrder
   keywords?: Prisma.SortOrder
   templateZh?: Prisma.SortOrder
@@ -457,7 +457,7 @@ export type IntentTemplateAvgOrderByAggregateInput = {
 
 export type IntentTemplateMaxOrderByAggregateInput = {
   id?: Prisma.SortOrder
-  intent?: Prisma.SortOrder
+  title?: Prisma.SortOrder
   label?: Prisma.SortOrder
   templateZh?: Prisma.SortOrder
   templateEn?: Prisma.SortOrder
@@ -470,7 +470,7 @@ export type IntentTemplateMaxOrderByAggregateInput = {
 
 export type IntentTemplateMinOrderByAggregateInput = {
   id?: Prisma.SortOrder
-  intent?: Prisma.SortOrder
+  title?: Prisma.SortOrder
   label?: Prisma.SortOrder
   templateZh?: Prisma.SortOrder
   templateEn?: Prisma.SortOrder
@@ -499,7 +499,7 @@ export type IntentTemplateUpdatekeywordsInput = {
 
 export type IntentTemplateSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
-  intent?: boolean
+  title?: boolean
   label?: boolean
   keywords?: boolean
   templateZh?: boolean
@@ -513,7 +513,7 @@ export type IntentTemplateSelect<ExtArgs extends runtime.Types.Extensions.Intern
 
 export type IntentTemplateSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
-  intent?: boolean
+  title?: boolean
   label?: boolean
   keywords?: boolean
   templateZh?: boolean
@@ -527,7 +527,7 @@ export type IntentTemplateSelectCreateManyAndReturn<ExtArgs extends runtime.Type
 
 export type IntentTemplateSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
-  intent?: boolean
+  title?: boolean
   label?: boolean
   keywords?: boolean
   templateZh?: boolean
@@ -541,7 +541,7 @@ export type IntentTemplateSelectUpdateManyAndReturn<ExtArgs extends runtime.Type
 
 export type IntentTemplateSelectScalar = {
   id?: boolean
-  intent?: boolean
+  title?: boolean
   label?: boolean
   keywords?: boolean
   templateZh?: boolean
@@ -553,7 +553,7 @@ export type IntentTemplateSelectScalar = {
   updatedAt?: boolean
 }
 
-export type IntentTemplateOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "intent" | "label" | "keywords" | "templateZh" | "templateEn" | "priority" | "isActive" | "category" | "createdAt" | "updatedAt", ExtArgs["result"]["intentTemplate"]>
+export type IntentTemplateOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "title" | "label" | "keywords" | "templateZh" | "templateEn" | "priority" | "isActive" | "category" | "createdAt" | "updatedAt", ExtArgs["result"]["intentTemplate"]>
 
 export type $IntentTemplatePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "IntentTemplate"
@@ -563,7 +563,7 @@ export type $IntentTemplatePayload<ExtArgs extends runtime.Types.Extensions.Inte
     /**
      * e.g. "product-inquiry"
      */
-    intent: string
+    title: string
     /**
      * human-readable label
      */
@@ -1015,7 +1015,7 @@ export interface Prisma__IntentTemplateClient<T, Null = never, ExtArgs extends r
  */
 export interface IntentTemplateFieldRefs {
   readonly id: Prisma.FieldRef<"IntentTemplate", 'Int'>
-  readonly intent: Prisma.FieldRef<"IntentTemplate", 'String'>
+  readonly title: Prisma.FieldRef<"IntentTemplate", 'String'>
   readonly label: Prisma.FieldRef<"IntentTemplate", 'String'>
   readonly keywords: Prisma.FieldRef<"IntentTemplate", 'String[]'>
   readonly templateZh: Prisma.FieldRef<"IntentTemplate", 'String'>

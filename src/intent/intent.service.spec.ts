@@ -9,7 +9,7 @@ import { SystemConfigService } from '../system-config/system-config.service';
 function makeTemplate(overrides: Partial<IntentTemplate> = {}): IntentTemplate {
   return {
     id: 1,
-    intent: 'product-inquiry',
+    title: 'product-inquiry',
     label: 'Product Inquiry',
     keywords: ['產品', '規格', 'product', 'spec'],
     templateZh: '您想了解哪個產品的規格？',
@@ -81,8 +81,8 @@ describe('IntentService', () => {
   describe('loadCache()', () => {
     it('populates templates and glossary from the repository', async () => {
       const templates = [
-        makeTemplate({ id: 1, intent: 'product-inquiry' }),
-        makeTemplate({ id: 2, intent: 'price-inquiry', keywords: ['報價', 'price', 'quotation'], priority: 20 }),
+        makeTemplate({ id: 1, title: 'product-inquiry' }),
+        makeTemplate({ id: 2, title: 'price-inquiry', keywords: ['報價', 'price', 'quotation'], priority: 20 }),
       ];
       const glossary = [makeGlossaryTerm()];
 
@@ -125,7 +125,7 @@ describe('IntentService', () => {
   describe('invalidateCache()', () => {
     it('triggers a full re-load from the repository', async () => {
       const first = [makeTemplate({ id: 1 })];
-      const updated = [makeTemplate({ id: 1 }), makeTemplate({ id: 2, intent: 'general-faq', keywords: ['FAQ', 'help'] })];
+      const updated = [makeTemplate({ id: 1 }), makeTemplate({ id: 2, title: 'general-faq', keywords: ['FAQ', 'help'] })];
 
       repo.findAllTemplates.mockResolvedValueOnce(first);
       repo.findAllGlossary.mockResolvedValue([]);
@@ -156,9 +156,9 @@ describe('IntentService', () => {
   describe('detect() — backward-compat (no analyzedQuery)', () => {
     beforeEach(async () => {
       repo.findAllTemplates.mockResolvedValue([
-        makeTemplate({ id: 1, intent: 'product-inquiry', keywords: ['產品', '規格', 'product', 'spec'], priority: 10 }),
-        makeTemplate({ id: 2, intent: 'price-inquiry', keywords: ['報價', 'price', 'quotation'], priority: 20 }),
-        makeTemplate({ id: 3, intent: 'general-faq', keywords: ['FAQ', 'help', '幫助'], priority: 5 }),
+        makeTemplate({ id: 1, title: 'product-inquiry', keywords: ['產品', '規格', 'product', 'spec'], priority: 10 }),
+        makeTemplate({ id: 2, title: 'price-inquiry', keywords: ['報價', 'price', 'quotation'], priority: 20 }),
+        makeTemplate({ id: 3, title: 'general-faq', keywords: ['FAQ', 'help', '幫助'], priority: 5 }),
       ]);
       repo.findAllGlossary.mockResolvedValue([
         makeGlossaryTerm({ id: 1, term: '墊片', synonyms: ['gasket', 'seal'], intentLabel: 'product-inquiry' }),
@@ -209,7 +209,7 @@ describe('IntentService', () => {
 
     it('skips templates with isActive=false and returns null when no active template matches', async () => {
       repo.findAllTemplates.mockResolvedValue([
-        makeTemplate({ id: 1, intent: 'product-inquiry', keywords: ['產品', 'spec'], isActive: false }),
+        makeTemplate({ id: 1, title: 'product-inquiry', keywords: ['產品', 'spec'], isActive: false }),
       ]);
       await service.loadCache();
 
@@ -219,8 +219,8 @@ describe('IntentService', () => {
 
     it('matches active templates and ignores disabled ones with overlapping keywords', async () => {
       repo.findAllTemplates.mockResolvedValue([
-        makeTemplate({ id: 1, intent: 'disabled-intent', keywords: ['產品'], isActive: false, priority: 99 }),
-        makeTemplate({ id: 2, intent: 'active-intent', keywords: ['產品'], isActive: true, priority: 10 }),
+        makeTemplate({ id: 1, title: 'disabled-intent', keywords: ['產品'], isActive: false, priority: 99 }),
+        makeTemplate({ id: 2, title: 'active-intent', keywords: ['產品'], isActive: true, priority: 10 }),
       ]);
       await service.loadCache();
 
@@ -230,8 +230,8 @@ describe('IntentService', () => {
 
     it('returns null when all templates are disabled', async () => {
       repo.findAllTemplates.mockResolvedValue([
-        makeTemplate({ id: 1, intent: 'intent-a', keywords: ['test'], isActive: false }),
-        makeTemplate({ id: 2, intent: 'intent-b', keywords: ['test'], isActive: false }),
+        makeTemplate({ id: 1, title: 'intent-a', keywords: ['test'], isActive: false }),
+        makeTemplate({ id: 2, title: 'intent-b', keywords: ['test'], isActive: false }),
       ]);
       await service.loadCache();
 
@@ -241,7 +241,7 @@ describe('IntentService', () => {
 
     it('treats isActive=undefined as enabled and still matches', async () => {
       repo.findAllTemplates.mockResolvedValue([
-        makeTemplate({ id: 1, intent: 'legacy-intent', keywords: ['legacy-match'], isActive: undefined }),
+        makeTemplate({ id: 1, title: 'legacy-intent', keywords: ['legacy-match'], isActive: undefined }),
       ]);
       await service.loadCache();
 
@@ -257,7 +257,7 @@ describe('IntentService', () => {
   describe('detect() — Layer 1: intent hints', () => {
     beforeEach(async () => {
       repo.findAllTemplates.mockResolvedValue([
-        makeTemplate({ id: 1, intent: 'product-inquiry', keywords: ['產品', 'spec'], priority: 10 }),
+        makeTemplate({ id: 1, title: 'product-inquiry', keywords: ['產品', 'spec'], priority: 10 }),
       ]);
       repo.findAllGlossary.mockResolvedValue([]);
       await service.loadCache();
@@ -317,8 +317,8 @@ describe('IntentService', () => {
   describe('detect() — Layer 2: expandedTerms matching', () => {
     beforeEach(async () => {
       repo.findAllTemplates.mockResolvedValue([
-        makeTemplate({ id: 1, intent: 'product-inquiry', keywords: ['螺絲', 'bolt', 'screw'], priority: 10 }),
-        makeTemplate({ id: 2, intent: 'price-inquiry', keywords: ['報價', 'quote'], priority: 15 }),
+        makeTemplate({ id: 1, title: 'product-inquiry', keywords: ['螺絲', 'bolt', 'screw'], priority: 10 }),
+        makeTemplate({ id: 2, title: 'price-inquiry', keywords: ['報價', 'quote'], priority: 15 }),
       ]);
       repo.findAllGlossary.mockResolvedValue([]);
       await service.loadCache();
@@ -368,11 +368,11 @@ describe('IntentService', () => {
     const contactKeywords = ['聯絡', '聯繫', '電話', '客服', 'contact', 'phone', 'support'];
     const allTemplates: IntentTemplate[] = [
       // sorted by priority descending — mirrors production repository order
-      makeTemplate({ id: 2, intent: 'product-diagnosis', keywords: ['問題', '故障', '異常', '壞掉', '不正常', '修', 'issue', 'broken', 'fault', 'problem', 'repair'], priority: 20 }),
-      makeTemplate({ id: 3, intent: 'pricing-inquiry',   keywords: ['價格', '報價', '多少錢', '費用', '優惠', 'price', 'quote', 'cost', 'discount', 'how much'], priority: 15 }),
-      makeTemplate({ id: 5, intent: 'contact-inquiry',   keywords: contactKeywords, priority: 12 }),
-      makeTemplate({ id: 1, intent: 'product-inquiry',   keywords: ['產品', '型號', '規格', '尺寸', '材質', 'product', 'model', 'spec', 'size'], priority: 10 }),
-      makeTemplate({ id: 4, intent: 'general-faq',       keywords: ['如何', '怎麼', '什麼是', '說明', 'FAQ', 'how to', 'what is', 'explain', 'help'], priority: 0 }),
+      makeTemplate({ id: 2, title: 'product-diagnosis', keywords: ['問題', '故障', '異常', '壞掉', '不正常', '修', 'issue', 'broken', 'fault', 'problem', 'repair'], priority: 20 }),
+      makeTemplate({ id: 3, title: 'pricing-inquiry',   keywords: ['價格', '報價', '多少錢', '費用', '優惠', 'price', 'quote', 'cost', 'discount', 'how much'], priority: 15 }),
+      makeTemplate({ id: 5, title: 'contact-inquiry',   keywords: contactKeywords, priority: 12 }),
+      makeTemplate({ id: 1, title: 'product-inquiry',   keywords: ['產品', '型號', '規格', '尺寸', '材質', 'product', 'model', 'spec', 'size'], priority: 10 }),
+      makeTemplate({ id: 4, title: 'general-faq',       keywords: ['如何', '怎麼', '什麼是', '說明', 'FAQ', 'how to', 'what is', 'explain', 'help'], priority: 0 }),
     ];
 
     beforeEach(async () => {

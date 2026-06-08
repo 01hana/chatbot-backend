@@ -11,7 +11,7 @@ import {
 const INTENT_SORT_FIELDS = new Set([
   'createdAt',
   'updatedAt',
-  'intent',
+  'title',
   'label',
   'priority',
   'category',
@@ -50,7 +50,7 @@ export class AdminIntentService {
       ...(query.keyword
         ? {
             OR: [
-              { intent: { contains: query.keyword, mode: 'insensitive' as const } },
+              { title: { contains: query.keyword, mode: 'insensitive' as const } },
               { label: { contains: query.keyword, mode: 'insensitive' as const } },
               { templateZh: { contains: query.keyword, mode: 'insensitive' as const } },
               { templateEn: { contains: query.keyword, mode: 'insensitive' as const } },
@@ -95,7 +95,7 @@ export class AdminIntentService {
   async create(dto: CreateIntentTemplateDto): Promise<IntentTemplate> {
     const entry = await this.prisma.intentTemplate.create({
       data: {
-        intent: dto.intent,
+        title: dto.title,
         label: dto.label,
         keywords: dto.keywords,
         templateZh: dto.templateZh,

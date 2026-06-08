@@ -5,7 +5,7 @@ import { DiagnosisContext } from './types/diagnosis-context.type';
 
 /** Create a mock IntentService with an empty template cache by default. */
 function makeIntentServiceMock(
-  templates: Array<{ intent: string; templateZh: string; templateEn: string; isActive: boolean }> = [],
+  templates: Array<{ title: string; templateZh: string; templateEn: string; isActive: boolean }> = [],
 ) {
   return {
     getCachedTemplates: jest.fn().mockReturnValue(templates),
@@ -14,7 +14,7 @@ function makeIntentServiceMock(
 
 /** Shorthand to create a DiagnosisService with the given templates. */
 function makeService(
-  templates: Array<{ intent: string; templateZh: string; templateEn: string; isActive: boolean }> = [],
+  templates: Array<{ title: string; templateZh: string; templateEn: string; isActive: boolean }> = [],
 ) {
   return new DiagnosisService(makeIntentServiceMock(templates) as never);
 }
@@ -314,9 +314,9 @@ describe('DiagnosisService', () => {
   // ── getNextQuestion — template lookup ─────────────────────────────────────
 
   describe('getNextQuestion() — IntentTemplate lookup', () => {
-    it('uses templateZh from IntentTemplate when intent matches', () => {
+    it('uses templateZh from IntentTemplate when title matches', () => {
       const templates = [
-        { intent: 'diagnosis.purpose', templateZh: '您的主要用途是？', templateEn: 'Your main purpose?', isActive: true },
+        { title: 'diagnosis.purpose', templateZh: '您的主要用途是？', templateEn: 'Your main purpose?', isActive: true },
       ];
       const svc = makeService(templates);
       const ctx = svc.startOrContinue(null);
@@ -326,7 +326,7 @@ describe('DiagnosisService', () => {
 
     it('uses templateEn from IntentTemplate when language is en', () => {
       const templates = [
-        { intent: 'diagnosis.purpose', templateZh: '您的主要用途是？', templateEn: 'Your main purpose?', isActive: true },
+        { title: 'diagnosis.purpose', templateZh: '您的主要用途是？', templateEn: 'Your main purpose?', isActive: true },
       ];
       const svc = makeService(templates);
       const ctx = svc.startOrContinue(null);
@@ -336,7 +336,7 @@ describe('DiagnosisService', () => {
 
     it('falls back when template isActive=false', () => {
       const templates = [
-        { intent: 'diagnosis.purpose', templateZh: '停用的問題', templateEn: 'Disabled question', isActive: false },
+        { title: 'diagnosis.purpose', templateZh: '停用的問題', templateEn: 'Disabled question', isActive: false },
       ];
       const svc = makeService(templates);
       const ctx = svc.startOrContinue(null);
@@ -347,7 +347,7 @@ describe('DiagnosisService', () => {
 
     it('falls back to hardcoded text when no matching template exists', () => {
       const templates = [
-        { intent: 'diagnosis.material', templateZh: '材質模板', templateEn: 'material template', isActive: true },
+        { title: 'diagnosis.material', templateZh: '材質模板', templateEn: 'material template', isActive: true },
       ];
       const svc = makeService(templates);
       const ctx = svc.startOrContinue(null); // currentField=purpose, no template for purpose
@@ -358,7 +358,7 @@ describe('DiagnosisService', () => {
     it('treats template without isActive field as active', () => {
       // Simulates legacy DB rows that predate the isActive column
       const templates = [
-        { intent: 'diagnosis.purpose', templateZh: '舊版問題', templateEn: 'Legacy question' },
+        { title: 'diagnosis.purpose', templateZh: '舊版問題', templateEn: 'Legacy question' },
       ];
       const svc = makeService(templates as never);
       const ctx = svc.startOrContinue(null);
@@ -368,7 +368,7 @@ describe('DiagnosisService', () => {
 
     it('falls back when template isActive is explicitly false', () => {
       const templates = [
-        { intent: 'diagnosis.purpose', templateZh: '停用的問題', templateEn: 'Disabled question', isActive: false },
+        { title: 'diagnosis.purpose', templateZh: '停用的問題', templateEn: 'Disabled question', isActive: false },
       ];
       const svc = makeService(templates);
       const ctx = svc.startOrContinue(null);

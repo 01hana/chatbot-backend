@@ -412,10 +412,10 @@ describe('Phase 4-F checkpoint (e2e)', () => {
       };
     }),
     getCachedTemplates: jest.fn(() => [
-      { intent: 'diagnosis.purpose', templateZh: '請問您的用途是什麼？', templateEn: 'What is the purpose?', isActive: true },
-      { intent: 'diagnosis.material', templateZh: '請問您需要的材質是什麼？', templateEn: 'What material?', isActive: true },
-      { intent: 'diagnosis.length', templateZh: '請問您需要的長度是多少？', templateEn: 'What length?', isActive: true },
-      { intent: 'diagnosis.environment', templateZh: '請問使用環境為何？', templateEn: 'What environment?', isActive: true },
+      { title: 'diagnosis.purpose', templateZh: '請問您的用途是什麼？', templateEn: 'What is the purpose?', isActive: true },
+      { title: 'diagnosis.material', templateZh: '請問您需要的材質是什麼？', templateEn: 'What material?', isActive: true },
+      { title: 'diagnosis.length', templateZh: '請問您需要的長度是多少？', templateEn: 'What length?', isActive: true },
+      { title: 'diagnosis.environment', templateZh: '請問使用環境為何？', templateEn: 'What environment?', isActive: true },
     ]),
     invalidateCache: jest.fn(),
   };

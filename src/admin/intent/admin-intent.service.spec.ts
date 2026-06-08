@@ -5,13 +5,13 @@ const now = new Date();
 
 function makeTemplate(
   id: number,
-  intent: string,
+  title: string,
   overrides: Partial<Record<string, unknown>> = {},
 ) {
   return {
     id,
-    intent,
-    label: `Label for ${intent}`,
+    title,
+    label: `Label for ${title}`,
     keywords: ['keyword1', 'keyword2'],
     templateZh: '請問您想了解的是？',
     templateEn: 'What would you like to know?',
@@ -35,7 +35,7 @@ function makePrismaMock(templates: ReturnType<typeof makeTemplate>[]) {
           Promise.resolve(templates.find(t => t.id === where.id) ?? null),
         ),
       create: jest.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => {
-        const created = makeTemplate(templates.length + 1, data['intent'] as string, data);
+        const created = makeTemplate(templates.length + 1, data['title'] as string, data);
         templates.push(created);
         return Promise.resolve(created);
       }),
@@ -108,7 +108,7 @@ describe('AdminIntentService', () => {
             category: 'product-spec',
             isActive: false,
             OR: [
-              { intent: { contains: 'product', mode: 'insensitive' } },
+              { title: { contains: 'product', mode: 'insensitive' } },
               { label: { contains: 'product', mode: 'insensitive' } },
               { templateZh: { contains: 'product', mode: 'insensitive' } },
               { templateEn: { contains: 'product', mode: 'insensitive' } },
@@ -156,7 +156,7 @@ describe('AdminIntentService', () => {
       const service = new AdminIntentService(prisma as never, intentService as never);
 
       const result = await service.getOne(1);
-      expect(result.intent).toBe('product-inquiry');
+      expect(result.title).toBe('product-inquiry');
     });
 
     it('throws NotFoundException when template does not exist', async () => {
@@ -185,7 +185,7 @@ describe('AdminIntentService', () => {
       const service = new AdminIntentService(prisma as never, intentService as never);
 
       const result = await service.create({
-        intent: 'contact-inquiry',
+        title: 'contact-inquiry',
         label: 'Contact Inquiry',
         keywords: ['聯絡', 'contact'],
         templateZh: '請提供您的聯絡資訊',
@@ -194,11 +194,11 @@ describe('AdminIntentService', () => {
         category: 'contact',
       });
 
-      expect(result.intent).toBe('contact-inquiry');
+      expect(result.title).toBe('contact-inquiry');
       expect(prisma.intentTemplate.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            intent: 'contact-inquiry',
+            title: 'contact-inquiry',
             isActive: true,
             priority: 5,
           }),
@@ -212,7 +212,7 @@ describe('AdminIntentService', () => {
       const service = new AdminIntentService(prisma as never, intentService as never);
 
       await service.create({
-        intent: 'general-faq',
+        title: 'general-faq',
         label: 'General FAQ',
         keywords: ['問題'],
         templateZh: '請問您的問題是？',
@@ -228,7 +228,7 @@ describe('AdminIntentService', () => {
       const service = new AdminIntentService(prisma as never, intentService as never);
 
       await service.create({
-        intent: 'general-faq',
+        title: 'general-faq',
         label: 'General FAQ',
         keywords: ['問題'],
         templateZh: '請問您的問題是？',

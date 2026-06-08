@@ -2,7 +2,21 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import type { IntentTemplate } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { IntentService } from '../../intent/intent.service';
-import { CreateIntentTemplateDto, UpdateIntentTemplateDto } from './dto/intent-admin.dto';
+import {
+  CreateIntentTemplateDto,
+  UpdateIntentTemplateDto,
+  ListIntentTemplateQueryDto,
+} from './dto/intent-admin.dto';
+
+const INTENT_SORT_FIELDS = new Set([
+  'createdAt',
+  'updatedAt',
+  'intent',
+  'label',
+  'priority',
+  'category',
+  'isActive',
+]);
 
 /**
  * AdminIntentService — admin CRUD for intent templates.
@@ -20,11 +34,46 @@ export class AdminIntentService {
     private readonly intentService: IntentService,
   ) {}
 
-  /** Return all intent templates ordered by priority (desc) then id. */
-  async listAll(): Promise<IntentTemplate[]> {
-    return this.prisma.intentTemplate.findMany({
-      orderBy: [{ priority: 'desc' }, { id: 'asc' }],
-    });
+  /** Return paginated intent templates ordered by priority (desc) then id by default. */
+  async listAll(
+    query: ListIntentTemplateQueryDto = {},
+  ): Promise<{ data: IntentTemplate[]; meta: { total: number; page: number; pageSize: number } }> {
+    const page = Math.max(1, query.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 20));
+    const safeSortBy =
+      query.sortBy && INTENT_SORT_FIELDS.has(query.sortBy) ? query.sortBy : undefined;
+    const sortOrder = query.sortOrder ?? 'desc';
+
+    const where = {
+      ...(query.category ? { category: query.category } : {}),
+      ...(query.isActive !== undefined ? { isActive: query.isActive === 'true' } : {}),
+      ...(query.keyword
+        ? {
+            OR: [
+              { intent: { contains: query.keyword, mode: 'insensitive' as const } },
+              { label: { contains: query.keyword, mode: 'insensitive' as const } },
+              { templateZh: { contains: query.keyword, mode: 'insensitive' as const } },
+              { templateEn: { contains: query.keyword, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
+
+    const orderBy = safeSortBy
+      ? [{ [safeSortBy]: sortOrder }, { id: 'asc' as const }]
+      : [{ priority: 'desc' as const }, { id: 'asc' as const }];
+
+    const [items, total] = await Promise.all([
+      this.prisma.intentTemplate.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.intentTemplate.count({ where }),
+    ]);
+
+    return { data: items, meta: { total, page, pageSize } };
   }
 
   /**

@@ -5,7 +5,22 @@ import {
   IsOptional,
   IsNumber,
   IsBoolean,
+  IsInt,
+  Min,
+  Max,
+  IsIn,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+
+const INTENT_SORT_FIELDS = [
+  'createdAt',
+  'updatedAt',
+  'intent',
+  'label',
+  'priority',
+  'category',
+  'isActive',
+] as const;
 
 /** DTO for creating an IntentTemplate via the admin API. */
 export class CreateIntentTemplateDto {
@@ -78,4 +93,43 @@ export class UpdateIntentTemplateDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+}
+
+/** DTO for listing IntentTemplate rows with pagination and filters. */
+export class ListIntentTemplateQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  pageSize?: number;
+
+  @IsOptional()
+  @IsString()
+  keyword?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['true', 'false'])
+  isActive?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn([...INTENT_SORT_FIELDS])
+  sortBy?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['asc', 'desc'])
+  sortOrder?: string;
 }

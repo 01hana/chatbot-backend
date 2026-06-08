@@ -12,7 +12,12 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { KnowledgeEntry, KnowledgeVersion } from '../../generated/prisma/client';
-import { CreateKnowledgeDto, UpdateKnowledgeDto, ListKnowledgeQueryDto } from './dto/knowledge-admin.dto';
+import {
+  CreateKnowledgeDto,
+  UpdateKnowledgeDto,
+  ListKnowledgeQueryDto,
+  KnowledgeFilterOptionsResponse,
+} from './dto/knowledge-admin.dto';
 import { AdminKnowledgeService } from './admin-knowledge.service';
 
 /**
@@ -30,6 +35,12 @@ export class AdminKnowledgeController {
     @Query() query: ListKnowledgeQueryDto,
   ): Promise<{ data: KnowledgeEntry[]; meta: { total: number; page: number; pageSize: number } }> {
     return this.adminKnowledgeService.list(query);
+  }
+
+  /** Get filter options for the knowledge table. */
+  @Get('filters')
+  getFilters(): Promise<KnowledgeFilterOptionsResponse> {
+    return this.adminKnowledgeService.getFilters();
   }
 
   /** Get a single knowledge entry with its version history. */

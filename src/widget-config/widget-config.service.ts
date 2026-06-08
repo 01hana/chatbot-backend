@@ -1,27 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { AiStatusService } from '../health/ai-status.service';
-
-/**
- * Multi-language string map: { "zh-TW": "...", "en": "..." }
- */
-export type MultiLangString = Record<string, string>;
-
-/**
- * Multi-language string-array map: { "zh-TW": [...], "en": [...] }
- */
-export type MultiLangStringArray = Record<string, string[]>;
-
-export type WidgetStatus = 'online' | 'offline' | 'degraded';
-
-/** Full response shape for GET /api/v1/widget/config */
-export interface WidgetConfig {
-  status: WidgetStatus;
-  welcomeMessage: MultiLangString;
-  quickReplies: MultiLangStringArray;
-  disclaimer: MultiLangString;
-  fallbackMessage: MultiLangString;
-}
+import { WIDGET_CONFIG_KEYS, WIDGET_STATUS_VALUES } from './widget-config.constants';
+import type {
+  MultiLangString,
+  MultiLangStringArray,
+  WidgetConfig,
+  WidgetStatus,
+} from './widget-config.types';
 
 /**
  * WidgetConfigService — assembles the Widget Config API response from
@@ -33,26 +19,6 @@ export interface WidgetConfig {
  */
 @Injectable()
 export class WidgetConfigService {
-  private readonly FALLBACK_WELCOME: MultiLangString = {
-    'zh-TW': '歡迎使用震南客服，請問有什麼可以幫您？',
-    en: 'Welcome! How can I help you today?',
-  };
-
-  private readonly FALLBACK_QUICK_REPLIES: MultiLangStringArray = {
-    'zh-TW': ['查詢產品規格', '聯絡業務', '其他問題'],
-    en: ['Product specs', 'Contact sales', 'Other'],
-  };
-
-  private readonly FALLBACK_DISCLAIMER: MultiLangString = {
-    'zh-TW': '本服務由 AI 提供，回覆僅供參考。',
-    en: 'This service is AI-powered. Responses are for reference only.',
-  };
-
-  private readonly FALLBACK_FALLBACK_MSG: MultiLangString = {
-    'zh-TW': '目前服務暫時無法使用，請稍後再試或留下聯絡資訊。',
-    en: 'Service temporarily unavailable. Please try again later or leave your contact info.',
-  };
-
   constructor(
     private readonly systemConfigService: SystemConfigService,
     private readonly aiStatusService: AiStatusService,
@@ -64,30 +30,66 @@ export class WidgetConfigService {
    */
   getConfig(): WidgetConfig {
     // Determine status: degrade overrides DB value
-    const dbStatus = (this.systemConfigService.get('widget_status') ?? 'online') as WidgetStatus;
+    const dbStatus = this.getDbStatus();
     const status: WidgetStatus = this.aiStatusService.isDegraded() ? 'degraded' : dbStatus;
 
     return {
       status,
-      welcomeMessage: this.parseJsonb<MultiLangString>('widget_welcome_message', this.FALLBACK_WELCOME),
-      quickReplies: this.parseJsonb<MultiLangStringArray>('widget_quick_replies', this.FALLBACK_QUICK_REPLIES),
-      disclaimer: this.parseJsonb<MultiLangString>('widget_disclaimer', this.FALLBACK_DISCLAIMER),
-      fallbackMessage: this.parseJsonb<MultiLangString>('widget_fallback_message', this.FALLBACK_FALLBACK_MSG),
+      welcomeMessage: this.parseRequiredStringRecord(WIDGET_CONFIG_KEYS.welcomeMessage),
+      quickReplies: this.parseRequiredStringArrayRecord(WIDGET_CONFIG_KEYS.quickReplies),
+      disclaimer: this.parseRequiredStringRecord(WIDGET_CONFIG_KEYS.disclaimer),
+      fallbackMessage: this.parseRequiredStringRecord(WIDGET_CONFIG_KEYS.fallbackMessage),
     };
   }
 
-  /**
-   * Parse a JSONB string from SystemConfig.
-   * Falls back to `defaultValue` when the key is absent or the JSON is invalid.
-   */
-  private parseJsonb<T>(key: string, defaultValue: T): T {
+  private getDbStatus(): WidgetStatus {
+    const raw = this.systemConfigService.get(WIDGET_CONFIG_KEYS.status);
+    if (WIDGET_STATUS_VALUES.includes(raw as WidgetStatus)) {
+      return raw as WidgetStatus;
+    }
+    return 'online';
+  }
+
+  private parseRequiredStringRecord(key: string): MultiLangString {
+    const parsed = this.parseRequiredJsonb(key);
+    if (
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      !Array.isArray(parsed) &&
+      Object.values(parsed as Record<string, unknown>).every(value => typeof value === 'string')
+    ) {
+      return parsed as MultiLangString;
+    }
+
+    throw new InternalServerErrorException(`Invalid widget config shape for '${key}'`);
+  }
+
+  private parseRequiredStringArrayRecord(key: string): MultiLangStringArray {
+    const parsed = this.parseRequiredJsonb(key);
+    if (
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      !Array.isArray(parsed) &&
+      Object.values(parsed as Record<string, unknown>).every(
+        value => Array.isArray(value) && value.every(item => typeof item === 'string'),
+      )
+    ) {
+      return parsed as MultiLangStringArray;
+    }
+
+    throw new InternalServerErrorException(`Invalid widget config shape for '${key}'`);
+  }
+
+  private parseRequiredJsonb(key: string): unknown {
     const raw = this.systemConfigService.get(key);
-    if (!raw) return defaultValue;
+    if (!raw) {
+      throw new InternalServerErrorException(`Missing widget config '${key}'`);
+    }
 
     try {
-      return JSON.parse(raw) as T;
+      return JSON.parse(raw) as unknown;
     } catch {
-      return defaultValue;
+      throw new InternalServerErrorException(`Invalid widget config JSON for '${key}'`);
     }
   }
 }

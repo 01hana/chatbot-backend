@@ -3,7 +3,26 @@ import { KnowledgeEntry, KnowledgeVersion } from '../../generated/prisma/client'
 import { KnowledgeService } from '../../knowledge/knowledge.service';
 import { KnowledgeListParams } from '../../knowledge/knowledge.repository';
 import { AuditService } from '../../audit/audit.service';
-import { CreateKnowledgeDto, UpdateKnowledgeDto, ListKnowledgeQueryDto } from './dto/knowledge-admin.dto';
+import {
+  CreateKnowledgeDto,
+  UpdateKnowledgeDto,
+  ListKnowledgeQueryDto,
+  KnowledgeFilterOptionsResponse,
+  KnowledgeStatus,
+  KNOWLEDGE_STATUSES,
+} from './dto/knowledge-admin.dto';
+
+const KNOWLEDGE_STATUS_LABELS: Record<KnowledgeStatus, string> = {
+  draft: '草稿',
+  published: '已發佈',
+  archived: '已封存',
+};
+
+const KNOWLEDGE_CATEGORY_LABELS: Record<string, string> = {
+  'faq-general': '常見問題',
+  'product-spec': '產品規格',
+  'selection-guide': '選型指南',
+};
 
 /**
  * AdminKnowledgeService — admin CRUD + publishing workflow for knowledge entries.
@@ -31,7 +50,9 @@ export class AdminKnowledgeService {
   /**
    * Paginated, filtered list of all non-deleted knowledge entries.
    */
-  async list(query: ListKnowledgeQueryDto): Promise<{ data: KnowledgeEntry[]; meta: { total: number; page: number; pageSize: number } }> {
+  async list(
+    query: ListKnowledgeQueryDto,
+  ): Promise<{ data: KnowledgeEntry[]; meta: { total: number; page: number; pageSize: number } }> {
     const page = Math.max(1, query.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 20));
 
@@ -52,6 +73,24 @@ export class AdminKnowledgeService {
     return { data: items, meta: { total, page, pageSize } };
   }
 
+  /**
+   * Return filter option lists for the admin knowledge table.
+   */
+  async getFilters(): Promise<KnowledgeFilterOptionsResponse> {
+    const categories = await this.knowledgeService.findDistinctCategories();
+
+    return {
+      status: KNOWLEDGE_STATUSES.map(status => ({
+        label: KNOWLEDGE_STATUS_LABELS[status],
+        value: status,
+      })),
+      category: categories.map(category => ({
+        label: KNOWLEDGE_CATEGORY_LABELS[category] ?? category,
+        value: category,
+      })),
+    };
+  }
+
   // ─── Read single ──────────────────────────────────────────────────────────
 
   /** Get a single knowledge entry by ID; throws 404 when not found. */
@@ -67,9 +106,7 @@ export class AdminKnowledgeService {
    * Get a single knowledge entry with its version history.
    * Throws 404 when not found.
    */
-  async getOneWithVersions(
-    id: number,
-  ): Promise<KnowledgeEntry & { versions: KnowledgeVersion[] }> {
+  async getOneWithVersions(id: number): Promise<KnowledgeEntry & { versions: KnowledgeVersion[] }> {
     const entry = await this.knowledgeService.findByIdWithVersions(id);
     if (!entry) {
       throw new NotFoundException(`Knowledge entry #${id} not found`);
@@ -134,7 +171,8 @@ export class AdminKnowledgeService {
     if (dto.answerType !== undefined) patch.answerType = dto.answerType;
     if (dto.templateKey !== undefined) patch.templateKey = dto.templateKey;
     if (dto.faqQuestions !== undefined) patch.faqQuestions = dto.faqQuestions;
-    if (dto.crossLanguageGroupKey !== undefined) patch.crossLanguageGroupKey = dto.crossLanguageGroupKey;
+    if (dto.crossLanguageGroupKey !== undefined)
+      patch.crossLanguageGroupKey = dto.crossLanguageGroupKey;
 
     const entry = await this.knowledgeService.updateWithVersionSnapshot(id, patch);
     if (!entry) {

@@ -204,4 +204,53 @@ describe('KnowledgeRepository', () => {
       expect(result).toBeNull();
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // findDistinctCategories
+  // ──────────────────────────────────────────────────────────────────────────
+
+  describe('findDistinctCategories()', () => {
+    it('queries distinct categories from non-deleted entries', async () => {
+      mockFindMany.mockResolvedValue([
+        { category: 'faq-general' },
+        { category: 'product-spec' },
+      ] as unknown as KnowledgeEntry[]);
+
+      await repository.findDistinctCategories();
+
+      expect(mockFindMany).toHaveBeenCalledWith({
+        where: {
+          deletedAt: null,
+          category: { not: null },
+        },
+        select: { category: true },
+        distinct: ['category'],
+        orderBy: { category: 'asc' },
+      });
+    });
+
+    it('excludes null, empty, and whitespace-only categories', async () => {
+      mockFindMany.mockResolvedValue([
+        { category: null },
+        { category: '' },
+        { category: '   ' },
+        { category: ' product-spec ' },
+      ] as unknown as KnowledgeEntry[]);
+
+      const result = await repository.findDistinctCategories();
+
+      expect(result).toEqual(['product-spec']);
+    });
+
+    it('deduplicates categories after trimming', async () => {
+      mockFindMany.mockResolvedValue([
+        { category: 'faq-general' },
+        { category: ' faq-general ' },
+      ] as unknown as KnowledgeEntry[]);
+
+      const result = await repository.findDistinctCategories();
+
+      expect(result).toEqual(['faq-general']);
+    });
+  });
 });

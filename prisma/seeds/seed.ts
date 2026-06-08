@@ -56,9 +56,6 @@ const SYSTEM_CONFIG_DEFAULTS = [
   { key: 'high_intent_threshold', value: '2', description: 'Min high-intent score before lead prompt is shown' },
   { key: 'high_intent_look_back_turns', value: '5', description: 'Number of recent turns examined for high-intent signals' },
 
-  // Widget config (Phase 2)
-  { key: 'widget_status', value: 'online', description: 'Widget operational status: online | offline | degraded' },
-
   // Fallback messages (Phase 2)
   { key: 'fallback_message_zh', value: '抱歉，目前服務暫時無法使用，請稍後再試或留下聯絡資訊，我們將儘速回覆。', description: 'Fallback reply when AI is degraded (zh-TW)' },
   { key: 'fallback_message_en', value: 'Sorry, the service is temporarily unavailable. Please try again later or leave your contact info and we\'ll get back to you.', description: 'Fallback reply when AI is degraded (en)' },

@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import type { Response, Request } from 'express';
-import { NotFoundException } from '@nestjs/common';
+import { InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { ChatController } from './chat.controller';
 import { ChatPipelineService } from './chat-pipeline.service';
 import { ConversationService } from '../conversation/conversation.service';
@@ -389,8 +389,16 @@ describe('T2-016 SSE / sessionToken / Widget acceptance (mock)', () => {
   describe('WidgetConfigService', () => {
     let widgetService: WidgetConfigService;
 
+    const seededConfig: Record<string, string> = {
+      widget_status: 'online',
+      widget_welcome_message: JSON.stringify({ 'zh-TW': '測試歡迎', en: 'Test welcome' }),
+      widget_quick_replies: JSON.stringify({ 'zh-TW': ['查詢'], en: ['Search'] }),
+      widget_disclaimer: JSON.stringify({ 'zh-TW': '提醒', en: 'Notice' }),
+      widget_fallback_message: JSON.stringify({ 'zh-TW': '稍後再試', en: 'Try later' }),
+    };
+
     const mockSystemConfigService = {
-      get: jest.fn().mockReturnValue(null),
+      get: jest.fn((key: string): string | undefined => seededConfig[key]),
       getNumber: jest.fn().mockReturnValue(null),
     };
     const mockAiStatusService = {
@@ -401,6 +409,8 @@ describe('T2-016 SSE / sessionToken / Widget acceptance (mock)', () => {
 
     beforeEach(async () => {
       jest.clearAllMocks();
+      mockSystemConfigService.get.mockImplementation((key: string) => seededConfig[key]);
+      mockAiStatusService.isDegraded.mockReturnValue(false);
 
       const module: TestingModule = await Test.createTestingModule({
         providers: [
@@ -414,7 +424,6 @@ describe('T2-016 SSE / sessionToken / Widget acceptance (mock)', () => {
     });
 
     it('should return online status when not degraded', () => {
-      mockSystemConfigService.get.mockReturnValue(null);
       mockAiStatusService.isDegraded.mockReturnValue(false);
 
       const config = widgetService.getConfig();
@@ -428,25 +437,53 @@ describe('T2-016 SSE / sessionToken / Widget acceptance (mock)', () => {
       expect(config.status).toBe('degraded');
     });
 
-    it('should parse valid JSON from SystemConfig', () => {
-      mockSystemConfigService.get.mockImplementation((key: string) => {
-        if (key === 'widget_welcome_message') {
-          return JSON.stringify({ 'zh-TW': '測試', en: 'Test' });
-        }
-        return null;
-      });
-
+    it('should parse seeded values from SystemConfig', () => {
       const config = widgetService.getConfig();
-      expect(config.welcomeMessage['zh-TW']).toBe('測試');
-      expect(config.welcomeMessage['en']).toBe('Test');
+      expect(config.welcomeMessage).toEqual({ 'zh-TW': '測試歡迎', en: 'Test welcome' });
+      expect(config.quickReplies).toEqual({ 'zh-TW': ['查詢'], en: ['Search'] });
+      expect(config.disclaimer).toEqual({ 'zh-TW': '提醒', en: 'Notice' });
+      expect(config.fallbackMessage).toEqual({ 'zh-TW': '稍後再試', en: 'Try later' });
     });
 
-    it('should fall back to default values when SystemConfig key is absent', () => {
-      mockSystemConfigService.get.mockReturnValue(null);
+    it('should fall back to online when status is absent or invalid', () => {
+      mockSystemConfigService.get.mockImplementation((key: string) =>
+        key === 'widget_status' ? 'invalid' : seededConfig[key],
+      );
 
       const config = widgetService.getConfig();
-      expect(config.welcomeMessage).toBeDefined();
-      expect(config.welcomeMessage['zh-TW']).toBeTruthy();
+      expect(config.status).toBe('online');
+    });
+
+    it('should throw when a required text config key is absent', () => {
+      mockSystemConfigService.get.mockImplementation((key: string) =>
+        key === 'widget_welcome_message' ? undefined : seededConfig[key],
+      );
+
+      expect(() => widgetService.getConfig()).toThrow(InternalServerErrorException);
+    });
+
+    it('should throw when a required text config contains invalid JSON', () => {
+      mockSystemConfigService.get.mockImplementation((key: string) =>
+        key === 'widget_disclaimer' ? '{bad json' : seededConfig[key],
+      );
+
+      expect(() => widgetService.getConfig()).toThrow(InternalServerErrorException);
+    });
+
+    it('should throw when a text config has the wrong shape', () => {
+      mockSystemConfigService.get.mockImplementation((key: string) =>
+        key === 'widget_fallback_message' ? JSON.stringify({ 'zh-TW': 123 }) : seededConfig[key],
+      );
+
+      expect(() => widgetService.getConfig()).toThrow(InternalServerErrorException);
+    });
+
+    it('should throw when quickReplies are absent or invalid', () => {
+      mockSystemConfigService.get.mockImplementation((key: string) =>
+        key === 'widget_quick_replies' ? JSON.stringify({ 'zh-TW': '查詢' }) : seededConfig[key],
+      );
+
+      expect(() => widgetService.getConfig()).toThrow(InternalServerErrorException);
     });
   });
 });

@@ -6,12 +6,17 @@ import {
   Delete,
   Param,
   Body,
+  Query,
   ParseIntPipe,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
 import type { IntentTemplate } from '../../generated/prisma/client';
-import { CreateIntentTemplateDto, UpdateIntentTemplateDto } from './dto/intent-admin.dto';
+import {
+  CreateIntentTemplateDto,
+  UpdateIntentTemplateDto,
+  ListIntentTemplateQueryDto,
+} from './dto/intent-admin.dto';
 import { AdminIntentService } from './admin-intent.service';
 
 /**
@@ -26,10 +31,12 @@ import { AdminIntentService } from './admin-intent.service';
 export class AdminIntentController {
   constructor(private readonly adminIntentService: AdminIntentService) {}
 
-  /** List all intent templates ordered by priority (desc). */
+  /** List intent templates with pagination and optional filters. */
   @Get()
-  listAll(): Promise<IntentTemplate[]> {
-    return this.adminIntentService.listAll();
+  listAll(
+    @Query() query: ListIntentTemplateQueryDto,
+  ): Promise<{ data: IntentTemplate[]; meta: { total: number; page: number; pageSize: number } }> {
+    return this.adminIntentService.listAll(query);
   }
 
   /** Get a single intent template by id. */

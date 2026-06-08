@@ -42,7 +42,10 @@ export class KnowledgeService {
    * Create a new knowledge entry (default status = draft).
    */
   async create(
-    data: Omit<KnowledgeEntry, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'versions' | 'structuredAttributes'>,
+    data: Omit<
+      KnowledgeEntry,
+      'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'versions' | 'structuredAttributes'
+    >,
   ): Promise<KnowledgeEntry> {
     return this.knowledgeRepository.create(data);
   }
@@ -52,7 +55,25 @@ export class KnowledgeService {
    */
   async update(
     id: number,
-    data: Partial<Pick<KnowledgeEntry, 'title' | 'content' | 'intentLabel' | 'tags' | 'aliases' | 'language' | 'status' | 'visibility' | 'sourceKey' | 'category' | 'answerType' | 'templateKey' | 'faqQuestions' | 'crossLanguageGroupKey'>>,
+    data: Partial<
+      Pick<
+        KnowledgeEntry,
+        | 'title'
+        | 'content'
+        | 'intentLabel'
+        | 'tags'
+        | 'aliases'
+        | 'language'
+        | 'status'
+        | 'visibility'
+        | 'sourceKey'
+        | 'category'
+        | 'answerType'
+        | 'templateKey'
+        | 'faqQuestions'
+        | 'crossLanguageGroupKey'
+      >
+    >,
   ): Promise<KnowledgeEntry | null> {
     return this.knowledgeRepository.update(id, data);
   }
@@ -70,6 +91,13 @@ export class KnowledgeService {
    */
   async findByCategory(category: string): Promise<KnowledgeEntry[]> {
     return this.knowledgeRepository.findByCategory(category);
+  }
+
+  /**
+   * Return distinct non-empty category values for admin table filters.
+   */
+  async findDistinctCategories(): Promise<string[]> {
+    return this.knowledgeRepository.findDistinctCategories();
   }
 
   /**

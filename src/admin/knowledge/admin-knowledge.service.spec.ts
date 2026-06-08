@@ -11,6 +11,7 @@ import { KnowledgeEntry, KnowledgeVersion } from '../../generated/prisma/client'
  *
  * Covers:
  *  - list: pagination, filters, sort params, defaults
+ *  - getFilters: status and category table filter options
  *  - getOne: found / not found
  *  - getOneWithVersions: found with versions / not found
  *  - create: defaults (status=draft, version=1, visibility=private), provided visibility, audit event
@@ -74,6 +75,7 @@ describe('AdminKnowledgeService', () => {
       updateWithVersionSnapshot: jest.fn(),
       softDelete: jest.fn(),
       findByCategory: jest.fn(),
+      findDistinctCategories: jest.fn(),
     };
 
     const mockAuditService: Partial<jest.Mocked<AuditService>> = {
@@ -89,8 +91,8 @@ describe('AdminKnowledgeService', () => {
     }).compile();
 
     service = module.get(AdminKnowledgeService);
-    knowledgeService = module.get(KnowledgeService) as jest.Mocked<KnowledgeService>;
-    auditService = module.get(AuditService) as jest.Mocked<AuditService>;
+    knowledgeService = module.get(KnowledgeService);
+    auditService = module.get(AuditService);
   });
 
   // ─── list ─────────────────────────────────────────────────────────────────
@@ -109,7 +111,12 @@ describe('AdminKnowledgeService', () => {
     it('should pass filters to findFiltered', async () => {
       knowledgeService.findFiltered.mockResolvedValueOnce({ items: [], total: 0 });
 
-      await service.list({ status: 'published', visibility: 'public', language: 'en', keyword: 'bolt' });
+      await service.list({
+        status: 'published',
+        visibility: 'public',
+        language: 'en',
+        keyword: 'bolt',
+      });
 
       expect(knowledgeService.findFiltered).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -160,6 +167,47 @@ describe('AdminKnowledgeService', () => {
         expect.objectContaining({ page: 1 }),
       );
       expect(result.meta.page).toBe(1);
+    });
+  });
+
+  // ─── getFilters ──────────────────────────────────────────────────────────
+
+  describe('getFilters()', () => {
+    it('should return status options in knowledge status order', async () => {
+      knowledgeService.findDistinctCategories.mockResolvedValueOnce([]);
+
+      const result = await service.getFilters();
+
+      expect(result.status).toEqual([
+        { label: '草稿', value: 'draft' },
+        { label: '已發佈', value: 'published' },
+        { label: '已封存', value: 'archived' },
+      ]);
+    });
+
+    it('should return category options with Chinese labels for known categories', async () => {
+      knowledgeService.findDistinctCategories.mockResolvedValueOnce([
+        'faq-general',
+        'product-spec',
+        'selection-guide',
+      ]);
+
+      const result = await service.getFilters();
+
+      expect(knowledgeService.findDistinctCategories).toHaveBeenCalledTimes(1);
+      expect(result.category).toEqual([
+        { label: '常見問題', value: 'faq-general' },
+        { label: '產品規格', value: 'product-spec' },
+        { label: '選型指南', value: 'selection-guide' },
+      ]);
+    });
+
+    it('should fall back to the raw category value for unknown categories', async () => {
+      knowledgeService.findDistinctCategories.mockResolvedValueOnce(['custom-category']);
+
+      const result = await service.getFilters();
+
+      expect(result.category).toEqual([{ label: 'custom-category', value: 'custom-category' }]);
     });
   });
 
@@ -270,7 +318,11 @@ describe('AdminKnowledgeService', () => {
     });
 
     it('should pass tags, intentLabel, aliases from DTO', async () => {
-      const entry = makeEntry({ tags: ['wire', '線材'], intentLabel: 'product-inquiry', aliases: ['Wire'] });
+      const entry = makeEntry({
+        tags: ['wire', '線材'],
+        intentLabel: 'product-inquiry',
+        aliases: ['Wire'],
+      });
       knowledgeService.create.mockResolvedValueOnce(entry);
 
       await service.create({
@@ -282,12 +334,20 @@ describe('AdminKnowledgeService', () => {
       });
 
       expect(knowledgeService.create).toHaveBeenCalledWith(
-        expect.objectContaining({ tags: ['wire', '線材'], intentLabel: 'product-inquiry', aliases: ['Wire'] }),
+        expect.objectContaining({
+          tags: ['wire', '線材'],
+          intentLabel: 'product-inquiry',
+          aliases: ['Wire'],
+        }),
       );
     });
 
     it('should pass sourceKey, category, and answerType from DTO', async () => {
-      const entry = makeEntry({ sourceKey: 'bolt-hex', category: 'product-spec', answerType: 'rag' });
+      const entry = makeEntry({
+        sourceKey: 'bolt-hex',
+        category: 'product-spec',
+        answerType: 'rag',
+      });
       knowledgeService.create.mockResolvedValueOnce(entry);
 
       await service.create({
@@ -299,7 +359,11 @@ describe('AdminKnowledgeService', () => {
       });
 
       expect(knowledgeService.create).toHaveBeenCalledWith(
-        expect.objectContaining({ sourceKey: 'bolt-hex', category: 'product-spec', answerType: 'rag' }),
+        expect.objectContaining({
+          sourceKey: 'bolt-hex',
+          category: 'product-spec',
+          answerType: 'rag',
+        }),
       );
     });
   });
@@ -339,7 +403,11 @@ describe('AdminKnowledgeService', () => {
     });
 
     it('should apply partial patch with language and aliases', async () => {
-      const updated = makeEntry({ language: 'en', aliases: ['What bolts do you offer?'], version: 2 });
+      const updated = makeEntry({
+        language: 'en',
+        aliases: ['What bolts do you offer?'],
+        version: 2,
+      });
       knowledgeService.updateWithVersionSnapshot.mockResolvedValueOnce(updated);
 
       await service.update(1, { language: 'en', aliases: ['What bolts do you offer?'] });
@@ -356,7 +424,9 @@ describe('AdminKnowledgeService', () => {
 
       await service.update(1, { title: 'Title' });
 
-      const [[, patchArg]] = knowledgeService.updateWithVersionSnapshot.mock.calls as [[number, Record<string, unknown>]];
+      const [[, patchArg]] = knowledgeService.updateWithVersionSnapshot.mock.calls as [
+        [number, Record<string, unknown>],
+      ];
       expect(patchArg).not.toHaveProperty('status');
     });
   });

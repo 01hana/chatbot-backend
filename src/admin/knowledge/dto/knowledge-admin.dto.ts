@@ -6,6 +6,17 @@ const SUPPORTED_LANGUAGES = ['zh-TW', 'en'] as const;
 
 /** Valid status values for knowledge entries. */
 export const KNOWLEDGE_STATUSES = ['draft', 'published', 'archived'] as const;
+export type KnowledgeStatus = (typeof KNOWLEDGE_STATUSES)[number];
+
+export interface FilterOption<TValue extends string = string> {
+  label: string;
+  value: TValue;
+}
+
+export interface KnowledgeFilterOptionsResponse {
+  status: FilterOption<KnowledgeStatus>[];
+  category: FilterOption[];
+}
 
 /** Valid visibility values for knowledge entries. */
 export const KNOWLEDGE_VISIBILITIES = ['public', 'private', 'internal', 'confidential'] as const;
@@ -159,7 +170,13 @@ export class UpdateKnowledgeDto {
 }
 
 /** Allowed sort fields for knowledge entry list. */
-const ALLOWED_KNOWLEDGE_SORT_FIELDS = ['createdAt', 'updatedAt', 'title', 'version', 'status'] as const;
+const ALLOWED_KNOWLEDGE_SORT_FIELDS = [
+  'createdAt',
+  'updatedAt',
+  'title',
+  'version',
+  'status',
+] as const;
 
 /** DTO for listing knowledge entries with pagination and filters (GET /admin/knowledge). */
 export class ListKnowledgeQueryDto {

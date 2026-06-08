@@ -95,7 +95,10 @@ export class KnowledgeRepository {
    * Create a new knowledge entry with default status = 'draft'.
    */
   async create(
-    data: Omit<KnowledgeEntry, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'versions' | 'structuredAttributes'>,
+    data: Omit<
+      KnowledgeEntry,
+      'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'versions' | 'structuredAttributes'
+    >,
   ): Promise<KnowledgeEntry> {
     return this.prisma.knowledgeEntry.create({
       data: {
@@ -124,7 +127,25 @@ export class KnowledgeRepository {
    */
   async update(
     id: number,
-    data: Partial<Pick<KnowledgeEntry, 'title' | 'content' | 'intentLabel' | 'tags' | 'aliases' | 'language' | 'status' | 'visibility' | 'sourceKey' | 'category' | 'answerType' | 'templateKey' | 'faqQuestions' | 'crossLanguageGroupKey'>>,
+    data: Partial<
+      Pick<
+        KnowledgeEntry,
+        | 'title'
+        | 'content'
+        | 'intentLabel'
+        | 'tags'
+        | 'aliases'
+        | 'language'
+        | 'status'
+        | 'visibility'
+        | 'sourceKey'
+        | 'category'
+        | 'answerType'
+        | 'templateKey'
+        | 'faqQuestions'
+        | 'crossLanguageGroupKey'
+      >
+    >,
   ): Promise<KnowledgeEntry | null> {
     try {
       return await this.prisma.knowledgeEntry.update({
@@ -162,6 +183,27 @@ export class KnowledgeRepository {
     });
   }
 
+  /**
+   * Return distinct category values from non-deleted entries for admin filters.
+   */
+  async findDistinctCategories(): Promise<string[]> {
+    const rows = await this.prisma.knowledgeEntry.findMany({
+      where: {
+        deletedAt: null,
+        category: { not: null },
+      },
+      select: { category: true },
+      distinct: ['category'],
+      orderBy: { category: 'asc' },
+    });
+
+    const categories = rows
+      .map(row => row.category?.trim() ?? '')
+      .filter(category => category.length > 0);
+
+    return Array.from(new Set(categories));
+  }
+
   // ─── Admin list (paginated + filtered) ────────────────────────────────────
 
   /**
@@ -184,7 +226,8 @@ export class KnowledgeRepository {
       sortOrder = 'desc',
     } = params;
 
-    const safeSortBy = params.sortBy && ALLOWED_SORT_FIELDS.has(params.sortBy) ? params.sortBy : 'updatedAt';
+    const safeSortBy =
+      params.sortBy && ALLOWED_SORT_FIELDS.has(params.sortBy) ? params.sortBy : 'updatedAt';
 
     const where = {
       deletedAt: null,
@@ -312,6 +355,6 @@ export class KnowledgeRepository {
       }),
     ]);
 
-    return updated as KnowledgeEntry;
+    return updated;
   }
 }

@@ -3,7 +3,11 @@ import { AdminIntentService } from './admin-intent.service';
 
 const now = new Date();
 
-function makeTemplate(id: number, intent: string, overrides: Partial<Record<string, unknown>> = {}) {
+function makeTemplate(
+  id: number,
+  intent: string,
+  overrides: Partial<Record<string, unknown>> = {},
+) {
   return {
     id,
     intent,
@@ -24,22 +28,27 @@ function makePrismaMock(templates: ReturnType<typeof makeTemplate>[]) {
   return {
     intentTemplate: {
       findMany: jest.fn().mockResolvedValue(templates),
-      findUnique: jest.fn().mockImplementation(({ where }: { where: { id: number } }) =>
-        Promise.resolve(templates.find(t => t.id === where.id) ?? null),
-      ),
+      count: jest.fn().mockResolvedValue(templates.length),
+      findUnique: jest
+        .fn()
+        .mockImplementation(({ where }: { where: { id: number } }) =>
+          Promise.resolve(templates.find(t => t.id === where.id) ?? null),
+        ),
       create: jest.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => {
         const created = makeTemplate(templates.length + 1, data['intent'] as string, data);
         templates.push(created);
         return Promise.resolve(created);
       }),
-      update: jest.fn().mockImplementation(
-        ({ where, data }: { where: { id: number }; data: Record<string, unknown> }) => {
-          const entry = templates.find(t => t.id === where.id);
-          if (!entry) return Promise.resolve(null);
-          Object.assign(entry, data);
-          return Promise.resolve(entry);
-        },
-      ),
+      update: jest
+        .fn()
+        .mockImplementation(
+          ({ where, data }: { where: { id: number }; data: Record<string, unknown> }) => {
+            const entry = templates.find(t => t.id === where.id);
+            if (!entry) return Promise.resolve(null);
+            Object.assign(entry, data);
+            return Promise.resolve(entry);
+          },
+        ),
     },
   };
 }
@@ -52,18 +61,23 @@ describe('AdminIntentService', () => {
   // ── listAll ──────────────────────────────────────────────────────────────
 
   describe('listAll()', () => {
-    it('returns all templates with the expected orderBy shape', async () => {
+    it('returns paginated templates with meta and the expected default orderBy shape', async () => {
       const templates = [makeTemplate(1, 'product-inquiry'), makeTemplate(2, 'pricing-inquiry')];
       const prisma = makePrismaMock(templates);
       const intentService = makeIntentServiceMock();
       const service = new AdminIntentService(prisma as never, intentService as never);
 
-      const result = await service.listAll();
+      const result = await service.listAll({});
 
-      expect(result).toHaveLength(2);
+      expect(result.data).toHaveLength(2);
+      expect(result.meta).toEqual({ total: 2, page: 1, pageSize: 20 });
       expect(prisma.intentTemplate.findMany).toHaveBeenCalledWith({
+        where: {},
         orderBy: [{ priority: 'desc' }, { id: 'asc' }],
+        skip: 0,
+        take: 20,
       });
+      expect(prisma.intentTemplate.count).toHaveBeenCalledWith({ where: {} });
     });
 
     it('returns empty array when no templates exist', async () => {
@@ -71,7 +85,64 @@ describe('AdminIntentService', () => {
       const intentService = makeIntentServiceMock();
       const service = new AdminIntentService(prisma as never, intentService as never);
 
-      expect(await service.listAll()).toEqual([]);
+      expect(await service.listAll({})).toEqual({
+        data: [],
+        meta: { total: 0, page: 1, pageSize: 20 },
+      });
+    });
+
+    it('passes keyword, category, and isActive filters to Prisma', async () => {
+      const prisma = makePrismaMock([]);
+      const intentService = makeIntentServiceMock();
+      const service = new AdminIntentService(prisma as never, intentService as never);
+
+      await service.listAll({
+        keyword: 'product',
+        category: 'product-spec',
+        isActive: 'false',
+      });
+
+      expect(prisma.intentTemplate.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            category: 'product-spec',
+            isActive: false,
+            OR: [
+              { intent: { contains: 'product', mode: 'insensitive' } },
+              { label: { contains: 'product', mode: 'insensitive' } },
+              { templateZh: { contains: 'product', mode: 'insensitive' } },
+              { templateEn: { contains: 'product', mode: 'insensitive' } },
+            ],
+          },
+        }),
+      );
+    });
+
+    it('clamps page and pageSize like admin knowledge list', async () => {
+      const prisma = makePrismaMock([]);
+      const intentService = makeIntentServiceMock();
+      const service = new AdminIntentService(prisma as never, intentService as never);
+
+      const result = await service.listAll({ page: 0, pageSize: 500 });
+
+      expect(prisma.intentTemplate.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 0, take: 100 }),
+      );
+      expect(result.meta).toEqual({ total: 0, page: 1, pageSize: 100 });
+    });
+
+    it('uses requested safe sort field and order', async () => {
+      const prisma = makePrismaMock([]);
+      const intentService = makeIntentServiceMock();
+      const service = new AdminIntentService(prisma as never, intentService as never);
+
+      await service.listAll({ sortBy: 'label', sortOrder: 'asc' });
+
+      expect(prisma.intentTemplate.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ label: 'asc' }, { id: 'asc' }],
+        }),
+      );
     });
   });
 

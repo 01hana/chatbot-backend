@@ -7,8 +7,9 @@
  *   3. safety-rules     (Phase 1: T1-003)
  *   4. blacklist        (Phase 1: T1-003)
  *   5. intent-templates (Phase 1: T1-004)
- *   6. glossary-terms   (Phase 1: T1-004)
- *   7. knowledge        (Phase 1: T1-005 — skipped in production)
+ *   6. knowledge-categories
+ *   7. glossary-terms   (Phase 1: T1-004)
+ *   8. knowledge        (Phase 1: T1-005 — skipped in production)
  *
  * Run with: npx prisma db seed
  */
@@ -19,6 +20,7 @@ import { PrismaClient } from '../../src/generated/prisma/client';
 import { seedSafetyRules } from './safety-rules.seed';
 import { seedBlacklist } from './blacklist.seed';
 import { seedIntentTemplates } from './intent-templates.seed';
+import { seedKnowledgeCategories } from './knowledge-categories.seed';
 import { seedGlossaryTerms } from './glossary-terms.seed';
 import { seedKnowledge } from './knowledge.seed';
 import { seedKnowledgePublicZh } from './knowledge-public-zh.seed';
@@ -127,6 +129,7 @@ async function main(): Promise<void> {
   await seedSafetyRules(prisma);
   await seedBlacklist(prisma);
   await seedIntentTemplates(prisma);
+  await seedKnowledgeCategories(prisma);
   await seedGlossaryTerms(prisma);
   await seedQueryRules(prisma);
 

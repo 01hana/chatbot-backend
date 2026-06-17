@@ -91,7 +91,7 @@ model KnowledgeEntry {
   /// ISO language tag for this entry — used for language-aware retrieval. zh-TW | en
   language    String            @default("zh-TW")
   status      String            @default("draft") /// draft | published | archived
-  visibility  String            @default("private") /// public | private
+  visibility  String            @default("private") /// private | public | internal | confidential
   version     Int               @default(1)
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
@@ -121,6 +121,22 @@ model KnowledgeEntry {
   /// PostgreSQL treats NULL as distinct, so rows with sourceKey=NULL are exempt.
   @@unique([sourceKey, language])
   @@map("knowledge_entries")
+}
+
+/// Admin-managed knowledge category options for KnowledgeEntry.category.
+model KnowledgeCategory {
+  id                 Int       @id @default(autoincrement())
+  key                String    @unique
+  label              String
+  description        String?
+  defaultIntentLabel String?
+  isActive           Boolean   @default(true)
+  sortOrder          Int       @default(0)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
+
+  @@map("knowledge_categories")
 }
 
 /// Immutable version snapshots of KnowledgeEntry content.
@@ -272,7 +288,7 @@ model KnowledgeDocument {
   docType     KnowledgeDocType
   language    String               @default("zh-TW")
   status      String               @default("draft")  /// draft | published | archived
-  visibility  String               @default("private") /// public | private
+  visibility  String               @default("private") /// private | public | internal | confidential
   metadata    Json?
   deletedAt   DateTime?
   createdAt   DateTime             @default(now())

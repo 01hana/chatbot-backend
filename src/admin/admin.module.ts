@@ -7,6 +7,7 @@ import { AdminSafetyController } from './safety/safety-admin.controller.js';
 import { AdminSafetyService } from './safety/safety-admin.service.js';
 import { SafetyModule } from '../safety/safety.module.js';
 import { KnowledgeModule } from '../knowledge/knowledge.module';
+import { KnowledgeCategoryModule } from '../knowledge-category/knowledge-category.module';
 import { AdminIntentModule } from './intent/admin-intent.module';
 import { AdminGlossaryModule } from './glossary/admin-glossary.module';
 import { TicketsAdminModule } from './tickets/tickets-admin.module';
@@ -21,6 +22,7 @@ import { AdminWidgetSettingsModule } from './widget-settings/widget-settings.mod
   imports: [
     SafetyModule,
     KnowledgeModule,
+    KnowledgeCategoryModule,
     AdminIntentModule,
     AdminGlossaryModule,
     TicketsAdminModule,

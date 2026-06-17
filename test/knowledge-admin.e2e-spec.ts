@@ -7,21 +7,24 @@
  * Covers:
  *  1. create → status=draft / version=1
  *  2. update → KnowledgeVersion snapshot produced / version+1 / status=draft
- *  3. approve draft → approved
- *  4. approved + public → findForRetrieval() returns it
- *  5. archive approved → archived
+ *  3. publish draft → published
+ *  4. published + public → findForRetrieval() returns it
+ *  5. archive published → archived
  *  6. archived entry NOT returned by findForRetrieval()
  *  7. draft entry NOT returned by findForRetrieval()
  *  8. internal / confidential entries NOT returned by findForRetrieval()
- *  9. illegal approve transition (archived → approve) → 400
+ *  9. publish archived → published
  * 10. list pagination and filter
  */
 import { describe, beforeEach, it, expect, jest } from '@jest/globals';
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { AdminKnowledgeService } from '../src/admin/knowledge/admin-knowledge.service';
+import { KnowledgeClassificationService } from '../src/knowledge/knowledge-classification.service';
+import { KnowledgeCategoryService } from '../src/knowledge-category/knowledge-category.service';
 import { KnowledgeRepository } from '../src/knowledge/knowledge.repository';
 import { KnowledgeService } from '../src/knowledge/knowledge.service';
+import { IntentService } from '../src/intent/intent.service';
 import { AuditService } from '../src/audit/audit.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { KnowledgeEntry, KnowledgeVersion } from '../src/generated/prisma/client';
@@ -83,6 +86,12 @@ function buildMemoryPrisma() {
       if (where['visibility']) results = results.filter(e => e.visibility === where['visibility']);
       if (where['language']) results = results.filter(e => e.language === where['language']);
       if (where['intentLabel']) results = results.filter(e => e.intentLabel === where['intentLabel']);
+      const tagsFilter = where['tags'] as { hasEvery?: string[] } | undefined;
+      if (tagsFilter?.hasEvery) {
+        results = results.filter(e =>
+          tagsFilter.hasEvery!.every(tag => e.tags.includes(tag)),
+        );
+      }
       if (where['OR']) {
         // keyword search — not tested in detail here; just return all
       }
@@ -201,9 +210,33 @@ describe('Knowledge Admin — integration (mocked Prisma)', () => {
     module = await Test.createTestingModule({
       providers: [
         AdminKnowledgeService,
+        KnowledgeClassificationService,
         KnowledgeService,
         KnowledgeRepository,
+        {
+          provide: KnowledgeCategoryService,
+          useValue: {
+            findActiveOptions: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
+            findByKey: jest.fn<() => Promise<unknown | null>>().mockResolvedValue(null),
+            findActiveByKey: jest.fn<() => Promise<unknown | null>>().mockResolvedValue(null),
+            resolveDefaultIntentLabel: jest.fn(async (category: string) => {
+              if (category === 'product-spec') return 'product-inquiry';
+              if (category === 'faq-general') return 'general-faq';
+              return null;
+            }),
+          },
+        },
         { provide: PrismaService, useValue: mockPrisma },
+        {
+          provide: IntentService,
+          useValue: {
+            getCachedTemplates: jest.fn().mockReturnValue([
+              { title: 'product-spec', isActive: true },
+              { title: 'general-faq', isActive: true },
+              { title: 'product-inquiry', isActive: true },
+            ]),
+          },
+        },
         { provide: AuditService, useValue: mockAuditService },
       ],
     }).compile();
@@ -250,34 +283,81 @@ describe('Knowledge Admin — integration (mocked Prisma)', () => {
     expect(parsed.content).toBe('Original content');
   });
 
-  // ─── Test 3: approve draft → approved ────────────────────────────────────
+  it('2b. updateVisibility changes visibility without creating a version snapshot', async () => {
+    const created = await adminService.create({
+      title: 'Visibility only',
+      content: 'Visibility content',
+      visibility: 'private',
+    });
 
-  it('3. approve draft → approved', async () => {
+    const updated = await adminService.updateVisibility(created.id, { visibility: 'public' });
+
+    expect(updated.visibility).toBe('public');
+    expect(updated.version).toBe(created.version);
+    expect(updated.status).toBe('draft');
+    expect(updated.retrievable).toBe(false);
+    expect(updated.retrievalBlockReasons).toContain('status_not_published');
+    expect(mockPrisma._versions).toHaveLength(0);
+  });
+
+  // ─── Test 3: publish draft → published ───────────────────────────────────
+
+  it('3. publish draft → published', async () => {
     const created = await adminService.create({ title: 'Entry', content: 'Content' });
     expect(created.status).toBe('draft');
 
-    const approved = await adminService.approve(created.id);
+    const published = await adminService.publish(created.id);
 
-    expect(approved.status).toBe('approved');
+    expect(published.status).toBe('published');
   });
 
-  // ─── Test 4: approved + public → findForRetrieval returns it ─────────────
+  // ─── Test 4: published + public → findForRetrieval returns it ────────────
 
-  it('4. approved + public entry is returned by KnowledgeRepository.findForRetrieval()', async () => {
-    // Create and approve a public entry
+  it('4. published + public entry is returned by KnowledgeRepository.findForRetrieval()', async () => {
+    // Create and publish a public entry
     const entry = await adminService.create({ title: 'Public Entry', content: 'Public content', visibility: 'public' });
-    await adminService.approve(entry.id);
+    await adminService.publish(entry.id);
 
     const results = await knowledgeRepository.findForRetrieval({});
 
     expect(results.some(r => r.id === entry.id)).toBe(true);
   });
 
-  // ─── Test 5: archive approved → archived ─────────────────────────────────
+  it('4b. product-spec knowledge with generated intentLabel and tags is retrievable', async () => {
+    const entry = await adminService.create({
+      title: '產品規格',
+      category: 'product-spec',
+      content: '常見的產品規格有「螺絲」、「螺帽」、「螺栓」',
+      visibility: 'public',
+    });
 
-  it('5. archive approved → archived', async () => {
+    expect(entry.intentLabel).toBe('product-inquiry');
+    expect(entry.tags).toEqual(
+      expect.arrayContaining([
+        '產品規格',
+        'product-spec',
+        'product-inquiry',
+        '螺絲',
+        '螺帽',
+        '螺栓',
+      ]),
+    );
+
+    await adminService.publish(entry.id);
+
+    const results = await knowledgeRepository.findForRetrieval({
+      intentLabel: 'product-inquiry',
+      tags: ['產品規格'],
+    });
+
+    expect(results.some(result => result.id === entry.id)).toBe(true);
+  });
+
+  // ─── Test 5: archive published → archived ────────────────────────────────
+
+  it('5. archive published → archived', async () => {
     const entry = await adminService.create({ title: 'Entry', content: 'Content' });
-    await adminService.approve(entry.id);
+    await adminService.publish(entry.id);
 
     const archived = await adminService.archive(entry.id);
 
@@ -288,7 +368,7 @@ describe('Knowledge Admin — integration (mocked Prisma)', () => {
 
   it('6. archived entry is NOT returned by findForRetrieval()', async () => {
     const entry = await adminService.create({ title: 'Entry', content: 'Content', visibility: 'public' });
-    await adminService.approve(entry.id);
+    await adminService.publish(entry.id);
     await adminService.archive(entry.id);
 
     const results = await knowledgeRepository.findForRetrieval({});
@@ -300,7 +380,7 @@ describe('Knowledge Admin — integration (mocked Prisma)', () => {
 
   it('7. draft entry is NOT returned by findForRetrieval()', async () => {
     const entry = await adminService.create({ title: 'Draft Entry', content: 'Content', visibility: 'public' });
-    // Do NOT approve — stays draft
+    // Do NOT publish — stays draft
 
     const results = await knowledgeRepository.findForRetrieval({});
 
@@ -310,7 +390,7 @@ describe('Knowledge Admin — integration (mocked Prisma)', () => {
   // ─── Test 8: internal/confidential NOT in retrieval ──────────────────────
 
   it('8. internal visibility NOT returned by findForRetrieval()', async () => {
-    const entry = makeEntry({ id: idCounter, status: 'approved', visibility: 'internal' });
+    const entry = makeEntry({ id: idCounter, status: 'published', visibility: 'internal' });
     mockPrisma._entries.set(entry.id, entry);
     idCounter++;
 
@@ -320,7 +400,7 @@ describe('Knowledge Admin — integration (mocked Prisma)', () => {
   });
 
   it('8b. confidential visibility NOT returned by findForRetrieval()', async () => {
-    const entry = makeEntry({ id: idCounter, status: 'approved', visibility: 'confidential' });
+    const entry = makeEntry({ id: idCounter, status: 'published', visibility: 'confidential' });
     mockPrisma._entries.set(entry.id, entry);
     idCounter++;
 
@@ -330,7 +410,7 @@ describe('Knowledge Admin — integration (mocked Prisma)', () => {
   });
 
   it('8c. private visibility NOT returned by findForRetrieval()', async () => {
-    const entry = makeEntry({ id: idCounter, status: 'approved', visibility: 'private' });
+    const entry = makeEntry({ id: idCounter, status: 'published', visibility: 'private' });
     mockPrisma._entries.set(entry.id, entry);
     idCounter++;
 
@@ -339,18 +419,20 @@ describe('Knowledge Admin — integration (mocked Prisma)', () => {
     expect(results.some(r => r.id === entry.id)).toBe(false);
   });
 
-  // ─── Test 9: illegal approve transition → 400 ────────────────────────────
+  // ─── Test 9: publish archived → published ────────────────────────────────
 
-  it('9. archived → approve throws BadRequestException (400)', async () => {
+  it('9. archived → publish restores published', async () => {
     const entry = await adminService.create({ title: 'Entry', content: 'Content' });
-    await adminService.approve(entry.id);
+    await adminService.publish(entry.id);
     await adminService.archive(entry.id);
 
-    await expect(adminService.approve(entry.id)).rejects.toThrow(BadRequestException);
+    const published = await adminService.publish(entry.id);
+
+    expect(published.status).toBe('published');
   });
 
-  it('9b. non-existent id → approve throws NotFoundException (404)', async () => {
-    await expect(adminService.approve(9999)).rejects.toThrow(NotFoundException);
+  it('9b. non-existent id → publish throws NotFoundException (404)', async () => {
+    await expect(adminService.publish(9999)).rejects.toThrow(NotFoundException);
   });
 
   // ─── Test 10: list pagination and filter ─────────────────────────────────
@@ -371,14 +453,14 @@ describe('Knowledge Admin — integration (mocked Prisma)', () => {
 
   it('10b. list with status filter returns only matching entries', async () => {
     const draftEntry = await adminService.create({ title: 'Draft', content: 'Content' });
-    const approvedEntry = await adminService.create({ title: 'Approved', content: 'Content' });
-    await adminService.approve(approvedEntry.id);
+    const publishedEntry = await adminService.create({ title: 'Published', content: 'Content' });
+    await adminService.publish(publishedEntry.id);
 
-    const result = await adminService.list({ status: 'approved' });
+    const result = await adminService.list({ status: 'published' });
 
-    expect(result.data.every(e => e.status === 'approved')).toBe(true);
+    expect(result.data.every(e => e.status === 'published')).toBe(true);
     expect(result.data.some(e => e.id === draftEntry.id)).toBe(false);
-    expect(result.data.some(e => e.id === approvedEntry.id)).toBe(true);
+    expect(result.data.some(e => e.id === publishedEntry.id)).toBe(true);
   });
 
   // ─── update non-existent → 404 ───────────────────────────────────────────
@@ -391,7 +473,7 @@ describe('Knowledge Admin — integration (mocked Prisma)', () => {
 
   it('archive already-archived is no-op (returns current entry)', async () => {
     const entry = await adminService.create({ title: 'Entry', content: 'Content' });
-    await adminService.approve(entry.id);
+    await adminService.publish(entry.id);
     await adminService.archive(entry.id);
 
     // Archive again — should be no-op

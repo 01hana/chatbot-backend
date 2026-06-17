@@ -17,8 +17,10 @@ const DEFAULT_LIMIT = 5;
  *  - `PG_TRGM_ENABLED=true`  → uses `pg_trgm` similarity query (preferred)
  *  - `PG_TRGM_ENABLED=false` → falls back to `ILIKE` substring matching
  *
- * In both cases only `status='published' AND visibility='public'` entries are
- * returned (enforced at the SQL level).
+ * In both cases only `status='published' AND visibility='public' AND
+ * deletedAt IS NULL` entries are returned (enforced at the SQL level).
+ * This is a public retrieval invariant. Do not expose
+ * draft/private/internal/confidential/archived knowledge to visitor-facing chat.
  *
  * Both strategies search across `title`, `aliases`, `content`, and `tags`.
  * Scoring priority (highest → lowest):

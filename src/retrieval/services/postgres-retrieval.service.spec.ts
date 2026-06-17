@@ -185,6 +185,44 @@ describe('PostgresRetrievalService', () => {
       expect(results[0].entry).not.toHaveProperty('score');
       expect(results[0].entry).toHaveProperty('id', 4);
     });
+
+    it('should retrieve published public product-spec knowledge for 產品規格 regression', async () => {
+      const row = {
+        ...makeEntry(10, {
+          title: '產品規格',
+          content: '常見的產品規格有「螺絲」、「螺帽」、「螺栓」',
+          tags: ['產品規格', 'product-spec', '螺絲', '螺帽', '螺栓'],
+        }),
+        category: 'product-spec',
+        intentLabel: 'product-spec',
+        score: '0.9',
+      };
+      (prisma.$queryRawUnsafe as jest.Mock).mockResolvedValueOnce([row]);
+
+      const results = await service.retrieve({
+        query: '產品規格',
+        intentLabel: 'product-spec',
+        tags: ['產品規格'],
+        limit: 5,
+      });
+
+      const sql: string = (prisma.$queryRawUnsafe as jest.Mock).mock.calls[0][0];
+      expect(sql).toContain("ke.status = 'published'");
+      expect(sql).toContain("ke.visibility = 'public'");
+      expect(sql).toContain('ke."deletedAt" IS NULL');
+      expect(results).toHaveLength(1);
+      expect(results[0].entry).toEqual(
+        expect.objectContaining({
+          id: 10,
+          title: '產品規格',
+          status: 'published',
+          visibility: 'public',
+          deletedAt: null,
+          intentLabel: 'product-spec',
+          tags: expect.arrayContaining(['產品規格', 'product-spec', '螺絲', '螺帽', '螺栓']),
+        }),
+      );
+    });
   });
 
   // ─── pg_trgm failure fallback ─────────────────────────────────────────────

@@ -180,6 +180,60 @@ describe('KnowledgeRepository', () => {
 
       expect(result).toEqual([]);
     });
+
+    it.each([
+      ['published + public + deletedAt=null', 'published', 'public', null],
+      ['draft + public', 'published', 'public', null],
+      ['archived + public', 'published', 'public', null],
+      ['published + private', 'published', 'public', null],
+      ['published + internal', 'published', 'public', null],
+      ['published + confidential', 'published', 'public', null],
+      ['published + public + deletedAt not null', 'published', 'public', null],
+    ])(
+      'enforces public retrieval invariant for %s',
+      async (_caseName, expectedStatus, expectedVisibility, expectedDeletedAt) => {
+        mockFindMany.mockResolvedValue([makeEntry()]);
+
+        await repository.findForRetrieval({});
+
+        const [callArgs] = (mockFindMany as jest.Mock).mock.calls;
+        const whereClause = (callArgs as [{ where: Record<string, unknown> }])[0].where;
+        expect(whereClause.status).toBe(expectedStatus);
+        expect(whereClause.visibility).toBe(expectedVisibility);
+        expect(whereClause.deletedAt).toBe(expectedDeletedAt);
+      },
+    );
+
+    it('can retrieve published public product-spec entries with generated intentLabel and tags', async () => {
+      const productSpecEntry = makeEntry({
+        title: '產品規格',
+        category: 'product-spec',
+        content: '常見的產品規格有「螺絲」、「螺帽」、「螺栓」',
+        status: 'published',
+        visibility: 'public',
+        intentLabel: 'product-spec',
+        tags: ['產品規格', 'product-spec', '螺絲', '螺帽', '螺栓'],
+      });
+      mockFindMany.mockResolvedValue([productSpecEntry]);
+
+      const result = await repository.findForRetrieval({
+        intentLabel: 'product-spec',
+        tags: ['產品規格'],
+      });
+
+      const [callArgs] = (mockFindMany as jest.Mock).mock.calls;
+      const whereClause = (callArgs as [{ where: Record<string, unknown> }])[0].where;
+      expect(whereClause).toEqual(
+        expect.objectContaining({
+          status: 'published',
+          visibility: 'public',
+          deletedAt: null,
+          intentLabel: 'product-spec',
+          tags: { hasEvery: ['產品規格'] },
+        }),
+      );
+      expect(result).toEqual([productSpecEntry]);
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────

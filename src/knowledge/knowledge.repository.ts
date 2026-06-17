@@ -30,6 +30,9 @@ export interface KnowledgeListParams {
  *  `visibility = 'public'`. These filters are part of the method signature
  *  and cannot be removed or bypassed by callers. Any relaxation requires a
  *  deliberate change to this method (protected by code review).
+ *
+ * This is a public retrieval invariant. Do not expose
+ * draft/private/internal/confidential/archived knowledge to visitor-facing chat.
  */
 @Injectable()
 export class KnowledgeRepository {
@@ -56,7 +59,9 @@ export class KnowledgeRepository {
 
     return this.prisma.knowledgeEntry.findMany({
       where: {
-        // ─ SECURITY INVARIANT — DO NOT REMOVE ─────────────────────────────
+        // ─ PUBLIC RETRIEVAL INVARIANT — DO NOT REMOVE ────────────────────
+        // Do not expose draft/private/internal/confidential/archived knowledge
+        // to visitor-facing chat.
         status: 'published',
         visibility: 'public',
         // ──────────────────────────────────────────────────────────────────

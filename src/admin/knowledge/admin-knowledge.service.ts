@@ -1,14 +1,22 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { KnowledgeEntry, KnowledgeVersion } from '../../generated/prisma/client';
+import { KnowledgeEntry } from '../../generated/prisma/client';
+import { KnowledgeClassificationService } from '../../knowledge/knowledge-classification.service';
+import { KnowledgeCategoryService } from '../../knowledge-category/knowledge-category.service';
+import { KnowledgeCategoryOptionVm } from '../../knowledge-category/knowledge-category.repository';
 import { KnowledgeService } from '../../knowledge/knowledge.service';
 import { KnowledgeListParams } from '../../knowledge/knowledge.repository';
 import { AuditService } from '../../audit/audit.service';
 import {
   CreateKnowledgeDto,
   UpdateKnowledgeDto,
+  UpdateKnowledgeVisibilityDto,
   ListKnowledgeQueryDto,
   KnowledgeFilterOptionsResponse,
   KnowledgeStatus,
+  AdminKnowledgeEntryVm,
+  AdminKnowledgeEntryDetailVm,
+  KnowledgeRetrievalState,
+  RetrievalBlockReason,
   KNOWLEDGE_STATUSES,
 } from './dto/knowledge-admin.dto';
 
@@ -16,12 +24,6 @@ const KNOWLEDGE_STATUS_LABELS: Record<KnowledgeStatus, string> = {
   draft: '草稿',
   published: '已發佈',
   archived: '已封存',
-};
-
-const KNOWLEDGE_CATEGORY_LABELS: Record<string, string> = {
-  'faq-general': '常見問題',
-  'product-spec': '產品規格',
-  'selection-guide': '選型指南',
 };
 
 /**
@@ -43,6 +45,8 @@ export class AdminKnowledgeService {
   constructor(
     private readonly knowledgeService: KnowledgeService,
     private readonly auditService: AuditService,
+    private readonly knowledgeClassificationService: KnowledgeClassificationService,
+    private readonly knowledgeCategoryService: KnowledgeCategoryService,
   ) {}
 
   // ─── List (paginated + filtered) ──────────────────────────────────────────
@@ -50,9 +54,10 @@ export class AdminKnowledgeService {
   /**
    * Paginated, filtered list of all non-deleted knowledge entries.
    */
-  async list(
-    query: ListKnowledgeQueryDto,
-  ): Promise<{ data: KnowledgeEntry[]; meta: { total: number; page: number; pageSize: number } }> {
+  async list(query: ListKnowledgeQueryDto): Promise<{
+    data: AdminKnowledgeEntryVm[];
+    meta: { total: number; page: number; pageSize: number };
+  }> {
     const page = Math.max(1, query.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 20));
 
@@ -70,48 +75,52 @@ export class AdminKnowledgeService {
     };
 
     const { items, total } = await this.knowledgeService.findFiltered(params);
-    return { data: items, meta: { total, page, pageSize } };
+    return {
+      data: items.map(item => this.toAdminKnowledgeEntryVm(item)),
+      meta: { total, page, pageSize },
+    };
   }
 
   /**
    * Return filter option lists for the admin knowledge table.
    */
   async getFilters(): Promise<KnowledgeFilterOptionsResponse> {
-    const categories = await this.knowledgeService.findDistinctCategories();
+    const categories = await this.knowledgeCategoryService.findActiveOptions();
 
     return {
       status: KNOWLEDGE_STATUSES.map(status => ({
         label: KNOWLEDGE_STATUS_LABELS[status],
         value: status,
       })),
-      category: categories.map(category => ({
-        label: KNOWLEDGE_CATEGORY_LABELS[category] ?? category,
-        value: category,
-      })),
+      category: categories,
     };
+  }
+
+  async getCategories(): Promise<KnowledgeCategoryOptionVm[]> {
+    return this.knowledgeCategoryService.findActiveOptions();
   }
 
   // ─── Read single ──────────────────────────────────────────────────────────
 
   /** Get a single knowledge entry by ID; throws 404 when not found. */
-  async getOne(id: number): Promise<KnowledgeEntry> {
+  async getOne(id: number): Promise<AdminKnowledgeEntryVm> {
     const entry = await this.knowledgeService.findById(id);
     if (!entry) {
       throw new NotFoundException(`Knowledge entry #${id} not found`);
     }
-    return entry;
+    return this.toAdminKnowledgeEntryVm(entry);
   }
 
   /**
    * Get a single knowledge entry with its version history.
    * Throws 404 when not found.
    */
-  async getOneWithVersions(id: number): Promise<KnowledgeEntry & { versions: KnowledgeVersion[] }> {
+  async getOneWithVersions(id: number): Promise<AdminKnowledgeEntryDetailVm> {
     const entry = await this.knowledgeService.findByIdWithVersions(id);
     if (!entry) {
       throw new NotFoundException(`Knowledge entry #${id} not found`);
     }
-    return entry;
+    return this.toAdminKnowledgeEntryVm(entry);
   }
 
   // ─── Create ───────────────────────────────────────────────────────────────
@@ -120,12 +129,27 @@ export class AdminKnowledgeService {
    * Create a new knowledge entry.
    * Defaults: status='draft', visibility='private' (when not provided), version=1.
    */
-  async create(dto: CreateKnowledgeDto): Promise<KnowledgeEntry> {
+  async create(dto: CreateKnowledgeDto): Promise<AdminKnowledgeEntryVm> {
+    const intentLabel = await this.knowledgeClassificationService.resolveIntentLabel({
+      category: dto.category,
+      intentLabel: dto.intentLabel,
+    });
+    const tags = this.knowledgeClassificationService.mergeTags(
+      dto.tags,
+      this.knowledgeClassificationService.suggestTags({
+        title: dto.title,
+        category: dto.category,
+        intentLabel,
+        content: dto.content,
+        language: dto.language ?? 'zh-TW',
+      }),
+    );
+
     const entry = await this.knowledgeService.create({
       title: dto.title,
       content: dto.content,
-      intentLabel: dto.intentLabel ?? null,
-      tags: dto.tags ?? [],
+      intentLabel,
+      tags,
       aliases: dto.aliases ?? [],
       language: dto.language ?? 'zh-TW',
       status: 'draft',
@@ -146,7 +170,7 @@ export class AdminKnowledgeService {
       })
       .catch(() => undefined);
 
-    return entry;
+    return this.toAdminKnowledgeEntryVm(entry);
   }
 
   // ─── Update (with version snapshot) ──────────────────────────────────────
@@ -157,12 +181,43 @@ export class AdminKnowledgeService {
    * Increments version and resets status to 'draft' after update.
    * Throws 404 when not found.
    */
-  async update(id: number, dto: UpdateKnowledgeDto): Promise<KnowledgeEntry> {
+  async update(id: number, dto: UpdateKnowledgeDto): Promise<AdminKnowledgeEntryVm> {
+    const current = await this.knowledgeService.findById(id);
+    if (!current) {
+      throw new NotFoundException(`Knowledge entry #${id} not found`);
+    }
+
+    const effective = {
+      title: dto.title ?? current.title,
+      content: dto.content ?? current.content,
+      category: dto.category ?? current.category,
+      intentLabel: dto.intentLabel,
+      language: dto.language ?? current.language,
+    };
+    const shouldResolveIntentLabel = dto.intentLabel !== undefined || dto.category !== undefined;
+    const intentLabel = shouldResolveIntentLabel
+      ? await this.knowledgeClassificationService.resolveIntentLabel({
+          category: effective.category,
+          intentLabel: effective.intentLabel,
+        })
+      : current.intentLabel;
+    const tags = this.knowledgeClassificationService.mergeTags(
+      current.tags,
+      dto.tags,
+      this.knowledgeClassificationService.suggestTags({
+        title: effective.title,
+        category: effective.category,
+        intentLabel,
+        content: effective.content,
+        language: effective.language,
+      }),
+    );
+
     const patch: Parameters<KnowledgeService['updateWithVersionSnapshot']>[1] = {};
     if (dto.title !== undefined) patch.title = dto.title;
     if (dto.content !== undefined) patch.content = dto.content;
-    if (dto.intentLabel !== undefined) patch.intentLabel = dto.intentLabel;
-    if (dto.tags !== undefined) patch.tags = dto.tags;
+    patch.intentLabel = intentLabel;
+    patch.tags = tags;
     if (dto.aliases !== undefined) patch.aliases = dto.aliases;
     if (dto.language !== undefined) patch.language = dto.language;
     if (dto.visibility !== undefined) patch.visibility = dto.visibility;
@@ -186,7 +241,46 @@ export class AdminKnowledgeService {
       })
       .catch(() => undefined);
 
-    return entry;
+    return this.toAdminKnowledgeEntryVm(entry);
+  }
+
+  /**
+   * Update only visibility without creating a content version snapshot.
+   * Does not recalculate intentLabel/tags, modify content fields, or reset status.
+   */
+  async updateVisibility(
+    id: number,
+    dto: UpdateKnowledgeVisibilityDto,
+  ): Promise<AdminKnowledgeEntryVm> {
+    const current = await this.knowledgeService.findById(id);
+    if (!current) {
+      throw new NotFoundException(`Knowledge entry #${id} not found`);
+    }
+
+    if (current.visibility === dto.visibility) {
+      return this.toAdminKnowledgeEntryVm(current);
+    }
+
+    const updated = await this.knowledgeService.update(id, { visibility: dto.visibility });
+    if (!updated) {
+      throw new NotFoundException(`Knowledge entry #${id} not found`);
+    }
+
+    this.auditService
+      .log({
+        eventType: 'knowledge_visibility_updated',
+        eventData: {
+          id,
+          sourceKey: current.sourceKey,
+          fromVisibility: current.visibility,
+          toVisibility: dto.visibility,
+          status: current.status,
+          version: current.version,
+        },
+      })
+      .catch(() => undefined);
+
+    return this.toAdminKnowledgeEntryVm(updated);
   }
 
   // ─── Delete ───────────────────────────────────────────────────────────────
@@ -209,13 +303,13 @@ export class AdminKnowledgeService {
    *  - published → no-op (returns current entry unchanged)
    * Throws 404 when not found.
    */
-  async publish(id: number): Promise<KnowledgeEntry> {
+  async publish(id: number): Promise<AdminKnowledgeEntryVm> {
     const entry = await this.knowledgeService.findById(id);
     if (!entry) {
       throw new NotFoundException(`Knowledge entry #${id} not found`);
     }
     if (entry.status === 'published') {
-      return entry; // no-op
+      return this.toAdminKnowledgeEntryVm(entry); // no-op
     }
 
     const updated = await this.knowledgeService.update(id, { status: 'published' });
@@ -233,7 +327,7 @@ export class AdminKnowledgeService {
       })
       .catch(() => undefined);
 
-    return updated!;
+    return this.toAdminKnowledgeEntryVm(updated!);
   }
 
   /**
@@ -242,13 +336,13 @@ export class AdminKnowledgeService {
    *  - archived   → no-op (returns current entry unchanged)
    * Throws 404 when not found.
    */
-  async archive(id: number): Promise<KnowledgeEntry> {
+  async archive(id: number): Promise<AdminKnowledgeEntryVm> {
     const entry = await this.knowledgeService.findById(id);
     if (!entry) {
       throw new NotFoundException(`Knowledge entry #${id} not found`);
     }
     if (entry.status === 'archived') {
-      return entry; // no-op
+      return this.toAdminKnowledgeEntryVm(entry); // no-op
     }
 
     const updated = await this.knowledgeService.update(id, { status: 'archived' });
@@ -266,7 +360,44 @@ export class AdminKnowledgeService {
       })
       .catch(() => undefined);
 
-    return updated!;
+    return this.toAdminKnowledgeEntryVm(updated!);
+  }
+
+  private toAdminKnowledgeEntryVm<TEntry extends KnowledgeEntry>(
+    entry: TEntry,
+  ): TEntry & KnowledgeRetrievalState {
+    return {
+      ...entry,
+      ...this.getRetrievalState(entry),
+    };
+  }
+
+  private getRetrievalState(entry: KnowledgeEntry): KnowledgeRetrievalState {
+    const retrievalBlockReasons: RetrievalBlockReason[] = [];
+
+    if (entry.status !== 'published') {
+      retrievalBlockReasons.push('status_not_published');
+    }
+    if (entry.visibility !== 'public') {
+      retrievalBlockReasons.push('visibility_not_public');
+    }
+    if (entry.deletedAt !== null) {
+      retrievalBlockReasons.push('deleted');
+    }
+    if (!entry.intentLabel?.trim()) {
+      retrievalBlockReasons.push('intentLabel_missing');
+    }
+    if (!entry.tags.some(tag => tag.trim().length > 0)) {
+      retrievalBlockReasons.push('tags_empty');
+    }
+    if (!entry.title.trim() || !entry.content.trim()) {
+      retrievalBlockReasons.push('content_empty');
+    }
+
+    return {
+      retrievable: retrievalBlockReasons.length === 0,
+      retrievalBlockReasons,
+    };
   }
 
   // ─── Legacy / category ────────────────────────────────────────────────────

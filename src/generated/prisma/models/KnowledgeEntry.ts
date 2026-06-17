@@ -985,7 +985,7 @@ export type $KnowledgeEntryPayload<ExtArgs extends runtime.Types.Extensions.Inte
      */
     status: string
     /**
-     * public | private
+     * private | public | internal | confidential
      */
     visibility: string
     version: number

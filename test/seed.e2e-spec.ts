@@ -100,7 +100,7 @@ describe('seedKnowledge()', () => {
       content: '...',
       intentLabel: 'product-inquiry',
       tags: [],
-      status: 'approved',
+      status: 'published',
       visibility: 'public',
       version: 1,
       createdAt: new Date(),

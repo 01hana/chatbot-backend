@@ -1,4 +1,7 @@
 import { Module } from '@nestjs/common';
+import { IntentModule } from '../intent/intent.module';
+import { KnowledgeCategoryModule } from '../knowledge-category/knowledge-category.module';
+import { KnowledgeClassificationService } from './knowledge-classification.service';
 import { KnowledgeRepository } from './knowledge.repository';
 import { KnowledgeService } from './knowledge.service';
 
@@ -9,7 +12,8 @@ import { KnowledgeService } from './knowledge.service';
  * controllers (Phase 6) can consume knowledge without coupling to Prisma.
  */
 @Module({
-  providers: [KnowledgeRepository, KnowledgeService],
-  exports: [KnowledgeService],
+  imports: [IntentModule, KnowledgeCategoryModule],
+  providers: [KnowledgeRepository, KnowledgeService, KnowledgeClassificationService],
+  exports: [KnowledgeService, KnowledgeClassificationService],
 })
 export class KnowledgeModule {}

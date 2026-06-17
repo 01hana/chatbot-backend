@@ -390,6 +390,7 @@ export const ModelName = {
   IntentTemplate: 'IntentTemplate',
   GlossaryTerm: 'GlossaryTerm',
   KnowledgeEntry: 'KnowledgeEntry',
+  KnowledgeCategory: 'KnowledgeCategory',
   KnowledgeVersion: 'KnowledgeVersion',
   Conversation: 'Conversation',
   ConversationMessage: 'ConversationMessage',
@@ -417,7 +418,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "systemConfig" | "safetyRule" | "blacklistEntry" | "intentTemplate" | "glossaryTerm" | "knowledgeEntry" | "knowledgeVersion" | "conversation" | "conversationMessage" | "auditLog" | "queryRule" | "knowledgeDocument" | "knowledgeChunk" | "knowledgeEntity" | "knowledgeRelation" | "lead" | "ticket" | "feedback"
+    modelProps: "systemConfig" | "safetyRule" | "blacklistEntry" | "intentTemplate" | "glossaryTerm" | "knowledgeEntry" | "knowledgeCategory" | "knowledgeVersion" | "conversation" | "conversationMessage" | "auditLog" | "queryRule" | "knowledgeDocument" | "knowledgeChunk" | "knowledgeEntity" | "knowledgeRelation" | "lead" | "ticket" | "feedback"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -862,6 +863,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.KnowledgeEntryCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.KnowledgeEntryCountAggregateOutputType> | number
+        }
+      }
+    }
+    KnowledgeCategory: {
+      payload: Prisma.$KnowledgeCategoryPayload<ExtArgs>
+      fields: Prisma.KnowledgeCategoryFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.KnowledgeCategoryFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeCategoryPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.KnowledgeCategoryFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeCategoryPayload>
+        }
+        findFirst: {
+          args: Prisma.KnowledgeCategoryFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeCategoryPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.KnowledgeCategoryFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeCategoryPayload>
+        }
+        findMany: {
+          args: Prisma.KnowledgeCategoryFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeCategoryPayload>[]
+        }
+        create: {
+          args: Prisma.KnowledgeCategoryCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeCategoryPayload>
+        }
+        createMany: {
+          args: Prisma.KnowledgeCategoryCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.KnowledgeCategoryCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeCategoryPayload>[]
+        }
+        delete: {
+          args: Prisma.KnowledgeCategoryDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeCategoryPayload>
+        }
+        update: {
+          args: Prisma.KnowledgeCategoryUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeCategoryPayload>
+        }
+        deleteMany: {
+          args: Prisma.KnowledgeCategoryDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.KnowledgeCategoryUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.KnowledgeCategoryUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeCategoryPayload>[]
+        }
+        upsert: {
+          args: Prisma.KnowledgeCategoryUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeCategoryPayload>
+        }
+        aggregate: {
+          args: Prisma.KnowledgeCategoryAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateKnowledgeCategory>
+        }
+        groupBy: {
+          args: Prisma.KnowledgeCategoryGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.KnowledgeCategoryGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.KnowledgeCategoryCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.KnowledgeCategoryCountAggregateOutputType> | number
         }
       }
     }
@@ -1879,6 +1954,22 @@ export const KnowledgeEntryScalarFieldEnum = {
 export type KnowledgeEntryScalarFieldEnum = (typeof KnowledgeEntryScalarFieldEnum)[keyof typeof KnowledgeEntryScalarFieldEnum]
 
 
+export const KnowledgeCategoryScalarFieldEnum = {
+  id: 'id',
+  key: 'key',
+  label: 'label',
+  description: 'description',
+  defaultIntentLabel: 'defaultIntentLabel',
+  isActive: 'isActive',
+  sortOrder: 'sortOrder',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  deletedAt: 'deletedAt'
+} as const
+
+export type KnowledgeCategoryScalarFieldEnum = (typeof KnowledgeCategoryScalarFieldEnum)[keyof typeof KnowledgeCategoryScalarFieldEnum]
+
+
 export const KnowledgeVersionScalarFieldEnum = {
   id: 'id',
   knowledgeEntryId: 'knowledgeEntryId',
@@ -2403,6 +2494,7 @@ export type GlobalOmitConfig = {
   intentTemplate?: Prisma.IntentTemplateOmit
   glossaryTerm?: Prisma.GlossaryTermOmit
   knowledgeEntry?: Prisma.KnowledgeEntryOmit
+  knowledgeCategory?: Prisma.KnowledgeCategoryOmit
   knowledgeVersion?: Prisma.KnowledgeVersionOmit
   conversation?: Prisma.ConversationOmit
   conversationMessage?: Prisma.ConversationMessageOmit

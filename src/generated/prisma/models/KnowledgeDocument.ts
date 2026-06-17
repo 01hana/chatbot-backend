@@ -653,7 +653,7 @@ export type $KnowledgeDocumentPayload<ExtArgs extends runtime.Types.Extensions.I
      */
     status: string
     /**
-     * public | private
+     * private | public | internal | confidential
      */
     visibility: string
     metadata: runtime.JsonValue | null

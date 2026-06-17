@@ -57,6 +57,7 @@ export const ModelName = {
   IntentTemplate: 'IntentTemplate',
   GlossaryTerm: 'GlossaryTerm',
   KnowledgeEntry: 'KnowledgeEntry',
+  KnowledgeCategory: 'KnowledgeCategory',
   KnowledgeVersion: 'KnowledgeVersion',
   Conversation: 'Conversation',
   ConversationMessage: 'ConversationMessage',
@@ -172,6 +173,22 @@ export const KnowledgeEntryScalarFieldEnum = {
 } as const
 
 export type KnowledgeEntryScalarFieldEnum = (typeof KnowledgeEntryScalarFieldEnum)[keyof typeof KnowledgeEntryScalarFieldEnum]
+
+
+export const KnowledgeCategoryScalarFieldEnum = {
+  id: 'id',
+  key: 'key',
+  label: 'label',
+  description: 'description',
+  defaultIntentLabel: 'defaultIntentLabel',
+  isActive: 'isActive',
+  sortOrder: 'sortOrder',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  deletedAt: 'deletedAt'
+} as const
+
+export type KnowledgeCategoryScalarFieldEnum = (typeof KnowledgeCategoryScalarFieldEnum)[keyof typeof KnowledgeCategoryScalarFieldEnum]
 
 
 export const KnowledgeVersionScalarFieldEnum = {

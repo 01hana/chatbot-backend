@@ -1,5 +1,7 @@
 import { IsString, IsNotEmpty, IsArray, IsOptional, IsIn, IsInt, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
+import type { KnowledgeEntry, KnowledgeVersion } from '../../../generated/prisma/client';
+import type { KnowledgeCategoryOptionVm } from '../../../knowledge-category/knowledge-category.repository';
 
 /** Valid language codes for knowledge entries. */
 const SUPPORTED_LANGUAGES = ['zh-TW', 'en'] as const;
@@ -15,8 +17,26 @@ export interface FilterOption<TValue extends string = string> {
 
 export interface KnowledgeFilterOptionsResponse {
   status: FilterOption<KnowledgeStatus>[];
-  category: FilterOption[];
+  category: KnowledgeCategoryOptionVm[];
 }
+
+export type RetrievalBlockReason =
+  | 'status_not_published'
+  | 'visibility_not_public'
+  | 'deleted'
+  | 'intentLabel_missing'
+  | 'tags_empty'
+  | 'content_empty';
+
+export interface KnowledgeRetrievalState {
+  retrievable: boolean;
+  retrievalBlockReasons: RetrievalBlockReason[];
+}
+
+export type AdminKnowledgeEntryVm = KnowledgeEntry & KnowledgeRetrievalState;
+export type AdminKnowledgeEntryDetailVm = KnowledgeEntry & {
+  versions: KnowledgeVersion[];
+} & KnowledgeRetrievalState;
 
 /** Valid visibility values for knowledge entries. */
 export const KNOWLEDGE_VISIBILITIES = ['public', 'private', 'internal', 'confidential'] as const;
@@ -167,6 +187,14 @@ export class UpdateKnowledgeDto {
   crossLanguageGroupKey?: string;
 
   // TODO: structuredAttributes admin editing deferred — field captured in version snapshots but not yet editable via Admin API.
+}
+
+/** DTO for updating only knowledge entry visibility via the dedicated endpoint. */
+export class UpdateKnowledgeVisibilityDto {
+  @IsString()
+  @IsNotEmpty()
+  @IsIn([...KNOWLEDGE_VISIBILITIES])
+  visibility!: string;
 }
 
 /** Allowed sort fields for knowledge entry list. */

@@ -8,7 +8,7 @@
  *  4. Leads admin (list, detail, update, status)
  *  5. Tickets admin (list, detail, status update, notes)
  *  6. Feedback admin (list with filters)
- *  7. Knowledge admin (CRUD + approval flow)
+ *  7. Knowledge admin (CRUD + publishing flow)
  *  8. Regression guard for chat/widget public APIs
  *
  * Uses a stateful in-memory PrismaService mock to avoid Prisma 7 WASM
@@ -109,6 +109,38 @@ function buildAdminMock() {
   const auditLogs = new Map<number, AnyRecord>();
   const knowledgeEntries = new Map<number, AnyRecord>();
   const knowledgeVersions = new Map<number, AnyRecord>();
+  const knowledgeCategories = new Map<string, AnyRecord>([
+    [
+      'faq-general',
+      {
+        id: nextId(),
+        key: 'faq-general',
+        label: '常見問題',
+        description: '一般 FAQ 類知識',
+        defaultIntentLabel: 'general-faq',
+        isActive: true,
+        sortOrder: 10,
+        createdAt: now(),
+        updatedAt: now(),
+        deletedAt: null,
+      },
+    ],
+    [
+      'product-spec',
+      {
+        id: nextId(),
+        key: 'product-spec',
+        label: '產品規格',
+        description: '產品規格、尺寸、材質、型號等知識',
+        defaultIntentLabel: 'product-inquiry',
+        isActive: true,
+        sortOrder: 20,
+        createdAt: now(),
+        updatedAt: now(),
+        deletedAt: null,
+      },
+    ],
+  ]);
 
   // ── conversation ──────────────────────────────────────────────────────────
 
@@ -796,6 +828,64 @@ function buildAdminMock() {
     },
   };
 
+  // ── knowledgeCategory ────────────────────────────────────────────────────
+
+  const knowledgeCategory = {
+    findMany({ where, orderBy }: { where?: AnyRecord; orderBy?: AnyRecord[] } = {}) {
+      let rows = Array.from(knowledgeCategories.values()).filter((r) =>
+        matchesWhere(r, where),
+      );
+      if (Array.isArray(orderBy)) {
+        rows = [...rows].sort((a, b) => {
+          for (const order of orderBy) {
+            const [[field, direction]] = Object.entries(order);
+            const aValue = a[field] as string | number;
+            const bValue = b[field] as string | number;
+            if (aValue === bValue) continue;
+            const result = aValue > bValue ? 1 : -1;
+            return direction === 'desc' ? -result : result;
+          }
+          return 0;
+        });
+      }
+      return Promise.resolve(rows);
+    },
+    findUnique({ where }: { where: AnyRecord }) {
+      return Promise.resolve(knowledgeCategories.get(where.key as string) ?? null);
+    },
+    findFirst({ where }: { where?: AnyRecord }) {
+      const result = Array.from(knowledgeCategories.values()).find((r) =>
+        matchesWhere(r, where),
+      );
+      return Promise.resolve(result ?? null);
+    },
+    create({ data }: { data: AnyRecord }) {
+      if (knowledgeCategories.has(data.key as string)) {
+        return Promise.reject(new Error('Unique constraint failed'));
+      }
+      const row: AnyRecord = {
+        id: nextId(),
+        key: data.key,
+        label: data.label,
+        description: data.description ?? null,
+        defaultIntentLabel: data.defaultIntentLabel ?? null,
+        isActive: data.isActive ?? true,
+        sortOrder: data.sortOrder ?? 0,
+        createdAt: now(),
+        updatedAt: now(),
+        deletedAt: null,
+      };
+      knowledgeCategories.set(row.key as string, row);
+      return Promise.resolve(row);
+    },
+    update({ where, data }: { where: AnyRecord; data: AnyRecord }) {
+      const row = knowledgeCategories.get(where.key as string);
+      if (!row) return Promise.reject(new Error('Record not found'));
+      Object.assign(row, data, { updatedAt: now() });
+      return Promise.resolve({ ...row });
+    },
+  };
+
   return {
     $connect: jest.fn().mockResolvedValue(undefined),
     $disconnect: jest.fn().mockResolvedValue(undefined),
@@ -803,10 +893,59 @@ function buildAdminMock() {
     /** Handles interactive-transaction array pattern used by updateWithVersionSnapshot. */
     $transaction: jest.fn().mockImplementation((ops: unknown[]) => Promise.all(ops)),
     // Static mocks for module initialization
-    systemConfig: { findMany: jest.fn().mockResolvedValue([]) },
+    systemConfig: {
+      findMany: jest.fn().mockResolvedValue([
+        { key: 'widget_status', value: 'online' },
+        {
+          key: 'widget_welcome_message',
+          value: JSON.stringify({ 'zh-TW': '歡迎使用客服', en: 'Welcome' }),
+        },
+        {
+          key: 'widget_quick_replies',
+          value: JSON.stringify({ 'zh-TW': ['產品規格'], en: ['Product specs'] }),
+        },
+        {
+          key: 'widget_disclaimer',
+          value: JSON.stringify({ 'zh-TW': '本服務由 AI 提供', en: 'AI assisted' }),
+        },
+        {
+          key: 'widget_fallback_message',
+          value: JSON.stringify({ 'zh-TW': '請稍後再試', en: 'Please try again later' }),
+        },
+      ]),
+    },
     safetyRule: { findMany: jest.fn().mockResolvedValue([]) },
     blacklistEntry: { findMany: jest.fn().mockResolvedValue([]) },
-    intentTemplate: { findMany: jest.fn().mockResolvedValue([]) },
+    intentTemplate: {
+      findMany: jest.fn().mockResolvedValue([
+        {
+          id: 1,
+          title: 'product-inquiry',
+          label: '產品詢問',
+          keywords: ['產品'],
+          templateZh: '',
+          templateEn: '',
+          priority: 10,
+          isActive: true,
+          category: 'product-spec',
+          createdAt: now(),
+          updatedAt: now(),
+        },
+        {
+          id: 2,
+          title: 'general-faq',
+          label: '常見問題',
+          keywords: ['FAQ'],
+          templateZh: '',
+          templateEn: '',
+          priority: 0,
+          isActive: true,
+          category: 'faq-general',
+          createdAt: now(),
+          updatedAt: now(),
+        },
+      ]),
+    },
     glossaryTerm: { findMany: jest.fn().mockResolvedValue([]) },
     // Stateful stores
     conversation,
@@ -817,6 +956,7 @@ function buildAdminMock() {
     auditLog,
     knowledgeEntry,
     knowledgeVersion,
+    knowledgeCategory,
   };
 }
 
@@ -1267,6 +1407,112 @@ describe('Admin API query endpoint checkpoint (e2e)', () => {
   describe('Knowledge admin (/admin/knowledge)', () => {
     let knowledgeId: number;
 
+    it('GET /admin/knowledge/categories → returns active category options', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/admin/knowledge/categories')
+        .expect(200);
+
+      const data = res.body.data as AnyRecord[];
+      const productSpec = data.find((option) => option.value === 'product-spec');
+      expect(productSpec).toEqual(
+        expect.objectContaining({
+          label: '產品規格',
+          value: 'product-spec',
+          defaultIntentLabel: 'product-inquiry',
+        }),
+      );
+    });
+
+    it('GET /admin/knowledge/filters → returns category options from knowledge categories', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/admin/knowledge/filters')
+        .expect(200);
+
+      const data = res.body.data as AnyRecord;
+      const categories = data.category as AnyRecord[];
+      const productSpec = categories.find((option) => option.value === 'product-spec');
+      expect(productSpec).toEqual(
+        expect.objectContaining({
+          label: '產品規格',
+          value: 'product-spec',
+          description: '產品規格、尺寸、材質、型號等知識',
+          defaultIntentLabel: 'product-inquiry',
+        }),
+      );
+    });
+
+    it('POST /admin/knowledge/categories → creates a category', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/admin/knowledge/categories')
+        .send({
+          key: 'pricing-info',
+          label: '報價資訊',
+          description: '報價、詢價、價格規則相關知識',
+          defaultIntentLabel: 'product-inquiry',
+          sortOrder: 40,
+        })
+        .expect(201);
+
+      const data = res.body.data as AnyRecord;
+      expect(data).toEqual(
+        expect.objectContaining({
+          key: 'pricing-info',
+          label: '報價資訊',
+          defaultIntentLabel: 'product-inquiry',
+          isActive: true,
+          sortOrder: 40,
+        }),
+      );
+    });
+
+    it('PATCH /admin/knowledge/categories/:key → updates category settings', async () => {
+      const res = await request(app.getHttpServer())
+        .patch('/api/v1/admin/knowledge/categories/pricing-info')
+        .send({
+          label: '價格資訊',
+          defaultIntentLabel: 'general-faq',
+          isActive: true,
+          sortOrder: 45,
+        })
+        .expect(200);
+
+      const data = res.body.data as AnyRecord;
+      expect(data).toEqual(
+        expect.objectContaining({
+          key: 'pricing-info',
+          label: '價格資訊',
+          defaultIntentLabel: 'general-faq',
+          sortOrder: 45,
+        }),
+      );
+    });
+
+    it('POST/PATCH /admin/knowledge/categories reject unknown defaultIntentLabel', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/admin/knowledge/categories')
+        .send({
+          key: 'invalid-default',
+          label: 'Invalid',
+          defaultIntentLabel: 'missing-intent',
+        })
+        .expect(400);
+
+      await request(app.getHttpServer())
+        .patch('/api/v1/admin/knowledge/categories/pricing-info')
+        .send({ defaultIntentLabel: 'missing-intent' })
+        .expect(400);
+    });
+
+    it('DELETE /admin/knowledge/categories/:key → soft deletes category', async () => {
+      const res = await request(app.getHttpServer())
+        .delete('/api/v1/admin/knowledge/categories/pricing-info')
+        .expect(200);
+
+      const data = res.body.data as AnyRecord;
+      expect(data.isActive).toBe(false);
+      expect(data.deletedAt).toBeTruthy();
+    });
+
     it('POST /admin/knowledge → creates entry with status=draft and version=1', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/admin/knowledge')
@@ -1315,14 +1561,29 @@ describe('Admin API query endpoint checkpoint (e2e)', () => {
       expect(data.status).toBe('draft');
     });
 
-    it('POST /admin/knowledge/:id/approve → sets status to approved', async () => {
+    it('PATCH /admin/knowledge/:id/visibility → updates visibility only', async () => {
       const res = await request(app.getHttpServer())
-        .post(`/api/v1/admin/knowledge/${knowledgeId}/approve`)
+        .patch(`/api/v1/admin/knowledge/${knowledgeId}/visibility`)
+        .send({ visibility: 'public' })
+        .expect(200);
+
+      const data = res.body.data as AnyRecord;
+      expect(data.id).toBe(knowledgeId);
+      expect(data.visibility).toBe('public');
+      expect(data).toHaveProperty('retrievable');
+      expect(data).toHaveProperty('retrievalBlockReasons');
+      expect(data.version).toBe(2);
+      expect(data.status).toBe('draft');
+    });
+
+    it('POST /admin/knowledge/:id/publish → sets status to published', async () => {
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/admin/knowledge/${knowledgeId}/publish`)
         .expect(201);
 
       const data = res.body.data as AnyRecord;
       expect(data.id).toBe(knowledgeId);
-      expect(data.status).toBe('approved');
+      expect(data.status).toBe('published');
     });
 
     it('POST /admin/knowledge/:id/archive → sets status to archived', async () => {
@@ -1335,11 +1596,14 @@ describe('Admin API query endpoint checkpoint (e2e)', () => {
       expect(data.status).toBe('archived');
     });
 
-    it('POST /admin/knowledge/:id/approve when archived → 400', async () => {
-      // Entry is currently archived; approving should fail
-      await request(app.getHttpServer())
-        .post(`/api/v1/admin/knowledge/${knowledgeId}/approve`)
-        .expect(400);
+    it('POST /admin/knowledge/:id/publish when archived → restores published', async () => {
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/admin/knowledge/${knowledgeId}/publish`)
+        .expect(201);
+
+      const data = res.body.data as AnyRecord;
+      expect(data.id).toBe(knowledgeId);
+      expect(data.status).toBe('published');
     });
 
     it('GET /admin/knowledge/:id → 404 for unknown id', async () => {

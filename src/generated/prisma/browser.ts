@@ -49,6 +49,11 @@ export type GlossaryTerm = Prisma.GlossaryTermModel
  */
 export type KnowledgeEntry = Prisma.KnowledgeEntryModel
 /**
+ * Model KnowledgeCategory
+ * Admin-managed knowledge category options for KnowledgeEntry.category.
+ */
+export type KnowledgeCategory = Prisma.KnowledgeCategoryModel
+/**
  * Model KnowledgeVersion
  * Immutable version snapshots of KnowledgeEntry content.
  */
